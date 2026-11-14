@@ -1,4 +1,4 @@
-# Siansa Beats
+# <img src="brand/siansa-beats-icon.svg" alt="" width="40" height="40" align="top"> Siansa Beats
 
 The companion service for the Siansa app (what it does for the app: [the repository's front page](../README.md)). It
 reads the songs of the libraries you choose on Navidrome, Emby or Jellyfin and finds every beat and downbeat in each
@@ -84,6 +84,18 @@ and the CPU when it isn't. The page's first pill says which, with the GPU's name
 4. Open **http://\<TrueNAS\>:8090**. After the first song, the pill says **Model final0 · GPU** and the card's name.
    If it says CPU and a warning appears at the top, the container didn't get the GPU: check step 1, and that
    `deploy: … driver: nvidia` is in the YAML.
+
+**Its icon on TrueNAS (optional).** An app installed from YAML shows TrueNAS's own icon, and the YAML has no place
+for one: TrueNAS keeps it in a file of its own. To give Siansa Beats its icon:
+
+1. System › Shell, then `sudo -i`.
+2. `vim /mnt/.ix-apps/app_configs/siansa-beats/metadata.yaml` (the folder is the name you gave the app).
+3. Press `i`, and under `host_mounts: []`, in line with it (two spaces in), add:
+   `icon: https://siansa.app/beats-icon.svg`
+4. Press `Esc`, type `:wq`, Enter.
+5. In Apps, open Siansa Beats' **Edit**, and **Save** without changing anything: the icon shows from then on.
+
+TrueNAS writes that file again when the app is edited or updated; if the icon goes, add the line again.
 
 On another Docker server with an NVIDIA GPU and NVIDIA's container toolkit:
 `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`.
