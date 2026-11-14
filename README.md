@@ -1,4 +1,4 @@
-# Siansa Beats
+# <img src="beats/brand/siansa-beats-icon.svg" alt="" width="40" height="40" align="top"> Siansa Beats
 
 The companion service for [Siansa](https://github.com/echovaultstudio/Siansa), the music player for your own
 Navidrome, Emby or Jellyfin server. It's one Docker container beside your music server: it listens to every song in
