@@ -173,7 +173,7 @@ def get(handler, path, query, server=None):
         except ValueError:
             return handler._error(HTTPStatus.BAD_REQUEST, "from, to (seconds since 1970) and limit are numbers") or True
         user = arg("user")
-        return handler._json({"user": user, "kind": kind, "from": start, "to": end, "listens": app.listens.count(user),
+        return handler._json({"user": user, "kind": kind, "from": start, "to": end, "listens": app.listens.count(app.listens.who(user)),
                               "top": app.listens.top(user, kind, start, end, limit, server or app.servers.default_id)}) or True
     if path == "/api/v1/listens/totals":  # a stretch of a listener's history in numbers (0.33): the app's reports
         try:
