@@ -701,6 +701,18 @@ class EveryArtistOfASong(Fresh):
         top = self.listens.top("max", "artists", at("2026-11-02T00:00:00"))
         self.assertEqual(sorted((r["artist"], r["listens"]) for r in top), [("Line", 2), ("Old", 2)])
 
+    def test_numbers_kept_from_before_a_library_read_are_worked_out_again(self):
+        self.listens.add("max", [self.row("2026-11-02T10:00:00", "Old • Line", "Song", id="old")])
+        self.assertEqual(self.listens.summary("max", 2026, 11)["totals"]["artists"], 4)
+        self.store.add_songs([{"id": "old", "title": "Song", "artist": "Old • Line", "album": "", "duration": 100.0,
+                               "suffix": "mp3", "tag_bpm": None, "artists": ["Old", "Line"]}])
+        self.assertEqual(self.listens.summary("max", 2026, 11)["totals"]["artists"], 5)  # no new listen was needed
+
+    def test_the_first_listen_of_someone_with_none_in_memory(self):
+        self.assertEqual(self.listens.summary("new")["totals"]["listens"], 0)
+        self.listens.add("new", [self.row("2026-11-02T10:00:00")])
+        self.assertEqual(self.listens.summary("new")["totals"]["listens"], 1)
+
 
 class InMemory(Fresh):
     """0.47: the numbers are worked out from the listens kept in memory; they're the database's at every moment."""

@@ -451,6 +451,8 @@ class Listens:
     def library(self):
         kept = self._library_kept
         if kept is None or kept.version != self.store.library_changes:
+            if kept is not None:
+                self.changes += 1  # a library was read: numbers kept from before are old (a song's artists may be new)
             kept = self._library_kept = Library(self.store, self.store.library_changes)
         return kept
 
@@ -486,7 +488,7 @@ class Listens:
                 book.seen = seen
                 return book
             rows = book.rows + new
-            if new[0][AT] < book.ats[-1]:  # a listen from before the last one (kept by the app while offline)
+            if book.ats and new[0][AT] < book.ats[-1]:  # a listen from before the last one (kept by the app while offline)
                 rows.sort(key=lambda r: (r[AT], r[ID]))
         book = Book(rows, max((r[ID] for r in rows), default=0), seen, library)
         with self._lock:
@@ -839,6 +841,7 @@ class Listens:
         out again there and then. What's playing and the latest listens are always the present ones. After a change
         that isn't a listen or two (a history brought in, listens removed or renamed) nothing old is given."""
         user = self.who(user)
+        self.library()
         kept_as = (user, year, month, tz_name, most)
         with self._lock:
             kept = self._kept.get(kept_as)
