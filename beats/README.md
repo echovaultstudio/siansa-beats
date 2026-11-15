@@ -205,7 +205,9 @@ the first time, what's playing now and the last listens. Days and hours are your
   and the last listens of them. Its address (`#artist=<name>`) can be kept or shared.
 - **From the app:** turn on **Scrobble to Siansa Beats** in Siansa (Settings › Scrobbling). Each listen is kept
   under the name the app scrobbles as (your music server's user name), so two people have a history each; the page
-  has a listener switch when there's more than one.
+  has a listener switch when there's more than one. A name is the same whatever its capitals (0.46.1: "Max" typed on
+  the TV is the phone's "max"), so one person's listens stay together and go on to their Last.fm; listens kept
+  apart before are joined at the start.
 - **From a file:** an export of Koito (its own JSON), of Last.fm (the JSON or CSV of an export tool, e.g.
   lastfm.ghan.nl/export) or of ListenBrainz. Choose the file and whose listens they are. A listen that's here
   already (the same listener, second, artist and title) is kept once, so a file can be brought in again and two
