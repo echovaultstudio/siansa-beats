@@ -139,17 +139,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # CUDA's libraries are several GB: room for them.
+      # CUDA's libraries are several GB, and the image is in the builder and in Docker both: room for them.
       - name: Free disk space
-        if: matrix.variant == 'cuda'
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
           df -h / | tail -1
 
+      # Built with the last build's layers (kept in the registry as buildcache-<variant>): a layer that didn't change
+      # is the very same one, so an update downloads only the layers that did (the Beats code: megabytes, not the
+      # gigabytes of torch and the models). The owner, 15 Nov: TrueNAS pulled the whole image at every update.
       - name: Build
+        env:
+          CACHE: ${{ env.IMAGE }}:buildcache-${{ matrix.variant }}
         run: |
-          docker build --progress=plain --build-arg TORCH_INDEX=${{ matrix.index }} -t siansa-beats:test beats \
-            2>&1 | tail -40
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker buildx create --name beats --driver docker-container --use
+          docker buildx build --progress=plain --build-arg TORCH_INDEX=${{ matrix.index }} \
+            --cache-from "type=registry,ref=$CACHE" --load -t siansa-beats:test beats 2>&1 | tail -40
+          test "${PIPESTATUS[0]}" = 0
 
       - name: Songs of known tempo and bars
         run: |
@@ -179,6 +186,7 @@ jobs:
           docker logs beats 2>&1 | tail -80 || true
           docker inspect --format '{{.State.Health.Status}}' beats || true
           docker image ls siansa-beats:test --format 'Image size: {{.Size}}'
+          docker history --format '{{.Size}}\t{{.CreatedBy}}' siansa-beats:test | cut -c1-110 | head -25
 
       - name: Publish
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/beats-sound') && github.event_name != 'pull_request'
@@ -197,7 +205,13 @@ jobs:
           else
             first=$([ -z "$suffix" ] && echo latest || echo cuda)
           fi
-          for tag in "$first" "$version$suffix" "sha-${GITHUB_SHA::7}$suffix"; do
-            docker tag siansa-beats:test "$IMAGE:$tag" && docker push -q "$IMAGE:$tag"
-          done
+          # Pushed by the builder from its own layers (all there from Build), with the cache for the next build: the
+          # layers keep their digests from one release to the next, so TrueNAS takes only what changed.
+          tags=()
+          for tag in "$first" "$version$suffix" "sha-${GITHUB_SHA::7}$suffix"; do tags+=(-t "$IMAGE:$tag"); done
+          docker buildx build --progress=plain --build-arg TORCH_INDEX=${{ matrix.index }} \
+            --cache-from "type=registry,ref=$IMAGE:buildcache-${{ matrix.variant }}" \
+            --cache-to "type=registry,ref=$IMAGE:buildcache-${{ matrix.variant }},mode=max,image-manifest=true,oci-mediatypes=true" \
+            "${tags[@]}" --push beats 2>&1 | tail -20
+          test "${PIPESTATUS[0]}" = 0
           echo "::notice::Published $IMAGE:$first ($version$suffix)"
