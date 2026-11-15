@@ -182,6 +182,11 @@ main > section.on { display: grid; gap: 16px; }
 .tm-rank li::before { content: counter(rank); color: var(--faint); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.8125rem; }
 .tm-rank li::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: color-mix(in srgb, var(--amber) 10%, transparent); border-radius: 8px; z-index: -1; }
 .tm-listens { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tm-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.tm-people li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tm-people .controls { flex-wrap: nowrap; }
+.tm-people .t { flex: 1 1 12rem; min-width: 0; display: grid; }
+.tm-people .t span { color: var(--muted); font-size: 0.875rem; overflow-wrap: anywhere; }
 .tm-listens li { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .tm-listens .t { min-width: 0; } .tm-listens .t b, .tm-listens .t span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tm-listens .t b { font-weight: 600; } .tm-listens .t span { font-size: 0.8125rem; color: var(--faint); }
@@ -214,7 +219,7 @@ main > section.on { display: grid; gap: 16px; }
 .tm-facts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; margin: 0; }
 .tm-facts dt { color: var(--muted); } .tm-facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .tm-empty { text-align: center; padding: 32px 16px; color: var(--muted); }
-.tm-tabs { position: sticky; top: var(--header-h); z-index: 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 999px;
+.tm-tabs { position: sticky; top: var(--header-h); z-index: 4; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 999px;
   background: color-mix(in srgb, var(--raised) 92%, transparent); backdrop-filter: blur(10px); border: 1px solid var(--line); }
 .tm-tabs button { justify-content: center; text-align: center; min-width: 0; border: 0; padding: 8px 4px; font-weight: 600; color: var(--muted); background: none;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background 0.15s ease, color 0.15s ease; }
@@ -792,6 +797,7 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
         <button type="button" role="tab" data-tab="top" aria-selected="false">Top</button>
         <button type="button" role="tab" data-tab="when" aria-selected="false">When</button>
         <button type="button" role="tab" data-tab="history" aria-selected="false">History</button>
+        <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings</button>
       </div>
       <div class="card tm-empty" id="tm-empty" hidden></div>
       <div class="tm-panel" data-tab="overview" id="tm-body">
@@ -822,6 +828,14 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
       </div>
       <div class="tm-panel" data-tab="history" hidden>
         <div class="card" id="tm-recent-card" hidden><h3>Last listens</h3><ul class="tm-listens" id="tm-recent" data-cap="6"></ul></div>
+      </div>
+      <!-- What Listening is set up with, in one place (0.47): who the listeners are, files brought in, Last.fm. -->
+      <div class="tm-panel" data-tab="settings" hidden>
+        <div class="card">
+          <h3>Listeners</h3>
+          <p class="sub">Every name the app scrobbles as, or a file was brought in for, has a history of its own. Two that are one person's can be joined: a listen both have is kept once.</p>
+          <ul class="tm-people" id="tm-people"></ul>
+        </div>
         <div class="card" data-fold>
           <h3>Bring in a history</h3>
           <p class="sub">An export of Koito, of Last.fm (the JSON or CSV of an export tool) or of ListenBrainz. A listen that's here already is kept once, so a file can be brought in again.</p>
@@ -1985,7 +1999,7 @@ function tmTab(tab) {
   tm.tab = tab;
   try { localStorage.setItem("beats-tm-tab", tab); } catch (e) { /* private window */ }
   document.querySelectorAll(".tm-tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
-  document.querySelectorAll(".tm-panel").forEach((p) => { p.hidden = p.dataset.tab !== tab || (tab !== "history" && !(tm.data && tm.data.totals.listens)); });
+  document.querySelectorAll(".tm-panel").forEach((p) => { p.hidden = p.dataset.tab !== tab || (tab !== "history" && tab !== "settings" && !(tm.data && tm.data.totals.listens)); });
 }
 document.querySelectorAll(".tm-tabs [data-tab]").forEach((b) => b.addEventListener("click", () => { tmTab(b.dataset.tab); window.scrollTo({top: 0}); }));
 document.querySelectorAll(".tm-seg [data-top]").forEach((b) => b.addEventListener("click", () => tmTop(b.dataset.top)));
@@ -2032,10 +2046,9 @@ function drawListening(d) {
       TM_MONTHS.map((m, i) => `<button type="button" data-month="${i + 1}" class="${d.months[i] ? "" : "empty"}" aria-pressed="${d.period.month === i + 1}" title="${num(d.months[i])} listens">${m}</button>`).join("");
     $("tm-months").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => tmGo(d.period.year, +b.dataset.month || null)));
   }
-  $("tm-empty").hidden = !!t.listens;
-  $("tm-empty").hidden = !!t.listens || tm.tab === "history";
+  $("tm-empty").hidden = !!t.listens || tm.tab === "history" || tm.tab === "settings";
   $("tm-empty").textContent = all.listens ? `Nothing was played in ${d.period.label}.` :
-    "Nothing here yet. Turn on Scrobble to Siansa Beats in the Siansa app (Settings › Scrobbling), or bring in a history under History.";
+    "Nothing here yet. Turn on Scrobble to Siansa Beats in the Siansa app (Settings › Scrobbling), or bring in a history under Settings.";
   tmTab(tm.tab);
   if (t.listens) {
     const tile = (k, v, s) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${v}</div><div class="s sub">${esc(s || "")}</div></div>`;
@@ -2074,6 +2087,7 @@ function drawListening(d) {
   $("tm-recent-card").hidden = !(d.recent || []).length;  // History: always there, also in a month with nothing
   $("tm-recent").innerHTML = (d.recent || []).map((l) => `<li data-artist="${esc(l.artist)}" tabindex="0">${art("cover", l.cover, l.title, 96, "s")}<div class="t"><b>${esc(l.title)}</b><span>${esc(l.artist)}</span></div>` +
     `<time>${esc(tmAgo(l.at))}</time></li>`).join("");
+  drawPeople(users);
   drawImport(d.importing);
   $("tm-remove-box").hidden = !users.some((u) => u.user === d.user && u.listens);
   const lf = (users.find((u) => u.user === d.user) || {}).lastfm || {};
@@ -2083,6 +2097,26 @@ function drawListening(d) {
     ? `${d.user || "This listener"}'s new listens are sent on to ${lf.name} on Last.fm: ${num(lf.sent)} sent` + (lf.waiting ? `, ${num(lf.waiting)} waiting` : "") +
       (lf.turned_away ? `, ${num(lf.turned_away)} not taken (too old, or turned away)` : "") + (lf.error ? `. ${lf.error}` : ".")
     : `Send ${d.user ? d.user + "'s" : "this listener's"} new listens on to a Last.fm account, as they come in. Listens from a file aren't sent.`;
+}
+// Settings › Listeners: who has a history here, and joining two that are one person's (the owner, 15 Nov: "max"
+// from a file and "Max" from the app, both theirs).
+function drawPeople(users) {
+  const name = (u) => u.user || "(no name)";
+  $("tm-people").innerHTML = users.map((u, i) => `<li><div class="t"><b>${esc(name(u))}</b><span>${num(u.listens)} ${u.listens === 1 ? "listen" : "listens"}${esc(listenerFrom(u))}` +
+    `${u.lastfm && u.lastfm.connected ? ` · sent on to ${esc(u.lastfm.name)} on Last.fm` : ""}</span></div>` +
+    (users.length > 1 ? `<span class="controls"><select data-from="${i}" aria-label="Join ${esc(name(u))}'s listens into"><option value="">Join into…</option>` +
+      users.map((o, j) => j === i ? "" : `<option value="${j}">${esc(name(o))}</option>`).join("") + `</select><button type="button" data-join="${i}" disabled>Join</button></span>` : "") + "</li>").join("") ||
+    '<li class="sub">No one yet.</li>';
+  $("tm-people").querySelectorAll("select").forEach((pick) => pick.addEventListener("change", () => {
+    $("tm-people").querySelector(`[data-join="${pick.dataset.from}"]`).disabled = pick.value === "";
+  }));
+  $("tm-people").querySelectorAll("[data-join]").forEach((b) => b.addEventListener("click", async () => {
+    const from = users[+b.dataset.join], to = users[+$("tm-people").querySelector(`select[data-from="${b.dataset.join}"]`).value];
+    if (!to || !confirm(`Make ${name(from)}'s ${num(from.listens)} listens ${name(to)}'s? A listen both have is kept once. This can't be undone.`)) return;
+    b.disabled = true;
+    try { await api("api/listens/rename", {method: "POST", body: JSON.stringify({from: from.user, to: to.user})}); tm.user = to.user; tm.year = tm.month = null; refreshListening(); }
+    catch (e) { banner(e.message); b.disabled = false; }
+  }));
 }
 function drawImport(state) {
   state = state || {};

@@ -19,6 +19,7 @@ other history service is needed beside it).
 Plain Python and the database of :mod:`beats.store`.
 """
 
+import bisect
 import csv
 import datetime
 import hashlib
@@ -313,6 +314,81 @@ class LastFm:
         return self.call(params, keys["secret"])
 
 
+# ---- in memory ----
+
+AT, ID, ARTIST, TITLE, ALBUM, DURATION, SONG, AKEY, TKEY, CREDITS = range(10)  # what a listen is in a Book
+
+
+class Library:
+    """What Listening needs of the songs here, read once per library read: each song's length and its artists as its
+    server lists them, and the artists of a credit line ("A feat. B") for a listen that names no song here."""
+
+    def __init__(self, store, version):
+        self.version, self.durations, self.artists, self.by_line = version, {}, {}, {}
+        for r in store._rows("SELECT id, duration, artist, artists FROM songs"):
+            if r["duration"]:
+                self.durations[r["id"]] = r["duration"]
+            if r["artists"]:
+                try:
+                    names = tuple(str(n) for n in json.loads(r["artists"]) if n)
+                except ValueError:
+                    continue
+                if names:
+                    self.artists[r["id"]] = names
+                    if len(names) > 1 and r["artist"]:
+                        self.by_line.setdefault(key(r["artist"]), names)
+
+    def names(self, song_id, akey):
+        """The artists of a listen of ``song_id`` (or, without one, of the credit line compared as ``akey``): None
+        when nothing here says."""
+        return (self.artists.get(song_id) if song_id else None) or self.by_line.get(akey)
+
+
+class Book:
+    """One listener's listens in memory, oldest first, as they were at one moment: never changed, a newer one takes
+    its place (0.47: the page's numbers read 69,000 rows from the database, several times over, for every period
+    opened). A listen counts for each of its artists (``CREDITS``: ``((as compared, name), …)``, the first one the
+    song's own), not for the line they're written in."""
+
+    def __init__(self, rows, top, seen, library):
+        self.rows, self.ats, self.top, self.seen, self.library = rows, [r[AT] for r in rows], top, seen, library
+        self._lengths = self._artists = None
+
+    def between(self, start, end):
+        return self.rows[bisect.bisect_left(self.ats, start):bisect.bisect_left(self.ats, end)]
+
+    def lengths(self):
+        """``{(artist line, title) as compared: the longest length a listen of it came with}``."""
+        if self._lengths is None:
+            found = {}
+            for r in self.rows:
+                if r[DURATION] and r[DURATION] > found.get((r[AKEY], r[TKEY]), 0):
+                    found[(r[AKEY], r[TKEY])] = r[DURATION]
+            self._lengths = found
+        return self._lengths
+
+    def artists(self):
+        """``{artist as compared: [first listen's second, listens, name, whether a song here says the name]}``, all
+        time."""
+        if self._artists is None:
+            found = {}
+            for r in self.rows:
+                for akey, name in r[CREDITS]:
+                    one = found.get(akey)
+                    if one is None:
+                        found[akey] = [r[AT], 1, name, bool(r[SONG])]
+                    else:
+                        one[1] += 1
+                        if r[SONG] or not one[3]:  # as the library writes the name, over a file's or an old tag's
+                            one[2], one[3] = name, bool(r[SONG])
+            self._artists = found
+        return self._artists
+
+    def length(self, r):
+        """A listen's length: its own, else its song's from another listen or from the library, else None."""
+        return r[DURATION] or self.lengths().get((r[AKEY], r[TKEY])) or self.library.durations.get(r[SONG])
+
+
 # ---- the history ----
 
 class Listens:
@@ -330,6 +406,12 @@ class Listens:
         self._working = set()  # the summaries being worked out again in the background
         self._relay_lock = threading.Lock()
         self._names = (None, [])  # (the change they were read at, the listeners with a listen kept)
+        self._books, self._forgot = {}, 0  # listener -> Book; counts the times everything in memory was dropped
+        self._library_kept = None
+        self._clock = {}  # time zone -> {quarter of an hour since 1970: (year, month, day, hour, weekday, day number)}
+        self._keys_kept = {}  # a name -> as compared
+        self._marked = 0  # counts the changes to what's sent on to Last.fm
+        self._people = self._sent = None
         self._join_names()
 
     # ---- who ----
@@ -363,6 +445,89 @@ class Listens:
                 continue
             for other in names[1:]:  # the first: the one who sends on, or else the one with the most listens
                 self.rename(other, names[0])
+
+    # ---- in memory ----
+
+    def library(self):
+        kept = self._library_kept
+        if kept is None or kept.version != self.store.library_changes:
+            kept = self._library_kept = Library(self.store, self.store.library_changes)
+        return kept
+
+    def _key(self, name):
+        got = self._keys_kept.get(name)
+        if got is None:
+            if len(self._keys_kept) > 200000:
+                self._keys_kept.clear()
+            got = self._keys_kept[name] = key(name) or name.casefold()
+        return got
+
+    def _row(self, r, library):
+        names = library.names(r["song_id"], r["akey"]) or (r["artist"],)
+        credits = tuple({self._key(n): n for n in names}.items())
+        return (r["at"], r["id"], r["artist"], r["title"], r["album"], r["duration"], r["song_id"], r["akey"], r["tkey"],
+                credits)
+
+    def book(self, user):
+        """``user``'s listens in memory, as they are now: read whole once, then only what came since."""
+        library = self.library()
+        with self._lock:
+            book, forgot = self._books.get(user), self._forgot
+        seen = self.changes
+        if book is not None and book.library is library and book.seen == seen:
+            return book
+        columns = "SELECT at, id, artist, title, album, duration, song_id, akey, tkey FROM listens "
+        if book is None or book.library is not library:
+            rows = [self._row(r, library) for r in self.store._rows(columns + "WHERE user=? ORDER BY at, id", (user,))]
+        else:
+            new = [self._row(r, library) for r in self.store._rows(columns + "WHERE id>? AND user=? ORDER BY at, id",
+                                                                   (book.top, user))]
+            if not new:
+                book.seen = seen
+                return book
+            rows = book.rows + new
+            if new[0][AT] < book.ats[-1]:  # a listen from before the last one (kept by the app while offline)
+                rows.sort(key=lambda r: (r[AT], r[ID]))
+        book = Book(rows, max((r[ID] for r in rows), default=0), seen, library)
+        with self._lock:
+            if forgot == self._forgot:  # nothing was removed or renamed meanwhile
+                if len(self._books) > 8:
+                    self._books.clear()
+                self._books[user] = book
+        return book
+
+    def _local(self, tz_name):
+        """``at -> (year, month, day, hour, weekday, day number)`` on the clock of ``tz_name``, worked out once per
+        quarter of an hour (a zone's clock is a whole number of them from UTC)."""
+        tz = zone(tz_name)
+        if len(self._clock) > 6:
+            self._clock.clear()
+        cache = self._clock.setdefault(str(tz_name or ""), {})
+        if len(cache) > 400000:
+            cache.clear()
+
+        def local(at):
+            got = cache.get(at // 900)
+            if got is None:
+                d = datetime.datetime.fromtimestamp(at, tz)
+                got = cache[at // 900] = (d.year, d.month, d.day, d.hour, d.weekday(), d.toordinal())
+            return got
+        return local
+
+    def warm(self, user, tz_name=None):
+        """Reads ``user``'s listens into memory and works out all time's numbers, in the background (at the start:
+        the first opening of Listening doesn't wait for them)."""
+        def work():
+            try:
+                self.summary(user, None, None, tz_name)
+            except Exception:  # nothing here may take the service down
+                _log.exception("Getting Listening ready went wrong")
+        threading.Thread(target=work, name="listens-warm", daemon=True).start()
+
+    def first_artist(self, artist, song_id=None):
+        """The artist Last.fm is told: the song's first one, not the line that credits a guest too ("A feat. B")."""
+        names = self.library().names(song_id, key(artist))
+        return names[0] if names else artist
 
     # ---- keeping ----
 
@@ -419,11 +584,16 @@ class Listens:
 
     def users(self):
         """The listeners, most listens first: ``[{"user", "listens", "first", "last", "sources", "lastfm"}]``."""
-        rows = self.store._rows("SELECT user, COUNT(*) AS listens, MIN(at) AS first, MAX(at) AS last FROM listens "
-                                "GROUP BY user ORDER BY listens DESC")
-        sources = {}
-        for r in self.store._rows("SELECT user, source, COUNT(*) AS n FROM listens GROUP BY user, source"):
-            sources.setdefault(r["user"], {})[r["source"] or "siansa"] = r["n"]
+        stamp = (self.changes, self._forgot)
+        kept = self._people
+        if kept is None or kept[0] != stamp:  # kept until a listen comes: two counts of every listen, at each opening
+            rows = self.store._rows("SELECT user, COUNT(*) AS listens, MIN(at) AS first, MAX(at) AS last FROM listens "
+                                    "GROUP BY user ORDER BY listens DESC")
+            sources = {}
+            for r in self.store._rows("SELECT user, source, COUNT(*) AS n FROM listens GROUP BY user, source"):
+                sources.setdefault(r["user"], {})[r["source"] or "siansa"] = r["n"]
+            kept = self._people = (stamp, rows, sources)
+        rows, sources = kept[1], kept[2]
         relays = self._relays()
         # Also who's playing now or sends on to Last.fm without a listen kept yet: the app's listener shows at once.
         names = [r["user"] for r in rows]
@@ -449,7 +619,8 @@ class Listens:
         self.playing[user] = playing
         keys = self._keys(user)
         if keys:
-            threading.Thread(target=self._say_playing, args=(user, keys, playing), name="lastfm-now", daemon=True).start()
+            said = dict(playing, artist=self.first_artist(artist, song_id))
+            threading.Thread(target=self._say_playing, args=(user, keys, said), name="lastfm-now", daemon=True).start()
         return True
 
     def _say_playing(self, user, keys, playing):
@@ -486,6 +657,7 @@ class Listens:
             with self.store._write():
                 self.store.db.execute("UPDATE listens SET relayed=0 WHERE user=? AND source='siansa' AND relayed IS NULL "
                                       "AND at>=?", (new, since))
+            self._marked += 1
         self.changes += 1
         self._forget_kept()
         self.store.event(f"The listens of {old or 'no name'} are {new or 'no name'}'s now ({moved} moved)")
@@ -577,59 +749,81 @@ class Listens:
 
     def top(self, user, kind="songs", start=0, end=2 ** 62, limit=50, server=None):
         """The most listened ``kind`` ("songs", "artists" or "albums") of ``user`` from ``start`` to ``end``, most
-        first: ``[{"artist", "title"|"album", "listens", "id" (``server``'s for the song, when it has it)}]``."""
+        first: ``[{"artist", "title"|"album", "listens", "id" (``server``'s for the song, when it has it)}]``. A
+        listen counts for each artist on its song; an album is its first artist's."""
         user = self.who(user)
-        limit = max(1, min(1000, int(limit)))
+        rows = self._top(self.book(user).between(start, end), kind, max(1, min(1000, int(limit))))
+        if kind == "songs":
+            ids = self.store.item_ids([r["song"] for r in rows if r["song"]], server) if server else {}
+            rows = [dict(r, id=ids.get(r["song"]) if server else r["song"]) for r in rows]
+        return rows
+
+    @staticmethod
+    def _top(rows, kind, limit):
+        found = {}  # what it's counted by -> [listens, last listen's second, the row shown]
         if kind == "artists":
-            rows = self.store._rows(
-                "SELECT artist, COUNT(*) AS listens, MAX(at) AS last, MAX(song_id) AS song_id FROM listens WHERE user=? "
-                "AND at>=? AND at<? GROUP BY akey ORDER BY listens DESC, last DESC LIMIT ?", (user, start, end, limit))
-            return [{"artist": r["artist"], "listens": r["listens"], "song": r["song_id"]} for r in rows]
+            for r in rows:
+                for place, (akey, name) in enumerate(r[CREDITS]):
+                    one = found.get(akey)
+                    if one is None:
+                        one = found[akey] = [0, 0, {"artist": name, "song": None, "here": False}]
+                    one[0], one[1] = one[0] + 1, r[AT]
+                    if r[SONG] or not one[2]["here"]:  # as the library writes the name, over a file's or an old tag's
+                        one[2]["artist"], one[2]["here"] = name, bool(r[SONG])
+                    if place == 0 and r[SONG]:  # a song of their own: a guest's listen would show the host's picture
+                        one[2]["song"] = r[SONG]
+        elif kind == "albums":
+            for r in rows:
+                if r[ALBUM] is None:
+                    continue
+                akey, name = r[CREDITS][0]
+                one = found.get((akey, r[ALBUM].casefold()))
+                if one is None:
+                    one = found[(akey, r[ALBUM].casefold())] = [0, 0, {"album": r[ALBUM], "artist": name, "song": None}]
+                one[0], one[1] = one[0] + 1, r[AT]
+                if r[SONG]:
+                    one[2]["song"] = r[SONG]
+        else:
+            for r in rows:
+                one = found.get((r[AKEY], r[TKEY]))
+                if one is None:
+                    one = found[(r[AKEY], r[TKEY])] = [0, 0, {"artist": r[ARTIST], "title": r[TITLE], "album": r[ALBUM],
+                                                              "song": None}]
+                one[0], one[1] = one[0] + 1, r[AT]
+                if r[SONG]:
+                    one[2]["song"] = r[SONG]
+        most = sorted(found.values(), key=lambda one: (-one[0], -one[1]))[:limit]
+        if kind == "artists":
+            return [{"artist": one[2]["artist"], "listens": one[0], "song": one[2]["song"]} for one in most]
         if kind == "albums":
-            rows = self.store._rows(
-                "SELECT album, artist, COUNT(*) AS listens, MAX(at) AS last, MAX(song_id) AS song_id FROM listens "
-                "WHERE user=? AND at>=? AND at<? AND album IS NOT NULL GROUP BY akey, album COLLATE NOCASE "
-                "ORDER BY listens DESC, last DESC LIMIT ?", (user, start, end, limit))
-            return [{"album": r["album"], "artist": r["artist"], "listens": r["listens"], "song": r["song_id"]} for r in rows]
-        rows = self.store._rows(
-            "SELECT artist, title, album, COUNT(*) AS listens, MAX(at) AS last, MAX(song_id) AS song_id FROM listens "
-            "WHERE user=? AND at>=? AND at<? GROUP BY akey, tkey ORDER BY listens DESC, last DESC LIMIT ?",
-            (user, start, end, limit))
-        ids = self.store.item_ids([r["song_id"] for r in rows if r["song_id"]], server) if server else {}
-        return [{"artist": r["artist"], "title": r["title"], "album": r["album"], "listens": r["listens"],
-                 "id": ids.get(r["song_id"]) if server else r["song_id"], "song": r["song_id"]} for r in rows]
+            return [{"album": one[2]["album"], "artist": one[2]["artist"], "listens": one[0], "song": one[2]["song"]}
+                    for one in most]
+        return [{"artist": one[2]["artist"], "title": one[2]["title"], "album": one[2]["album"], "listens": one[0],
+                 "song": one[2]["song"]} for one in most]
 
     def totals(self, user, start=0, end=2 ** 62, tz_name=None):
         """What ``user`` listened to from ``start`` to ``end`` in numbers, for the app's reports: ``{"listens",
         "seconds", "guessed" (listens whose length is a typical one's), "artists", "songs", "albums", "new_artists"
         (heard for the first time then), "hours"}`` (listens per hour of the day in ``tz_name``)."""
         user = self.who(user)
-        tz = zone(tz_name)
-        rows = self.store._rows("SELECT at, akey, tkey, album, duration, song_id FROM listens WHERE user=? AND at>=? "
-                                "AND at<?", (user, start, end))
-        # A listen's length: its own, else its song's from another listen or from the library, else a typical one.
-        lengths = {(r["akey"], r["tkey"]): r["d"] for r in self.store._rows(
-            "SELECT akey, tkey, MAX(duration) AS d FROM listens WHERE user=? AND duration IS NOT NULL GROUP BY akey, tkey",
-            (user,))} if rows else {}
-        library = {r["id"]: r["duration"] for r in self.store._rows(
-            "SELECT id, duration FROM songs WHERE id IN (SELECT DISTINCT song_id FROM listens WHERE user=? AND at>=? "
-            "AND at<? AND song_id IS NOT NULL)", (user, start, end))} if rows else {}
+        book, local = self.book(user), self._local(tz_name)
+        rows = book.between(start, end)
         seconds = guessed = 0
         hours, artists, songs, albums = [0] * 24, set(), set(), set()
         for r in rows:
-            length = r["duration"] or lengths.get((r["akey"], r["tkey"])) or library.get(r["song_id"])
+            length = book.length(r)
             if not length:
                 length, guessed = TYPICAL_SECONDS, guessed + 1
             seconds += length
-            hours[datetime.datetime.fromtimestamp(r["at"], tz).hour] += 1
-            artists.add(r["akey"])
-            songs.add((r["akey"], r["tkey"]))
-            if r["album"]:
-                albums.add((r["akey"], r["album"].casefold()))
-        new = self.store._rows("SELECT COUNT(*) AS n FROM (SELECT MIN(at) AS first FROM listens WHERE user=? GROUP BY akey "
-                               "HAVING first>=? AND first<?)", (user, start, end))
+            hours[local(r[AT])[3]] += 1
+            for akey, _ in r[CREDITS]:
+                artists.add(akey)
+            songs.add((r[AKEY], r[TKEY]))
+            if r[ALBUM]:
+                albums.add((r[CREDITS][0][0], r[ALBUM].casefold()))
+        new = sum(1 for one in book.artists().values() if start <= one[0] < end)
         return {"listens": len(rows), "seconds": seconds, "guessed": guessed, "artists": len(artists), "songs": len(songs),
-                "albums": len(albums), "new_artists": new[0]["n"] if new else 0, "hours": hours}
+                "albums": len(albums), "new_artists": new, "hours": hours}
 
     def recent(self, user, limit=30):
         user = self.who(user)
@@ -678,54 +872,42 @@ class Listens:
         """After a change bigger than a listen or two: no kept summary is given again."""
         with self._lock:
             self._kept.clear()
+            self._books.clear()
+            self._forgot += 1
 
     def _summary(self, user, year, month, tz_name, most):
-        tz = zone(tz_name)
-        start, end, label = self.window(year, month, tz)
-        local = lambda at: datetime.datetime.fromtimestamp(at, tz)  # noqa: E731
+        start, end, label = self.window(year, month, zone(tz_name))
+        book, local = self.book(user), self._local(tz_name)
 
-        # Every listen's second, for the years and months there's something in; a listen's local time is worked out
-        # once (0.42.3), here, and used again below for the ones in the period.
-        every = [r["at"] for r in self.store._rows("SELECT at FROM listens WHERE user=? ORDER BY at", (user,))]
+        # The years and months there's something in.
         years, months = Counter(), Counter()
-        when = {}
-        for at in every:
+        for at in book.ats:
             d = local(at)
-            years[d.year] += 1
-            if year and d.year == year:
-                months[d.month] += 1
-            if start <= at < end:
-                when[at] = d
+            years[d[0]] += 1
+            if year and d[0] == year:
+                months[d[1]] += 1
 
-        rows = self.store._rows("SELECT at, akey, tkey, album, duration, song_id FROM listens WHERE user=? AND at>=? "
-                                "AND at<? ORDER BY at", (user, start, end))
-        # A listen's length: its own, else its song's from another listen or from the library, else a typical one.
-        lengths = {(r["akey"], r["tkey"]): r["d"] for r in self.store._rows(
-            "SELECT akey, tkey, MAX(duration) AS d FROM listens WHERE user=? AND duration IS NOT NULL GROUP BY akey, tkey", (user,))}
-        library = {r["id"]: r["duration"] for r in self.store._rows(
-            "SELECT id, duration FROM songs WHERE id IN (SELECT DISTINCT song_id FROM listens WHERE user=? AND at>=? "
-            "AND at<? AND song_id IS NOT NULL)", (user, start, end))} if rows else {}
+        rows = book.between(start, end)
         seconds = guessed = 0
         hours, weekdays, days = [0] * 24, [0] * 7, Counter()
         artists, songs, albums = set(), set(), set()
         for r in rows:
-            length = r["duration"] or lengths.get((r["akey"], r["tkey"])) or library.get(r["song_id"])
+            length = book.length(r)
             if not length:
                 length, guessed = TYPICAL_SECONDS, guessed + 1
             seconds += length
-            d = when.get(r["at"]) or local(r["at"])
-            hours[d.hour] += 1
-            weekdays[d.weekday()] += 1
-            days[d.date()] += 1
-            artists.add(r["akey"])
-            songs.add((r["akey"], r["tkey"]))
-            if r["album"]:
-                albums.add((r["akey"], r["album"].casefold()))
+            d = local(r[AT])
+            hours[d[3]] += 1
+            weekdays[d[4]] += 1
+            days[d[5]] += 1
+            for akey, _ in r[CREDITS]:
+                artists.add(akey)
+            songs.add((r[AKEY], r[TKEY]))
+            if r[ALBUM]:
+                albums.add((r[CREDITS][0][0], r[ALBUM].casefold()))
 
-        # Artists heard for the first time in this period.
-        firsts = self.store._rows("SELECT artist, MIN(at) AS first, COUNT(*) AS listens FROM listens WHERE user=? "
-                                  "GROUP BY akey HAVING first>=? AND first<?", (user, start, end))
-        new_artists = sorted(firsts, key=lambda r: -r["listens"])
+        # Artists heard for the first time in this period, with their listens of all time.
+        new_artists = sorted((one for one in book.artists().values() if start <= one[0] < end), key=lambda one: -one[1])
 
         if not year:
             unit, points = "year", [{"label": str(y), "listens": years[y], "year": y}
@@ -734,16 +916,15 @@ class Listens:
             unit, points = "month", [{"label": MONTHS[m - 1][:3], "listens": months[m], "month": m} for m in range(1, 13)]
         else:
             last = (datetime.date(year + (month == 12), month % 12 + 1, 1) - datetime.timedelta(days=1)).day
-            unit, points = "day", [{"label": str(d), "listens": days[datetime.date(year, month, d)]} for d in range(1, last + 1)]
+            unit, points = "day", [{"label": str(d), "listens": days[datetime.date(year, month, d).toordinal()]}
+                                   for d in range(1, last + 1)]
 
         streak = best = 0
         previous = None
         for day in sorted(days):
-            streak = streak + 1 if previous and (day - previous).days == 1 else 1
+            streak = streak + 1 if previous is not None and day - previous == 1 else 1
             best, previous = max(best, streak), day
         busiest = max(days.items(), key=lambda p: p[1]) if days else None
-        first = self.store._rows("SELECT at, artist, title FROM listens WHERE user=? AND at>=? AND at<? ORDER BY at LIMIT 1",
-                                 (user, start, end))
         return {
             "user": user, "period": {"label": label, "year": year, "month": month, "zone": str(tz_name or "UTC")},
             "years": [{"year": y, "listens": n} for y, n in sorted(years.items())],
@@ -751,71 +932,76 @@ class Listens:
             "totals": {"listens": len(rows), "seconds": seconds, "guessed": guessed, "artists": len(artists),
                        "songs": len(songs), "albums": len(albums), "days": len(days), "new_artists": len(new_artists)},
             "chart": {"unit": unit, "points": points},
-            "top": {kind: self.top(user, kind, start, end, most) for kind in ("songs", "artists", "albums")},
-            "new_artists": [{"artist": r["artist"], "listens": r["listens"]} for r in new_artists[:12]],
+            "top": {kind: self._top(rows, kind, most) for kind in ("songs", "artists", "albums")},
+            "new_artists": [{"artist": one[2], "listens": one[1]} for one in new_artists[:12]],
             "hours": hours, "weekdays": [{"day": WEEKDAYS[i], "listens": n} for i, n in enumerate(weekdays)],
-            "records": {"busiest_day": {"date": busiest[0].isoformat(), "listens": busiest[1]} if busiest else None,
-                        "streak": best, "first": dict(first[0]) if first else None,
+            "records": {"busiest_day": {"date": datetime.date.fromordinal(busiest[0]).isoformat(), "listens": busiest[1]}
+                        if busiest else None,
+                        "streak": best,
+                        "first": {"at": rows[0][AT], "artist": rows[0][ARTIST], "title": rows[0][TITLE]} if rows else None,
                         "per_day": round(len(rows) / len(days), 1) if days else 0},
-            "all": {"listens": len(every), "first": every[0] if every else None, "last": every[-1] if every else None},
+            "all": {"listens": len(book.ats), "first": book.ats[0] if book.ats else None,
+                    "last": book.ats[-1] if book.ats else None},
         }
 
     def artist(self, user, name, tz_name=None, most=20):
         """Everything the page shows of one artist in ``user``'s listening, all time: ``None`` when they never
-        listened to it. Names are compared as :func:`key` does ("AC/DC" is "ac dc")."""
+        listened to it. Names are compared as :func:`key` does ("AC/DC" is "ac dc"). Every listen the artist is on
+        counts, a guest's too; a credit line of several ("A feat. B") is its first artist."""
         user = self.who(user)
         akey = key(name)
         if not akey:
             return None
-        rows = self.store._rows("SELECT at, artist, tkey, title, album, duration, song_id FROM listens WHERE user=? "
-                                "AND akey=? ORDER BY at", (user, akey))
-        if not rows:
-            return None
-        tz = zone(tz_name)
-        local = lambda at: datetime.datetime.fromtimestamp(at, tz)  # noqa: E731
-        lengths = {r["tkey"]: r["duration"] for r in rows if r["duration"]}
-        library = {r["id"]: r["duration"] for r in self.store._rows(
-            "SELECT id, duration FROM songs WHERE id IN (SELECT DISTINCT song_id FROM listens WHERE user=? AND akey=? "
-            "AND song_id IS NOT NULL)", (user, akey))}
+        book = self.book(user)
+        if akey not in book.artists():
+            line = next((r for r in reversed(book.rows) if r[AKEY] == akey), None)
+            if line is None:
+                return None
+            akey = line[CREDITS][0][0]
+        rows = [r for r in book.rows if any(c[0] == akey for c in r[CREDITS])]
+        local = self._local(tz_name)
         seconds = guessed = 0
         years, hours, days = Counter(), [0] * 24, set()
+        songs, albums = {}, {}  # as compared -> [listens, last, title or album, album, a song here, (songs of it)]
         for r in rows:
-            length = r["duration"] or lengths.get(r["tkey"]) or library.get(r["song_id"])
+            length = book.length(r)
             if not length:
                 length, guessed = TYPICAL_SECONDS, guessed + 1
             seconds += length
-            d = local(r["at"])
-            years[d.year] += 1
-            hours[d.hour] += 1
-            days.add(d.date())
-        # Its place among the listener's artists, all time.
-        ahead = self.store._rows("SELECT COUNT(*) AS n FROM (SELECT akey, COUNT(*) AS c FROM listens WHERE user=? "
-                                 "GROUP BY akey HAVING c > ?)", (user, len(rows)))[0]["n"]
-        everything = self.count(user)
-        songs = self.store._rows(
-            "SELECT title, album, COUNT(*) AS listens, MAX(at) AS last, MAX(song_id) AS song_id FROM listens "
-            "WHERE user=? AND akey=? GROUP BY tkey ORDER BY listens DESC, last DESC LIMIT ?", (user, akey, most))
-        albums = self.store._rows(
-            "SELECT album, COUNT(*) AS listens, MAX(at) AS last, MAX(song_id) AS song_id, COUNT(DISTINCT tkey) AS songs "
-            "FROM listens WHERE user=? AND akey=? AND album IS NOT NULL GROUP BY album COLLATE NOCASE "
-            "ORDER BY listens DESC, last DESC LIMIT ?", (user, akey, most))
+            d = local(r[AT])
+            years[d[0]] += 1
+            hours[d[3]] += 1
+            days.add(d[5])
+            one = songs.setdefault(r[TKEY], [0, 0, r[TITLE], r[ALBUM], None, r[ARTIST]])
+            one[0], one[1] = one[0] + 1, r[AT]
+            one[4] = r[SONG] or one[4]
+            if r[ALBUM]:
+                one = albums.setdefault(r[ALBUM].casefold(), [0, 0, r[ALBUM], set(), None, r[ARTIST]])
+                one[0], one[1] = one[0] + 1, r[AT]
+                one[3].add(r[TKEY])
+                one[4] = r[SONG] or one[4]
+        mine = book.artists()[akey]
+        ahead = sum(1 for one in book.artists().values() if one[1] > len(rows))
         busiest = max(years.items(), key=lambda p: p[1])
         first, last = rows[0], rows[-1]
+        most_first = lambda found: sorted(found.values(), key=lambda one: (-one[0], -one[1]))[:most]  # noqa: E731
         return {
-            "user": user, "artist": last["artist"], "song": next((r["song_id"] for r in reversed(rows) if r["song_id"]), None),
-            "totals": {"listens": len(rows), "seconds": seconds, "guessed": guessed, "songs": len({r["tkey"] for r in rows}),
-                       "albums": len({(r["album"] or "").casefold() for r in rows if r["album"]}), "days": len(days),
-                       "share": round(len(rows) / everything * 100, 1) if everything else 0, "rank": ahead + 1},
-            "first": {"at": first["at"], "title": first["title"]}, "last": {"at": last["at"], "title": last["title"]},
+            "user": user, "artist": mine[2],
+            # A song of their own for the picture: a song they're a guest on would show the host's.
+            "song": next((r[SONG] for r in reversed(rows) if r[SONG] and r[CREDITS][0][0] == akey), None),
+            "totals": {"listens": len(rows), "seconds": seconds, "guessed": guessed, "songs": len(songs),
+                       "albums": len(albums), "days": len(days),
+                       "share": round(len(rows) / len(book.rows) * 100, 1) if book.rows else 0, "rank": ahead + 1},
+            "first": {"at": first[AT], "title": first[TITLE]}, "last": {"at": last[AT], "title": last[TITLE]},
             "busiest_year": {"year": busiest[0], "listens": busiest[1]},
             "years": [{"year": y, "listens": years[y]} for y in range(min(years), max(years) + 1)],
             "hours": hours,
-            "songs": [{"title": r["title"], "album": r["album"], "artist": last["artist"], "listens": r["listens"],
-                       "song": r["song_id"]} for r in songs],
-            "albums": [{"album": r["album"], "artist": last["artist"], "listens": r["listens"], "songs": r["songs"],
-                        "song": r["song_id"]} for r in albums],
-            "recent": [{"at": r["at"], "title": r["title"], "album": r["album"], "artist": r["artist"], "song": r["song_id"]}
-                       for r in list(reversed(rows))[:10]],
+            "songs": [{"title": one[2], "album": one[3], "artist": one[5], "listens": one[0], "song": one[4]}
+                      for one in most_first(songs)],
+            "albums": [{"album": one[2], "artist": one[5], "listens": one[0], "songs": len(one[3]), "song": one[4]}
+                       for one in most_first(albums)],
+            "recent": [{"at": r[AT], "title": r[TITLE], "album": r[ALBUM], "artist": r[ARTIST], "song": r[SONG]}
+                       for r in rows[:-11:-1]],
         }
 
     # ---- on to Last.fm ----
@@ -836,8 +1022,15 @@ class Listens:
     def lastfm_status(self, user):
         """``{"connected", "name", "waiting", "sent", "error"}`` of ``user``'s sending on to Last.fm; never a key."""
         saved = self._relays().get(user)
-        counts = {r["relayed"]: r["n"] for r in self.store._rows(
-            "SELECT relayed, COUNT(*) AS n FROM listens WHERE user=? AND relayed IS NOT NULL GROUP BY relayed", (user,))}
+        stamp = (self.changes, self._forgot, self._marked)
+        kept = self._sent
+        if kept is None or kept[0] != stamp:
+            found = {}
+            for r in self.store._rows("SELECT user, relayed, COUNT(*) AS n FROM listens WHERE relayed IS NOT NULL "
+                                      "GROUP BY user, relayed"):
+                found.setdefault(r["user"], {})[r["relayed"]] = r["n"]
+            kept = self._sent = (stamp, found)
+        counts = kept[1].get(user, {})
         return {"connected": bool(saved), "name": (saved or {}).get("name"), "since": (saved or {}).get("since"),
                 "waiting": counts.get(0, 0), "sent": counts.get(1, 0), "turned_away": counts.get(2, 0) + counts.get(3, 0),
                 "error": (self.relay_state.get(user) or {}).get("error")}
@@ -860,13 +1053,14 @@ class Listens:
         self.store.event(f"Listens{' of ' + user if user else ''} are sent on to Last.fm ({name}) from now on")
         return self.lastfm_status(user)
 
-    def love(self, user, artist, title, loved=True):
+    def love(self, user, artist, title, loved=True, song_id=None):
         """Passes a heart from the app on to ``user``'s Last.fm, in the background; False when they don't send on."""
         user = self.who(user)
         keys = self._keys(user)
         artist, title = str(artist or "").strip(), str(title or "").strip()
         if not keys or not all(keys.values()) or not artist or not title:
             return False
+        artist = self.first_artist(artist, song_id)
 
         def send():
             try:
@@ -887,6 +1081,7 @@ class Listens:
         self.store.set_setting("lastfm_relay", saved)
         with self.store._write():  # what was waiting isn't sent later to another account
             self.store.db.execute("UPDATE listens SET relayed=NULL WHERE user=? AND relayed=0", (user,))
+        self._marked += 1
         self.relay_state.pop(user, None)
         self.store.event(f"Listens{' of ' + user if user else ''} are no longer sent on to Last.fm")
         return True
@@ -908,12 +1103,16 @@ class Listens:
         oldest = self.now() - LastFm.OLDEST
         with self.store._write():
             self.store.db.execute("UPDATE listens SET relayed=3 WHERE user=? AND relayed=0 AND at<?", (user, oldest))
+        self._marked += 1
         while True:
             rows = [dict(r) for r in self.store._rows(
-                "SELECT id, at, artist, title, album, album_artist, duration FROM listens WHERE user=? AND relayed=0 ORDER BY at LIMIT ?",
+                "SELECT id, at, artist, title, album, album_artist, duration, song_id FROM listens WHERE user=? AND relayed=0 "
+                "ORDER BY at LIMIT ?",
                 (user, LastFm.MOST))]
             if not rows:
                 break
+            for r in rows:  # Last.fm's artist is the song's first one, not a line with its guests ("A feat. B")
+                r["artist"] = self.first_artist(r["artist"], r.pop("song_id"))
             try:
                 self.lastfm.scrobble(keys, rows)
             except LastFmError as e:
@@ -936,3 +1135,4 @@ class Listens:
     def _mark(self, rows, state):
         with self.store._write():
             self.store.db.executemany("UPDATE listens SET relayed=? WHERE id=?", [(state, r["id"]) for r in rows])
+        self._marked += 1

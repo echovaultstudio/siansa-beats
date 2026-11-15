@@ -628,3 +628,118 @@ class NamesInAnyCapitals(unittest.TestCase):
         listens = L.Listens(store)
         self.assertEqual(sorted(r["user"] for r in store._rows("SELECT user FROM listens")), ["Max", "max"])
         self.assertEqual(listens.who("Max"), "Max")
+
+
+class Fresh(unittest.TestCase):
+    """History's start, without its checks."""
+    setUp, row = History.setUp, History.row
+
+
+class EveryArtistOfASong(Fresh):
+    """0.47: a listen of "A feat. B" counts for A and for B, as the song's tags have them (the owner, 15 Nov:
+    "Fred V & Grafix feat. Amy J Pryce" was an artist of its own on Listening)."""
+
+    LINE = "Fred V & Grafix feat. Amy J Pryce"
+
+    def setUp(self):
+        super().setUp()
+        song = {"title": "Ignite", "artist": self.LINE, "album": "Oxygen", "duration": 306.0, "suffix": "flac",
+                "tag_bpm": None, "artists": ["Fred V & Grafix", "Amy J Pryce"]}
+        self.store.add_songs([dict(song, id="ignite"),
+                              {**song, "id": "ultra", "title": "Ultraviolet", "artist": "Fred V & Grafix",
+                               "artists": ["Fred V & Grafix"]}])
+        self.listens.add("max", [self.row("2026-11-01T10:00:00", self.LINE, "Ignite", id="ignite", album="Oxygen"),
+                                 self.row("2026-11-01T10:10:00", "Fred V & Grafix", "Ultraviolet", id="ultra", album="Oxygen"),
+                                 # the same credit line from a file, for a song that isn't here: split as the line is here
+                                 self.row("2026-11-01T10:20:00", self.LINE, "Altitude", album="Oxygen"),
+                                 self.row("2026-11-01T10:30:00", "Someone & Friends", "Theirs")])
+
+    def test_a_listen_counts_for_each_artist_on_its_song(self):
+        top = self.listens.top("max", "artists")
+        self.assertEqual([(r["artist"], r["listens"]) for r in top],
+                         [("Fred V & Grafix", 3), ("Amy J Pryce", 2), ("Someone & Friends", 1)])  # a name with "&" stays whole
+        self.assertEqual(top[0]["song"], "ultra")
+        self.assertIsNone(top[1]["song"])  # a guest: not the host's picture
+        page = self.listens.summary("max", 2026, 11)
+        self.assertEqual(page["totals"]["artists"], 3)
+        self.assertEqual(sorted(r["artist"] for r in page["new_artists"]), ["Amy J Pryce", "Fred V & Grafix", "Someone & Friends"])
+        self.assertEqual(self.listens.totals("max")["artists"], 3)
+        self.assertEqual(self.listens.totals("max")["new_artists"], 3)
+
+    def test_the_album_is_its_first_artists_once(self):
+        albums = self.listens.top("max", "albums")
+        self.assertEqual([(r["album"], r["artist"], r["listens"]) for r in albums], [("Oxygen", "Fred V & Grafix", 3)])
+        self.assertEqual(self.listens.summary("max")["totals"]["albums"], 1)
+
+    def test_an_artists_page_has_every_listen_they_are_on(self):
+        guest = self.listens.artist("max", "Amy J Pryce")
+        self.assertEqual((guest["artist"], guest["totals"]["listens"], guest["totals"]["rank"]), ("Amy J Pryce", 2, 2))
+        self.assertEqual([r["title"] for r in guest["songs"]], ["Altitude", "Ignite"])
+        host = self.listens.artist("max", "fred v & grafix")
+        self.assertEqual((host["totals"]["listens"], host["totals"]["songs"], host["totals"]["albums"]), (3, 3, 1))
+        # An address kept from before, with the whole line: its first artist's page.
+        self.assertEqual(self.listens.artist("max", self.LINE)["artist"], "Fred V & Grafix")
+        self.assertIsNone(self.listens.artist("max", "Nobody"))
+
+    def test_lastfm_gets_the_songs_first_artist(self):
+        self.listens.connect_lastfm("max", "key", "shh", "max", "right")
+        self.now = at("2026-11-11T12:00:00")
+        self.listens.add("max", [self.row("2026-11-11T11:00:00", self.LINE, "Ignite", id="ignite", album="Oxygen"),
+                                 self.row("2026-11-11T11:10:00", "Someone & Friends", "Theirs")])
+        self.listens.relay()
+        self.assertEqual([[(artist, title) for _, artist, title in sent] for sent in self.lastfm.sent],
+                         [[("Fred V & Grafix", "Ignite"), ("Someone & Friends", "Theirs")]])
+        self.assertEqual(self.listens.first_artist(self.LINE), "Fred V & Grafix")  # by the line, without the song
+        self.assertEqual(self.listens.first_artist("A feat. B"), "A feat. B")  # nothing here says: left as it is
+
+    def test_a_library_read_again_splits_what_was_kept_before(self):
+        self.listens.add("max", [self.row("2026-11-02T10:00:00", "Old • Line", "Song", id="old")])
+        self.assertEqual(self.listens.top("max", "artists", at("2026-11-02T00:00:00"))[0]["artist"], "Old • Line")
+        self.store.add_songs([{"id": "old", "title": "Song", "artist": "Old • Line", "album": "", "duration": 100.0,
+                               "suffix": "mp3", "tag_bpm": None, "artists": ["Old", "Line"]}])
+        self.listens.add("max", [self.row("2026-11-02T11:00:00", "Old • Line", "Song", id="old")])
+        top = self.listens.top("max", "artists", at("2026-11-02T00:00:00"))
+        self.assertEqual(sorted((r["artist"], r["listens"]) for r in top), [("Line", 2), ("Old", 2)])
+
+
+class InMemory(Fresh):
+    """0.47: the numbers are worked out from the listens kept in memory; they're the database's at every moment."""
+
+    def test_a_listen_added_later_or_from_before_is_counted(self):
+        self.listens.add("max", [self.row("2026-11-01T10:00:00"), self.row("2026-11-03T10:00:00", title="Later")])
+        self.assertEqual(self.listens.summary("max")["totals"]["listens"], 2)
+        self.listens.add("max", [self.row("2026-11-04T10:00:00", title="Newest")])
+        self.listens.add("max", [self.row("2026-11-02T10:00:00", title="Kept offline")])  # from before the last one
+        page = self.listens.summary("max", 2026, 11)
+        self.assertEqual(page["totals"]["listens"], 4)
+        self.assertEqual(page["records"]["streak"], 4)
+        self.assertEqual(page["records"]["first"]["title"], "Eple")
+        seconds = [r[L.AT] for r in self.listens.book("max").rows]
+        self.assertEqual(seconds, sorted(seconds))
+        self.assertEqual(self.listens.count("max"), len(self.listens.book("max").rows))
+
+    def test_removed_and_renamed_listens_leave_memory(self):
+        self.listens.add("max", [self.row("2026-11-01T10:00:00")], source="lastfm")
+        self.listens.add("Other", [self.row("2026-11-02T10:00:00")])
+        self.assertEqual([u["listens"] for u in self.listens.users()], [1, 1])
+        self.assertEqual(self.listens.summary("max")["totals"]["listens"], 1)
+        self.listens.rename("Other", "max")
+        self.assertEqual(self.listens.summary("max")["totals"]["listens"], 2)
+        self.assertEqual([(u["user"], u["listens"]) for u in self.listens.users()], [("max", 2)])
+        self.assertEqual(self.listens.remove("max", "lastfm"), 1)
+        self.assertEqual(self.listens.summary("max")["totals"]["listens"], 1)
+        self.assertEqual(self.listens.top("max", "songs")[0]["listens"], 1)
+
+    def test_the_days_and_hours_are_the_zones(self):
+        self.listens.add("max", [self.row("2026-10-31T22:30:00")])  # 00:30 on 1 Nov in Helsinki (UTC+2 by then)
+        page = self.listens.summary("max", 2026, 11, "Europe/Helsinki")
+        self.assertEqual((page["totals"]["listens"], page["hours"][0], page["records"]["busiest_day"]["date"]), (1, 1, "2026-11-01"))
+        self.assertEqual(self.listens.summary("max", 2026, 11, "UTC")["totals"]["listens"], 0)
+
+    def test_what_was_sent_on_is_counted_as_it_changes(self):
+        self.listens.connect_lastfm("max", "key", "shh", "max", "right")
+        self.listens.add("max", [self.row("2026-11-11T11:00:00")])
+        self.assertEqual(self.listens.lastfm_status("max")["waiting"], 1)
+        self.listens.relay()
+        status = self.listens.lastfm_status("max")
+        self.assertEqual((status["waiting"], status["sent"]), (0, 1))

@@ -249,7 +249,9 @@ def post(handler, path, body, server=None):
     if path == "/api/v1/loves":  # a heart from the app: on to Last.fm for a listener who sends listens on
         if not str(body.get("artist") or "").strip() or not str(body.get("title") or "").strip():
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True
-        sent = handler.app.listens.love(body.get("user"), body.get("artist"), body.get("title"), body.get("loved", True) is not False)
+        here = _here(handler.app, str(body["id"]), server) if body.get("id") else None
+        sent = handler.app.listens.love(body.get("user"), body.get("artist"), body.get("title"),
+                                        body.get("loved", True) is not False, here)
         return handler._json({"passed_on": sent}) or True
     if path == "/api/v1/listens/now":  # what's playing now
         here = _here(handler.app, str(body["id"]), server) if body.get("id") else None

@@ -265,6 +265,8 @@ class App:
         from .listens import Listens
 
         self.listens = Listens(self.store, self.vault)
+        self._listening_zone = self.store.setting("listening_zone")
+        self.listens.warm(self.default_listener(), self._listening_zone)
         self.cleaner = Cleaner(self)  # tidying the database (0.40): looked at first, removed as shown
         self.style_switch = None  # {"model", "model_name", "phase", "since", "songs", "doubted"} while a switch runs
         # Covers and artists' pictures for the listening page (0.30): the music server's own, kept in the data folder.
@@ -321,6 +323,9 @@ class App:
         users = self.listens.users()
         if user is None:  # the first one with a name (the app's), else the first
             user = next((u["user"] for u in users if u["user"]), users[0]["user"] if users else "")
+        if tz and tz != self._listening_zone:  # remembered, to have all time's numbers ready after a restart
+            self._listening_zone = tz
+            self.store.set_setting("listening_zone", tz)
         answer = {"users": users, "importing": dict(self.listens.importing), "playing": self.listens.all_playing(),
                   **self.listens.summary(user, year, month, tz)}
         # Which song's cover and which song's artist picture each row shows ("cover", "face": a song id here, or
