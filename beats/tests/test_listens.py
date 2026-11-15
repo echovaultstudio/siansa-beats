@@ -580,3 +580,51 @@ class Pictures(Service):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NamesInAnyCapitals(unittest.TestCase):
+    """Issue 1178 of the app: the TV, signed in as "Max", wasn't sent on to the Last.fm that "max" connected."""
+
+    def test_a_name_in_other_capitals_is_the_same_listener(self):
+        store = Store(":memory:")
+        listens = L.Listens(store)
+        store.set_setting("lastfm_relay", {"max": {"name": "max-fm", "since": 0}})
+        at = int(listens.now())
+        self.assertEqual(listens.add("Max", [{"at": at, "artist": "A", "title": "T"}])["kept"], 1)
+        self.assertEqual(listens.add(" MAX ", [{"at": at - 300, "artist": "A", "title": "U"}])["kept"], 1)
+        rows = store._rows("SELECT user, relayed FROM listens")
+        self.assertEqual({(r["user"], r["relayed"]) for r in rows}, {("max", 0)})  # both wait for Last.fm
+        self.assertEqual(listens.who("mAx"), "max")
+        self.assertEqual(listens.count(listens.who("MAX")), 2)
+        self.assertEqual(len(listens.recent("Max")), 2)
+        self.assertEqual(listens.who("maxine"), "maxine")  # another name stays another listener
+        self.assertEqual(listens.who(""), "")
+
+    def test_listens_kept_under_other_capitals_join_at_the_start_and_go_on(self):
+        store = Store(":memory:")
+        first = L.Listens(store)
+        at = int(first.now())
+        store.set_setting("lastfm_relay", {"max": {"name": "max-fm", "since": at - 3600}})
+        with store._write():  # as 0.46 kept them: the TV's under "Max", never to be sent
+            for user, when, title, relayed in (("max", at - 60, "Phone", 1), ("Max", at - 30, "TV", None),
+                                               ("Max", at - 60, "Phone", None), ("Max", at - 7200, "Before", None)):
+                store.db.execute("INSERT INTO listens (user, at, artist, title, source, akey, tkey, relayed) "
+                                 "VALUES (?, ?, 'A', ?, 'siansa', 'a', ?, ?)", (user, when, title, title.lower(), relayed))
+        again = L.Listens(store)
+        rows = {r["title"]: (r["user"], r["relayed"]) for r in store._rows("SELECT user, title, relayed FROM listens")}
+        self.assertEqual(rows, {"Phone": ("max", 1),      # kept once, not sent twice
+                                "TV": ("max", 0),         # goes on to Last.fm now
+                                "Before": ("max", None)})  # from before Last.fm was connected: not sent
+        self.assertEqual(again.count(), 3)
+
+    def test_two_names_with_their_own_lastfm_stay_two(self):
+        store = Store(":memory:")
+        L.Listens(store)
+        store.set_setting("lastfm_relay", {"max": {"name": "one", "since": 0}, "Max": {"name": "two", "since": 0}})
+        with store._write():
+            for user in ("max", "Max"):
+                store.db.execute("INSERT INTO listens (user, at, artist, title, source, akey, tkey) "
+                                 "VALUES (?, 5, 'A', 'T', 'siansa', 'a', 't')", (user,))
+        listens = L.Listens(store)
+        self.assertEqual(sorted(r["user"] for r in store._rows("SELECT user FROM listens")), ["Max", "max"])
+        self.assertEqual(listens.who("Max"), "Max")

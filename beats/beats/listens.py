@@ -329,6 +329,40 @@ class Listens:
         self._kept, self._lock = {}, threading.Lock()
         self._working = set()  # the summaries being worked out again in the background
         self._relay_lock = threading.Lock()
+        self._names = (None, [])  # (the change they were read at, the listeners with a listen kept)
+        self._join_names()
+
+    # ---- who ----
+
+    def _listeners(self):
+        if self._names[0] != self.changes:
+            self._names = (self.changes, [r["user"] for r in self.store._rows(
+                "SELECT user FROM listens GROUP BY user ORDER BY COUNT(*) DESC")])
+        return self._names[1]
+
+    def who(self, user):
+        """The listener ``user`` means: a name is the same whatever its capitals ("Max" typed on the TV is the
+        phone's "max", as it is for the music server), so one person's listens stay together and go on to their
+        Last.fm (issue 1178 of the app). The one who sends on to Last.fm first, then the one with the most listens."""
+        user = str(user or "").strip()
+        known = list(self._relays()) + self._listeners()
+        if not user or user in known:
+            return user
+        folded = user.casefold()
+        return next((name for name in known if name.casefold() == folded), user)
+
+    def _join_names(self):
+        """Listens kept under one name in different capitals, from before :meth:`who`, become one listener's. Left
+        alone when two of the names each send on to their own Last.fm."""
+        relays, groups = self._relays(), {}
+        for name in list(relays) + self._listeners():
+            if name not in groups.setdefault(name.casefold(), []):
+                groups[name.casefold()].append(name)
+        for names in groups.values():
+            if len(names) < 2 or sum(1 for n in names if n in relays) > 1:
+                continue
+            for other in names[1:]:  # the first: the one who sends on, or else the one with the most listens
+                self.rename(other, names[0])
 
     # ---- keeping ----
 
@@ -336,7 +370,7 @@ class Listens:
         """Keeps ``rows`` (``{"at", "artist", "title", "album", "duration", "id" (a server's id for the song),
         "client"}``) as ``user``'s listens: ``{"kept", "known", "skipped"}``; ``known``: already here, ``skipped``:
         without a date, artist or title."""
-        user = str(user or "").strip()
+        user = self.who(user)
         rows = list(rows)
         latest, year = self.now() + 86400, datetime.datetime(FIRST_YEAR, 1, 1, tzinfo=datetime.timezone.utc).timestamp()
         by_id = self.store.resolve([str(r["id"]) for r in rows if r.get("id")], server) if source == "siansa" else {}
@@ -401,7 +435,7 @@ class Listens:
     def set_playing(self, user, row, song_id=None):
         """What the app says is playing for ``user`` now (shown on the page, and said to Last.fm); ``song_id``: the
         song here, for its cover."""
-        user = str(user or "").strip()
+        user = self.who(user)
         artist, title = str(row.get("artist") or "").strip(), str(row.get("title") or "").strip()
         if not artist or not title:
             return False
@@ -459,6 +493,7 @@ class Listens:
 
     def now_playing(self, user):
         """What's playing for ``user``, while it can still be: said within the song's length (10 minutes without)."""
+        user = self.who(user)
         playing = self.playing.get(user)
         if playing and self.now() - playing["at"] <= (playing.get("duration") or 600) + 30:
             return playing
@@ -543,6 +578,7 @@ class Listens:
     def top(self, user, kind="songs", start=0, end=2 ** 62, limit=50, server=None):
         """The most listened ``kind`` ("songs", "artists" or "albums") of ``user`` from ``start`` to ``end``, most
         first: ``[{"artist", "title"|"album", "listens", "id" (``server``'s for the song, when it has it)}]``."""
+        user = self.who(user)
         limit = max(1, min(1000, int(limit)))
         if kind == "artists":
             rows = self.store._rows(
@@ -567,6 +603,7 @@ class Listens:
         """What ``user`` listened to from ``start`` to ``end`` in numbers, for the app's reports: ``{"listens",
         "seconds", "guessed" (listens whose length is a typical one's), "artists", "songs", "albums", "new_artists"
         (heard for the first time then), "hours"}`` (listens per hour of the day in ``tz_name``)."""
+        user = self.who(user)
         tz = zone(tz_name)
         rows = self.store._rows("SELECT at, akey, tkey, album, duration, song_id FROM listens WHERE user=? AND at>=? "
                                 "AND at<?", (user, start, end))
@@ -595,6 +632,7 @@ class Listens:
                 "albums": len(albums), "new_artists": new[0]["n"] if new else 0, "hours": hours}
 
     def recent(self, user, limit=30):
+        user = self.who(user)
         return [dict(r) for r in self.store._rows(
             "SELECT at, artist, title, album, source, song_id AS song FROM listens WHERE user=? ORDER BY at DESC LIMIT ?",
             (user, limit))]
@@ -606,6 +644,7 @@ class Listens:
         while songs were analysed), and worked out again in the background for the next time; quick ones are worked
         out again there and then. What's playing and the latest listens are always the present ones. After a change
         that isn't a listen or two (a history brought in, listens removed or renamed) nothing old is given."""
+        user = self.who(user)
         kept_as = (user, year, month, tz_name, most)
         with self._lock:
             kept = self._kept.get(kept_as)
@@ -724,6 +763,7 @@ class Listens:
     def artist(self, user, name, tz_name=None, most=20):
         """Everything the page shows of one artist in ``user``'s listening, all time: ``None`` when they never
         listened to it. Names are compared as :func:`key` does ("AC/DC" is "ac dc")."""
+        user = self.who(user)
         akey = key(name)
         if not akey:
             return None
@@ -805,6 +845,7 @@ class Listens:
     def connect_lastfm(self, user, api_key, secret, name, password):
         """Signs ``user`` in to Last.fm with their own API account and keeps the session (encrypted; the password
         isn't kept). Listens from now on are sent on. :class:`LastFmError` says why not."""
+        user = self.who(user)
         api_key, secret, name = str(api_key or "").strip(), str(secret or "").strip(), str(name or "").strip()
         if not (api_key and secret and name and password):
             raise ValueError("Last.fm's API key, shared secret, user name and password are all needed")
@@ -821,6 +862,7 @@ class Listens:
 
     def love(self, user, artist, title, loved=True):
         """Passes a heart from the app on to ``user``'s Last.fm, in the background; False when they don't send on."""
+        user = self.who(user)
         keys = self._keys(user)
         artist, title = str(artist or "").strip(), str(title or "").strip()
         if not keys or not all(keys.values()) or not artist or not title:
@@ -838,6 +880,7 @@ class Listens:
         return True
 
     def disconnect_lastfm(self, user):
+        user = self.who(user)
         saved = dict(self._relays())
         if saved.pop(user, None) is None:
             return False
