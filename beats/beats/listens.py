@@ -48,6 +48,8 @@ CREATE INDEX IF NOT EXISTS listens_by_artist ON listens (user, akey, at);
 CREATE INDEX IF NOT EXISTS listens_waiting ON listens (relayed, user) WHERE relayed = 0;
 """
 
+MEMORY_MINUTES = 30  # a listener's listens stay in memory this long after the numbers were last asked for
+MEMORY_CHOICES = (0, 30, 240, -1)  # minutes; 0: not kept, -1: always
 A_FEW_LISTENS = 20  # more than this added at once is a history brought in, not the app's listens as they come
 SLOW_SUMMARY = 0.25  # seconds: numbers that took this long are given old at once and worked out again behind
 
@@ -412,6 +414,10 @@ class Listens:
         self._keys_kept = {}  # a name -> as compared
         self._marked = 0  # counts the changes to what's sent on to Last.fm
         self._people = self._sent = None
+        # How long a listener's listens stay in memory after the numbers were last asked for, in minutes (0: let
+        # go at once, -1: kept always). The owner, 15 Nov: "I don't want Beats to hog a ton of RAM for caching".
+        self.memory_minutes = self._minutes(store.setting("listening_memory_minutes"), MEMORY_MINUTES)
+        self._used = self.now()
         self._join_names()
 
     # ---- who ----
@@ -464,15 +470,55 @@ class Listens:
             got = self._keys_kept[name] = key(name) or name.casefold()
         return got
 
-    def _row(self, r, library):
+    def _row(self, r, library, same):
+        """A listen as a Book has it. ``same``: the names read so far, so a name written in thousands of listens
+        is in memory once (a 69,000-listen history: 17 MB instead of 39)."""
+        one = lambda v: v if v is None else same.setdefault(v, v)  # noqa: E731
         names = library.names(r["song_id"], r["akey"]) or (r["artist"],)
         credits = tuple({self._key(n): n for n in names}.items())
-        return (r["at"], r["id"], r["artist"], r["title"], r["album"], r["duration"], r["song_id"], r["akey"], r["tkey"],
-                credits)
+        return (r["at"], r["id"], one(r["artist"]), one(r["title"]), one(r["album"]), r["duration"], one(r["song_id"]),
+                one(r["akey"]), one(r["tkey"]), same.setdefault(credits, credits))
+
+    @staticmethod
+    def _minutes(value, default=None):
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return default
+        return value if value in MEMORY_CHOICES else default
+
+    def set_memory(self, minutes):
+        """How long listens stay in memory (one of :data:`MEMORY_CHOICES`); False for anything else."""
+        minutes = self._minutes(minutes)
+        if minutes is None:
+            return False
+        self.memory_minutes = minutes
+        self.store.set_setting("listening_memory_minutes", minutes)
+        self.tidy()
+        return True
+
+    def memory(self):
+        """``{"minutes", "listens"}``: the choice, and how many listens are in memory now."""
+        with self._lock:
+            return {"minutes": self.memory_minutes, "listens": sum(len(b.rows) for b in self._books.values())}
+
+    def tidy(self):
+        """Lets the listens in memory go when the numbers weren't asked for in :attr:`memory_minutes` (called every
+        half minute). The numbers already worked out stay: they're small, and what the page opens with."""
+        if self.memory_minutes < 0 or self.now() - self._used < self.memory_minutes * 60:
+            return False
+        with self._lock:
+            had = bool(self._books)
+            self._books.clear()
+            self._forgot += 1
+        self._clock.clear()
+        self._keys_kept.clear()
+        return had
 
     def book(self, user):
         """``user``'s listens in memory, as they are now: read whole once, then only what came since."""
         library = self.library()
+        self._used = self.now()
         with self._lock:
             book, forgot = self._books.get(user), self._forgot
         seen = self.changes
@@ -480,10 +526,11 @@ class Listens:
             return book
         columns = "SELECT at, id, artist, title, album, duration, song_id, akey, tkey FROM listens "
         if book is None or book.library is not library:
-            rows = [self._row(r, library) for r in self.store._rows(columns + "WHERE user=? ORDER BY at, id", (user,))]
+            same = {}
+            rows = [self._row(r, library, same) for r in self.store._rows(columns + "WHERE user=? ORDER BY at, id", (user,))]
         else:
-            new = [self._row(r, library) for r in self.store._rows(columns + "WHERE id>? AND user=? ORDER BY at, id",
-                                                                   (book.top, user))]
+            new = [self._row(r, library, {}) for r in self.store._rows(columns + "WHERE id>? AND user=? ORDER BY at, id",
+                                                                       (book.top, user))]
             if not new:
                 book.seen = seen
                 return book
@@ -519,6 +566,9 @@ class Listens:
     def warm(self, user, tz_name=None):
         """Reads ``user``'s listens into memory and works out all time's numbers, in the background (at the start:
         the first opening of Listening doesn't wait for them)."""
+        if self.memory_minutes == 0:
+            return
+
         def work():
             try:
                 self.summary(user, None, None, tz_name)
@@ -842,6 +892,7 @@ class Listens:
         that isn't a listen or two (a history brought in, listens removed or renamed) nothing old is given."""
         user = self.who(user)
         self.library()
+        self._used = self.now()
         kept_as = (user, year, month, tz_name, most)
         with self._lock:
             kept = self._kept.get(kept_as)

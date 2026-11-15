@@ -307,6 +307,7 @@ class App:
                 time.sleep(self.RELAY_EVERY)
                 try:
                     self.listens.relay()
+                    self.listens.tidy()
                 except Exception:  # nothing here may take the service down
                     _log.exception("Sending listens on to Last.fm went wrong")
 
@@ -327,6 +328,7 @@ class App:
             self._listening_zone = tz
             self.store.set_setting("listening_zone", tz)
         answer = {"users": users, "importing": dict(self.listens.importing), "playing": self.listens.all_playing(),
+                  "memory": self.listens.memory(),
                   **self.listens.summary(user, year, month, tz)}
         # Which song's cover and which song's artist picture each row shows ("cover", "face": a song id here, or
         # null for music that isn't in the library): the page asks /api/art for them as it shows them.
@@ -1417,6 +1419,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
                 except LastFmError as e:
                     return self._error(HTTPStatus.BAD_GATEWAY, str(e))
+            if path == "/api/listens/memory":  # {"minutes"}: how long listens stay in memory after they were asked for
+                if not app.listens.set_memory(body.get("minutes")):
+                    return self._error(HTTPStatus.BAD_REQUEST, "minutes needed: 0 (not kept), 30, 240 or -1 (always)")
+                return self._json(app.listens.memory())
             if path == "/api/listens/rename":  # {"from", "to"}: one listener's listens become another's
                 if "from" not in body or not str(body.get("to") or "").strip():
                     return self._error(HTTPStatus.BAD_REQUEST, "from and to needed: whose listens, and whose they become")

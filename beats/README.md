@@ -209,7 +209,9 @@ the first time, what's playing now and the last listens. Days and hours are your
   on Overview does one), and listens kept before are split then too; a listen of music that isn't on the server
   is split when a song here is credited the same way, else left as written. Last.fm is told the first artist.
 - **Kept in memory (0.47):** a listener's listens are read once and the numbers worked out from there, with all
-  time's ready after a start, so a period opens at once also with a long history.
+  time's ready after a start, so a period opens at once also with a long history. It's about 35 MB for 69,000
+  listens, and let go when Listening wasn't opened for 30 minutes; **Settings › Memory** changes that (not at all,
+  30 minutes, 4 hours, always). The database stays the only copy that counts.
 - **Settings (0.47):** a part of the page for who the listeners are, files and Last.fm. **Listeners** lists every
   name with a history; two that are one person's are joined there (**Join into…**, a listen both have is kept
   once, and it can't be undone).

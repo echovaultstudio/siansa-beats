@@ -836,6 +836,13 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
           <p class="sub">Every name the app scrobbles as, or a file was brought in for, has a history of its own. Two that are one person's can be joined: a listen both have is kept once.</p>
           <ul class="tm-people" id="tm-people"></ul>
         </div>
+        <div class="card">
+          <h3>Memory</h3>
+          <p class="sub">Your listens are read into memory to work the numbers out fast, and let go when Listening hasn't been opened for a while. Nothing is lost either way: they stay in the database.</p>
+          <div class="controls"><label for="tm-memory" class="sub">Keep them in memory</label>
+            <select id="tm-memory"><option value="0">Not at all (slower, least memory)</option><option value="30">For 30 minutes</option><option value="240">For 4 hours</option><option value="-1">Always (fastest)</option></select></div>
+          <p class="sub" id="tm-memory-state" role="status"></p>
+        </div>
         <div class="card" data-fold>
           <h3>Bring in a history</h3>
           <p class="sub">An export of Koito, of Last.fm (the JSON or CSV of an export tool) or of ListenBrainz. A listen that's here already is kept once, so a file can be brought in again.</p>
@@ -2088,6 +2095,9 @@ function drawListening(d) {
   $("tm-recent").innerHTML = (d.recent || []).map((l) => `<li data-artist="${esc(l.artist)}" tabindex="0">${art("cover", l.cover, l.title, 96, "s")}<div class="t"><b>${esc(l.title)}</b><span>${esc(l.artist)}</span></div>` +
     `<time>${esc(tmAgo(l.at))}</time></li>`).join("");
   drawPeople(users);
+  const memory = d.memory || {};
+  if (document.activeElement !== $("tm-memory")) $("tm-memory").value = String(memory.minutes);
+  $("tm-memory-state").textContent = memory.listens ? `${num(memory.listens)} listens are in memory now, about ${Math.max(1, Math.round(memory.listens / 2000))} MB.` : "None are in memory now.";
   drawImport(d.importing);
   $("tm-remove-box").hidden = !users.some((u) => u.user === d.user && u.listens);
   const lf = (users.find((u) => u.user === d.user) || {}).lastfm || {};
@@ -2145,6 +2155,10 @@ async function refreshListening() {
   if (currentView === "listening" && !document.hidden) tm.refresh = setTimeout(refreshListening, 15000);
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden && currentView === "listening") refreshListening(); });
+$("tm-memory").addEventListener("change", async () => {
+  try { await api("api/listens/memory", {method: "POST", body: JSON.stringify({minutes: +$("tm-memory").value})}); refreshListening(); }
+  catch (e) { banner(e.message); }
+});
 $("tm-user").addEventListener("change", () => { tm.user = $("tm-user").value; tm.year = tm.month = null; $("tm-import-user").value = tm.user; refreshListening(); });
 $("tm-import").addEventListener("submit", async (e) => {
   e.preventDefault();

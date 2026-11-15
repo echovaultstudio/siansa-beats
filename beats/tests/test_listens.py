@@ -755,3 +755,23 @@ class InMemory(Fresh):
         self.listens.relay()
         status = self.listens.lastfm_status("max")
         self.assertEqual((status["waiting"], status["sent"]), (0, 1))
+
+    def test_listens_leave_memory_when_not_asked_for_and_come_back(self):
+        self.listens.add("max", [self.row("2026-11-01T10:00:00")])
+        self.assertEqual(self.listens.summary("max")["totals"]["listens"], 1)
+        self.assertEqual(self.listens.memory(), {"minutes": 30, "listens": 1})
+        self.now += 29 * 60
+        self.assertFalse(self.listens.tidy())
+        self.now += 2 * 60
+        self.assertTrue(self.listens.tidy())
+        self.assertEqual(self.listens.memory()["listens"], 0)
+        self.listens.add("max", [self.row("2026-11-02T10:00:00")])
+        self.assertEqual(self.listens.summary("max")["totals"]["listens"], 2)  # read again, with what came since
+        self.assertFalse(self.listens.set_memory(7))
+        self.assertTrue(self.listens.set_memory(-1))
+        self.now += 10 ** 6
+        self.assertFalse(self.listens.tidy())
+        self.assertEqual(self.listens.memory(), {"minutes": -1, "listens": 2})
+        self.assertTrue(self.listens.set_memory(0))  # not kept: gone at once
+        self.assertEqual(self.listens.memory()["listens"], 0)
+        self.assertEqual(L.Listens(self.store, now=lambda: self.now).memory_minutes, 0)  # the choice is kept
