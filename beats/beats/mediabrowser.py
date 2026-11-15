@@ -324,4 +324,5 @@ def song_from(e):
         "tag_bpm": None,  # neither server reads the BPM tag
         "genres": [g for g in (e.get("Genres") or []) if g],
         "path": path,
+        "artists": [a for a in (e.get("Artists") or []) if a],
     }

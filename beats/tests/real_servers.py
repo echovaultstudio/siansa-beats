@@ -75,6 +75,9 @@ def main(servers, library_path):
         check(len(songs) == len(wanted), f"{len(songs)} songs listed")
         check(all(s["title"] and s["artist"] and s["album"] and s["duration"] > 0 for s in songs),
               "every song has its title, artist, album and length")
+        # 0.47: every artist on a song, for Listening (a listen of "A feat. B" counts for A and for B).
+        check(all(s.get("artists") and all(isinstance(a, str) and a for a in s["artists"]) for s in songs),
+              f"every song lists its artists, such as {songs[0].get('artists') if songs else None}")
         with_path = [s for s in songs if s.get("path")]
         check(len(with_path) == len(songs), f"every song says where its file is ({len(with_path)} of {len(songs)}), "
               f"such as {with_path[0]['path'] if with_path else None}")

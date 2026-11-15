@@ -203,6 +203,18 @@ the first time, what's playing now and the last listens. Days and hours are your
   last listens, the new artists) for everything about them: plays, hours, their share and rank, songs, albums, days,
   their busiest year, year by year, around the clock, first and last listen, their most played songs, their albums
   and the last listens of them. Its address (`#artist=<name>`) can be kept or shared.
+- **Every artist of a song (0.47):** a listen of a song by several artists ("Fred V & Grafix feat. Amy J Pryce")
+  counts for each of them, as the music server lists the song's artists (your tags), not for the line they're
+  written in; its album is its first artist's. The artists come with the next library read (**Check what's new**
+  on Overview does one), and listens kept before are split then too; a listen of music that isn't on the server
+  is split when a song here is credited the same way, else left as written. Last.fm is told the first artist.
+- **Kept in memory (0.47):** a listener's listens are read once and the numbers worked out from there, with all
+  time's ready after a start, so a period opens at once also with a long history. It's about 35 MB for 69,000
+  listens, and let go when Listening wasn't opened for 30 minutes; **Settings › Memory** changes that (not at all,
+  30 minutes, 4 hours, always). The database stays the only copy that counts.
+- **Settings (0.47):** a part of the page for who the listeners are, files and Last.fm. **Listeners** lists every
+  name with a history; two that are one person's are joined there (**Join into…**, a listen both have is kept
+  once, and it can't be undone).
 - **From the app:** turn on **Scrobble to Siansa Beats** in Siansa (Settings › Scrobbling). Each listen is kept
   under the name the app scrobbles as (your music server's user name), so two people have a history each; the page
   has a listener switch when there's more than one. A name is the same whatever its capitals (0.46.1: "Max" typed on
@@ -222,7 +234,7 @@ the first time, what's playing now and the last listens. Days and hours are your
 - **A history brought in without a name** (the "whose listens" box left empty) is offered to the app's listener once
   the app sends something: **Make them max's** joins them (a listen both have is kept once), and sending on to
   Last.fm, if it was connected on the unnamed one, moves along, with the app's listens since then.
-- **On a phone** the page shows one part at a time (Overview, Top, When, History; the bar stays in view), long
+- **On a phone** the page shows one part at a time (Overview, Top, When, History, Settings; the bar stays in view), long
   lists show their first lines with **Show all**, the Setup cards open by their heading, and **↑ Top** goes back up.
 
 **Songs gone from the server are forgotten (0.27).** When a library is read again (every few hours, or **Read
