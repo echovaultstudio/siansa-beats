@@ -371,4 +371,6 @@ def song_from(e):
         "tag_bpm": float(e.get("bpm") or 0) or None,
         "genres": genres,
         "path": e.get("path") or None,
+        # Every artist on the song (OpenSubsonic's "artists"): both sides of a "feat.", as the tags have them.
+        "artists": [a.get("name") for a in (e.get("artists") or []) if isinstance(a, dict) and a.get("name")],
     }

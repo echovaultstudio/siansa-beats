@@ -129,6 +129,7 @@ class Store:
         self.sound_changes = 0  # the same for the sound table: the vectors in memory are read again when it moves
         self.measure_changes = 0  # the same for the loudness measures
         self.writes = 0  # every change to anything (0.35.1): answers kept while nothing is written are still right
+        self.library_changes = 0  # counts the libraries read here: what's kept in memory of the songs is from one
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self._writing = threading.local()  # how deep this thread is in a change: it reads its own change, not a reader's
@@ -152,6 +153,10 @@ class Store:
                 self.db.execute("ALTER TABLE measures ADD COLUMN source TEXT")  # 0.20.0's first builds had none
             if "folder" not in {r[1] for r in self.db.execute("PRAGMA table_info(songs)")}:
                 self.db.execute("ALTER TABLE songs ADD COLUMN folder TEXT")
+            if "artists" not in {r[1] for r in self.db.execute("PRAGMA table_info(songs)")}:
+                # 0.47: every artist on the song as its server lists them (a JSON list of names), so a listen of
+                # "A feat. B" counts for A and for B on Listening.
+                self.db.execute("ALTER TABLE songs ADD COLUMN artists TEXT")
             columns = {r[1] for r in self.db.execute("PRAGMA table_info(results)")}
             for column, kind in (("bpm_fit", "REAL"), ("main_share", "REAL"), ("grid_bpm", "REAL"), ("on_grid", "REAL"), ("grid_drift", "REAL"),
                                  ("analysis_version", "REAL"), ("downbeat_source", "TEXT"), ("grid_counted", "TEXT"), ("changes_share", "REAL"),
@@ -348,6 +353,7 @@ class Store:
         queued. ``{"songs", "queued": [ids], "matched": {"path", "tags", "title", "user"}}``: how many were found
         here for the first time, by what."""
         queued, matched = [], {}
+        self.library_changes += 1  # what's kept in memory of the songs (Listening's artists and lengths) is old now
         with self._write():
             for song in songs:
                 song_id, how = self._link(server, folder, song, source, twins, queued)
@@ -413,16 +419,17 @@ class Store:
         return match.choose(song, by("tail"), by("meta"), by("loose"))
 
     def _save_song(self, song_id, song, folder, server):
+        artists = [str(a).strip() for a in song.get("artists") or [] if str(a or "").strip()]
         self.db.execute(
             "INSERT INTO songs (id, title, artist, album, duration, suffix, tag_bpm, folder, added_at, path, tail, meta, "
-            "loose, server) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, "
+            "loose, server, artists) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, "
             "artist=excluded.artist, album=excluded.album, duration=excluded.duration, suffix=excluded.suffix, "
             "tag_bpm=excluded.tag_bpm, folder=COALESCE(excluded.folder, songs.folder), "
             "path=COALESCE(excluded.path, songs.path), tail=COALESCE(excluded.tail, songs.tail), meta=excluded.meta, "
-            "loose=excluded.loose",
+            "loose=excluded.loose, artists=COALESCE(excluded.artists, songs.artists)",
             (song_id, song["title"], song["artist"], song["album"], song["duration"], song["suffix"],
              song["tag_bpm"], folder, time.time(), song.get("path"), match.tail(song.get("path")), match.meta(song),
-             match.loose(song), None if server == MAIN else server))
+             match.loose(song), None if server == MAIN else server, json.dumps(artists) if artists else None))
 
     # ---- a server's ids for the songs, and the songs of a server's ids ----
 
