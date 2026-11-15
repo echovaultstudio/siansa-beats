@@ -150,6 +150,10 @@ RUN pip install numpy==1.26.4 librosa==0.10.2.post1 soundfile==0.12.1 scipy==1.1
       test -s "/models/$(basename "$url")"; \
     done
 
+# Everything that doesn't change with Beats' own code comes before it, so an update is the layers from here on only.
+COPY --from=arousal /emomusic-msd-musicnn-2.onnx /models/emomusic-msd-musicnn-2.onnx
+RUN useradd --uid 1000 --create-home beats && mkdir -p /data && chown beats /data
+
 WORKDIR /app
 COPY beats/ /app/beats/
 # A song heard for real: a made-up one, read through librosa and through ffmpeg, twice the same.
@@ -177,14 +181,12 @@ RUN python -c "import torch, beat_this.inference, beats.server; print('imports o
 r = m(numpy.zeros(16000 * 5, numpy.float32)); assert len(r) == 400 and 0 <= r[0][1] <= 1, r[:3]; print('style model ok:', r[0])"
 
 # The arousal model for real: any number of songs at once, the same answer each time, each about 1 to 9.
-COPY --from=arousal /emomusic-msd-musicnn-2.onnx /models/emomusic-msd-musicnn-2.onnx
 RUN python -c "import numpy, tempfile, os; from beats.store import Store; from beats.drive import Arousal; \
 a = Arousal('/models', Store(os.path.join(tempfile.mkdtemp(), 'beats.db'))); assert a.available; \
 v = numpy.random.default_rng(1).normal(0, 1, (5, 200)).astype(numpy.float32); one, again, single = a.score(v), a.score(v), a.score(v[:1]); \
 assert one.shape == (5,) and numpy.allclose(one, again) and abs(float(single[0]) - float(one[0])) < 1e-4, (one, single); \
 assert numpy.all(numpy.isfinite(one)), one; print('arousal model ok:', numpy.round(one, 3), os.path.getsize('/models/emomusic-msd-musicnn-2.onnx'), 'bytes')"
 
-RUN useradd --uid 1000 --create-home beats && mkdir -p /data && chown beats /data
 USER beats
 # As the service runs it: the model converted for the GPU, from read-only /models (0.17.0 wrote a temporary file there).
 RUN python -c "import onnx; from onnx2torch import convert; \
