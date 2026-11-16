@@ -466,6 +466,11 @@ On the server, after setting it up:
   stays out (`intro_bass_bars`, `outro_bass_bars`), how loud it is next to the song (`intro_energy`,
   `outro_energy`, dB), and the song where the bass drops out and comes back (`breakdowns_ms`, `drops_ms`), for the
   app to choose how to blend.
+- **Breakdowns and drops** (0.49.0): a song's page lists where Beats found the bass dropping out (a breakdown) and
+  coming back (a drop), as the app gets them, each with how much the bass falls or rises (10 dB or more is clear,
+  under that faint; it takes 6 dB to count), tap one to hear it. They show on the beat strip and the tempo chart
+  too. With your own **Section starts here** marks, a line says how many of Beats' ones your marks agree with
+  (within a bar), to see where the rule works and where it doesn't before the app mixes on them.
 - **Bad blends**: a song change marked as bad in Siansa Dev lands in a list on the page, with how the app blended it
   (technique, bars, tempos, confidence at each end, why it was planned that way), and both songs a tap away. When the
   app heard each song's kicks during the blend, it shows how far they fell from the song's beat grid (more than 20 ms

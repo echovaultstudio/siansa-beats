@@ -97,7 +97,51 @@ class EndsTest(unittest.TestCase):
         self.assertGreaterEqual(found["outro_bass_bars"], 7)
         self.assertTrue(any(abs(d - 40 * bar * 1000) < 100 for d in found["drops_ms"]), found["drops_ms"])
         self.assertTrue(any(abs(d - 32 * bar * 1000) < 100 for d in found["breakdowns_ms"]), found["breakdowns_ms"])
+        # How much the bass falls or rises at each (0.49.0): one size for each, and well over the 6 dB it takes.
+        self.assertEqual((len(found["drops_db"]), len(found["breakdowns_db"])), (len(found["drops_ms"]), len(found["breakdowns_ms"])))
+        self.assertTrue(all(d >= ends.BASS_IN_DB for d in found["drops_db"] + found["breakdowns_db"]))
         self.assertLess(found["intro_energy"], -3)  # drums alone are quieter than the full song
+
+
+class SongPageSectionsTest(unittest.TestCase):
+    """The song page's breakdowns and drops (0.49.0): the ones the app has, sized from the song's sound."""
+
+    def setUp(self):
+        drums = (-40.0, -45.0, -12.0, -15.0)
+        loud = (-8.0, -8.0, -12.0, -15.0)
+        self.beats = grid_beats(128, 8 * 8 * 4 * 60 / 128)
+        self.seconds = self.beats[-1] + 60 / 128
+        self.levels = song_levels(128, self.seconds, [drums, drums, loud, loud, drums, loud, loud, drums], accent=0.0)
+        self.full = {"beats": self.beats, "downbeats": self.beats[::4], "levels": self.levels}
+        self.steady = grid.with_sound(grid.steady_grid(self.beats, self.beats[::4], 128.0, 4), self.levels)
+
+    def sections(self, kept):
+        from types import SimpleNamespace
+        from beats.server import App
+        fake = SimpleNamespace(store=SimpleNamespace(ends=lambda ids, model: {"s": kept} if kept is not None else {}),
+                               config=SimpleNamespace(model="final0"))
+        return App.sections(fake, "s", self.full, self.steady, self.seconds)
+
+    def test_the_apps_ones_with_their_size(self):
+        bar = 4 * 60 / 128
+        made = grid.app_ends(self.steady, self.beats, self.seconds, self.levels)
+        got = self.sections(made)
+        self.assertTrue(got["sent"])
+        kinds = {(s["kind"], round(s["ms"] / 1000 / bar)) for s in got["found"]}
+        self.assertIn(("breakdown", 32), kinds)
+        self.assertIn(("drop", 40), kinds)
+        self.assertTrue(all(s["db"] >= ends.BASS_IN_DB for s in got["found"]))
+        self.assertEqual([s["ms"] for s in got["found"]], sorted(s["ms"] for s in got["found"]))
+
+    def test_an_older_analysis_shows_what_the_app_has(self):
+        # Kept from before the sizes were kept: the app's times, sized where they're found now, unsized where not.
+        got = self.sections({"breakdowns_ms": [1000.0], "drops_ms": []})
+        self.assertEqual(got["found"], [{"ms": 1000.0, "kind": "breakdown", "db": None}])
+
+    def test_not_sent_yet_and_no_sound(self):
+        self.assertFalse(self.sections(None)["sent"])
+        self.full["levels"] = None
+        self.assertIsNone(self.sections(None))
 
 
 if __name__ == "__main__":

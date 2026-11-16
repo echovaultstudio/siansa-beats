@@ -544,11 +544,32 @@ class App:
         row["tempo_curve"] = grid.tempo_curve(row["beats"])
         row["grid"] = self.steady_grid(full)
         row["end_seconds"] = grid.END_SECONDS
+        row["sections"] = self.sections(song_id, full, row["grid"], row.get("duration"))
         row["marks"] = self.store.marks(song_id)
         names = {s["id"]: s["name"] for s in self.servers.all()}
         row["servers"] = [{"id": server, "name": names.get(server, server), "item_id": item_id}
                           for server, item_id in self.store.where(song_id)]
         return row
+
+    def sections(self, song_id, full, steady, duration):
+        """The breakdowns and drops of the song (0.49.0), for its page: ``{"found": [{"ms", "kind", "db"}], "sent":
+        bool}``. ``found`` are the ones the app has (kept with the analysis); ``db``, how much the bass falls or rises
+        there, is worked out now from the song's sound (:func:`beats.ends.describe`), None where that doesn't find
+        the same one. Without kept ones (not sent to the app yet: ``sent`` false), the ones worked out now. None
+        without a grid or sound levels."""
+        if not full or not full.get("levels"):
+            return None
+        fresh = (grid.app_ends(steady, full["beats"], duration or 0.0, full["levels"]) or {}) if steady else {}
+        kept = self.store.ends([song_id], self.config.model).get(song_id)
+        source = kept if kept is not None else fresh
+        found = []
+        for kind, key in (("breakdown", "breakdowns"), ("drop", "drops")):
+            measured = list(zip(fresh.get(key + "_ms") or [], fresh.get(key + "_db") or []))
+            for ms in source.get(key + "_ms") or []:
+                db = next((d for m, d in measured if abs(m - ms) <= 50), None)
+                found.append({"ms": ms, "kind": kind, "db": db})
+        found.sort(key=lambda x: x["ms"])
+        return {"found": found, "sent": kept is not None}
 
     def steady_grid(self, full):
         """The even grid of a result with beats, or ``None``: as :func:`beats.grid.analyse` made it."""
