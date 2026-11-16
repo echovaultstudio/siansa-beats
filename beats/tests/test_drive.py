@@ -28,11 +28,12 @@ class Scored(unittest.TestCase):
         open(self.arousal.path, "w").close()  # "the model is there"
         self.asked = []
 
-        def score(vectors):  # a stand-in: a song's arousal is its vector's first number, times ten
+        def both(vectors):  # a stand-in: a song's arousal is its vector's first number, times ten; valence one less
             self.asked.append(len(vectors))
-            return np.asarray(vectors)[:, 0] * 10
+            arousal = np.asarray(vectors)[:, 0] * 10
+            return np.stack([arousal - 1, arousal], axis=1)
 
-        self.arousal.score = score
+        self.arousal.both = both
 
     def sound(self, song_id, value, source="audiomuse", energy=0.3):
         self.store.save_sound([{"song_id": song_id, "musicnn": vector(value), "energy": energy}], source)
@@ -53,6 +54,7 @@ class Scored(unittest.TestCase):
         self.assertNotIn("c", self.arousal.of(["c"]))
         self.assertEqual(self.arousal.catch_up(), 0)  # nothing new: the model isn't asked
         self.assertEqual(self.asked, [2])
+        self.assertAlmostEqual(self.arousal.valence_of(["a"])["a"], 4.0, places=4)  # 0.51: kept beside
 
     def test_a_song_heard_again_is_scored_again(self):
         self.sound("a", 0.5)

@@ -1358,12 +1358,19 @@ async function openSong(id, newSong, fromHistory) {
     ["Beats / downbeats", r.beat_count != null ? `${r.beat_count} / ${r.downbeat_count}` : "–"],
     ["Time", r.model_seconds ? `model ${fmt(r.model_seconds)} s · decode ${fmt(r.decode_seconds)} s · download ${fmt(r.download_seconds)} s` : "–"],
   ];
-  // Sung or not, whose voice, acoustic (0.51): what the models said, to check on songs you know.
-  const v = detail.voice;
-  const voiceFacts = !v ? [] : [
-    ["Voice", v.voice >= 0.5 ? `Sung (${pct(v.voice)} sure)` : `Instrumental (${pct(1 - v.voice)} sure)`],
-    ["Whose voice", v.voice < 0.5 ? "–" : v.female >= 0.5 ? `A woman's (${pct(v.female)} sure)` : `A man's (${pct(1 - v.female)} sure)`],
-    ["Acoustic", v.acoustic >= 0.5 ? `Yes (${pct(v.acoustic)} sure)` : `No (${pct(1 - v.acoustic)} sure)`],
+  // Essentia's trained traits (0.51): what the models said, to check on songs you know.
+  const tr = detail.traits;
+  const sure = (x) => x >= 0.5 ? `Yes (${pct(x)})` : `No (${pct(1 - x)})`;
+  const MIREX = {mirex_passionate: "Passionate, rousing", mirex_cheerful: "Cheerful, fun", mirex_bittersweet: "Wistful, bittersweet",
+    mirex_humorous: "Quirky, playful", mirex_intense: "Intense, fiery"};
+  const topMirex = !tr ? null : Object.keys(MIREX).sort((a, b) => tr[b] - tr[a])[0];
+  const voiceFacts = !tr ? [] : [
+    ["Voice", tr.voice >= 0.5 ? `Sung (${pct(tr.voice)} sure)` : `Instrumental (${pct(1 - tr.voice)} sure)`],
+    ["Whose voice", tr.voice < 0.5 ? "–" : tr.female >= 0.5 ? `A woman's (${pct(tr.female)} sure)` : `A man's (${pct(1 - tr.female)} sure)`],
+    ["Moods", ["happy", "sad", "relaxed", "party", "aggressive"].filter((m) => tr[m] >= 0.5).map((m) => `${m} ${pct(tr[m])}`).join(", ") || "none strongly"],
+    ["Mood group (MIREX)", `${MIREX[topMirex]} (${pct(tr[topMirex])})`],
+    ["Danceable", sure(tr.danceable)], ["Electronic", sure(tr.electronic)], ["Acoustic", sure(tr.acoustic)],
+    ["How positive (valence)", detail.valence != null ? `${fmt(detail.valence, 1)} of 9` : "–"],
   ];
   const genreFacts = [
     ["Its genres", heardGenres(detail.genres).map((g) => `${styleOf(g.label)} ${g.weight.toFixed(2)}`).join(", ") || "–"],

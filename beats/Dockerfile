@@ -150,11 +150,21 @@ RUN pip install numpy==1.26.4 librosa==0.10.2.post1 soundfile==0.12.1 scipy==1.1
       test -s "/models/$(basename "$url")"; \
     done
 
-# Sung or not, a woman's or a man's voice, acoustic (0.51): three of Essentia's small classifiers (MTG, UPF;
-# CC BY-NC-SA 4.0; 82 KB each, already ONNX) that read the MusiCNN vector kept for every song (beats/voice.py).
+# Sung or not, whose voice, moods, danceable (0.51): eleven of Essentia's small classifiers (MTG, UPF; CC BY-NC-SA 4.0;
+# 82 KB each, already ONNX, pinned here) that read the MusiCNN vector kept for every song (beats/traits.py).
 ARG ESSENTIA_HEADS=https://essentia.upf.edu/models/classification-heads
-ARG VOICE_SHA256="voice_instrumental/voice_instrumental-msd-musicnn-1.onnx=dd054410fa4f9fcb0086b4223a9a5c66dd098c5d4cef485c03af0b0500443b73 gender/gender-msd-musicnn-1.onnx=6149f3cc61a3625acb2577b89dcca39a2b912925945819f31dadfe2be7cc42e9 mood_acoustic/mood_acoustic-msd-musicnn-1.onnx=9be58be7362d67ad685b84586ad5e7cf6f0144ae76335584f26e8beadd3a973f"
-RUN for pair in $VOICE_SHA256; do \
+ARG TRAIT_SHA256="voice_instrumental/voice_instrumental-msd-musicnn-1.onnx=dd054410fa4f9fcb0086b4223a9a5c66dd098c5d4cef485c03af0b0500443b73 \
+    gender/gender-msd-musicnn-1.onnx=6149f3cc61a3625acb2577b89dcca39a2b912925945819f31dadfe2be7cc42e9 \
+    mood_acoustic/mood_acoustic-msd-musicnn-1.onnx=9be58be7362d67ad685b84586ad5e7cf6f0144ae76335584f26e8beadd3a973f \
+    mood_aggressive/mood_aggressive-msd-musicnn-1.onnx=28121d76b36549584f99d3ab2f2ea11561dd5a2617ae15c2d83b9a4cd96ae9a8 \
+    mood_electronic/mood_electronic-msd-musicnn-1.onnx=7897d6782608e4dd271812850bd88a4af5f23111b04ba923ddf9c7a36ce8ac34 \
+    mood_happy/mood_happy-msd-musicnn-1.onnx=250db7b11d058af80c13cec62f3b2e3712cd241d9a07c5a2f42239fe4362d9ac \
+    mood_party/mood_party-msd-musicnn-1.onnx=7c241f230d8ac259de3a4763bdd60673977ffc2459478e355858eaa3731b42d2 \
+    mood_relaxed/mood_relaxed-msd-musicnn-1.onnx=0f80db5cbbb4913687875a03174d734f49acdcce02b7247aaeade8463d18e04a \
+    mood_sad/mood_sad-msd-musicnn-1.onnx=3861d5611dcaad31f1377875a58b92d9673486cbc2776ad4e3194462a751a894 \
+    danceability/danceability-msd-musicnn-1.onnx=c38f0d428bc02dfec79b50dbe6044c5371fe766340b9f6c1b43e1c5b0d5ef278 \
+    moods_mirex/moods_mirex-msd-musicnn-1.onnx=7415f08c509cbb569616b4f5d72c6f5181f82ef5a137cbccf5283b8868edcd4b"
+RUN for pair in $TRAIT_SHA256; do \
       file="${pair%%=*}"; want="${pair#*=}"; to="/models/$(basename "$file")"; ok=""; \
       for try in 1 2 3 4 5; do \
         python -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "${ESSENTIA_HEADS}/${file}" "$to" \
@@ -200,12 +210,12 @@ v = numpy.random.default_rng(1).normal(0, 1, (5, 200)).astype(numpy.float32); on
 assert one.shape == (5,) and numpy.allclose(one, again) and abs(float(single[0]) - float(one[0])) < 1e-4, (one, single); \
 assert numpy.all(numpy.isfinite(one)), one; print('arousal model ok:', numpy.round(one, 3), os.path.getsize('/models/emomusic-msd-musicnn-2.onnx'), 'bytes')"
 
-# The voice models for real: a share from 0 to 1 for each song, the same answer each time.
-RUN python -c "import numpy, tempfile, os; from beats.store import Store; from beats.voice import Voice, NAMES; \
-v = Voice('/models', Store(os.path.join(tempfile.mkdtemp(), 'beats.db'))); assert v.available; \
-x = numpy.random.default_rng(1).normal(0, 1, (5, 200)).astype(numpy.float32); a, b = v.score(x), v.score(x); \
-assert all(a[n].shape == (5,) and numpy.allclose(a[n], b[n]) and float(a[n].min()) >= 0 and float(a[n].max()) <= 1 for n in NAMES), a; \
-print('voice models ok:', {n: numpy.round(a[n], 3).tolist() for n in NAMES})"
+# The trait models for real: a share from 0 to 1 for each song and trait, the same each time; MIREX's add up to 1.
+RUN python -c "import numpy, tempfile, os; from beats.store import Store; from beats.traits import Traits, TRAITS, MIREX; \
+t = Traits('/models', Store(os.path.join(tempfile.mkdtemp(), 'beats.db'))); assert t.available; \
+x = numpy.random.default_rng(1).normal(0, 1, (5, 200)).astype(numpy.float32); a, b = t.score(x), t.score(x); \
+assert set(a) == set(TRAITS) and all(a[n].shape == (5,) and numpy.allclose(a[n], b[n]) and float(a[n].min()) >= 0 and float(a[n].max()) <= 1 for n in TRAITS), a; \
+assert numpy.allclose(sum(a[m] for m in MIREX), 1, atol=1e-3); print('trait models ok:', {n: round(float(a[n][0]), 3) for n in TRAITS})"
 
 USER beats
 # As the service runs it: the model converted for the GPU, from read-only /models (0.17.0 wrote a temporary file there).

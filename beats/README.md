@@ -62,13 +62,16 @@ what he heard far better than loudness, which once on one scale barely tells son
 gives it as `arousal`. Energies kept from before 0.35 on an older scale (about 0.05 to 0.4) are given on today's
 (`energy_source`: `converted`).
 
-**Sung or not, whose voice, acoustic (0.51).** Every song with a sound also gets three shares from 0 to 1, from three
-small Essentia models (MTG, UPF; CC BY-NC-SA 4.0) that read the same kept vector, so the whole library is scored once
-in seconds with no song read again: `voice` (0 instrumental, 1 sung), `female` (of the voice: 0 a man's, 1 a
-woman's; only worth reading where `voice` is high) and `acoustic`. Their makers measured them right for 98, 85 and 93
-songs in 100 on their own collections; a song's page shows what they said, to check on songs you know.
-`/api/v1/sound/songs` gives them beside `arousal`, and `/api/v1/capabilities` counts them under `voice`. A song's
-feelings (danceable, aggressive, happy, party, relaxed, sad) were here already, as `other_features`.
+**What a song is like (0.51).** Every song with a sound also gets Essentia's trained traits (MTG, UPF; CC BY-NC-SA
+4.0), from eleven small models that read the same kept vector, so the whole library is scored once in seconds with no
+song read again, and new songs as they come. Each is a share from 0 to 1: `voice` (0 instrumental, 1 sung), `female`
+(of the voice: 0 a man's, 1 a woman's; only worth reading where `voice` is high), `acoustic`, `aggressive`,
+`electronic`, `happy`, `party`, `relaxed`, `sad`, `danceable`, and MIREX's five mood groups (`mirex_passionate`,
+`mirex_cheerful`, `mirex_bittersweet`, `mirex_humorous`, `mirex_intense`, adding up to 1). Beside the energy's
+`arousal` there's now its `valence` too: how positive a song feels, about 1 (dark) to 9 (bright). Their makers
+measured the models right for 84 to 98 songs in 100 on their own collections (MIREX's five groups: 67); a song's page
+shows what they said, to check on songs you know. `/api/v1/sound/songs` gives them as `traits` and `valence`;
+`/api/v1/capabilities` counts them under `traits`. AudioMuse-AI's feelings stay as `other_features`.
 
 **Memory (0.34).** The models are loaded by the first song and let go again after 10 minutes without a song to
 analyse (the Activity list says so, with the memory held before and after); the next song loads them again in a few

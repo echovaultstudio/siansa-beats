@@ -840,7 +840,7 @@
         ],
         "responses": {
           "200": {
-            "description": "{tracks: [{id, title, artist, album, tempo, key, scale, mood_vector, other_features, energy, arousal, voice, female, acoustic}]}"
+            "description": "{tracks: [{id, title, artist, album, tempo, key, scale, mood_vector, other_features, energy, arousal, valence, traits}]}"
           }
         }
       }
@@ -869,7 +869,7 @@
         ],
         "responses": {
           "200": {
-            "description": "{tracks: [{id, title, artist, album, tempo, key, scale, mood_vector, other_features, energy, arousal, voice, female, acoustic}]}"
+            "description": "{tracks: [{id, title, artist, album, tempo, key, scale, mood_vector, other_features, energy, arousal, valence, traits}]}"
           }
         },
         "deprecated": true
