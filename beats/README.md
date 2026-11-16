@@ -482,13 +482,11 @@ On the server, after setting it up:
   under that faint; it takes 6 dB to count), tap one to hear it. They show on the beat strip and the tempo chart
   too. With your own **Section starts here** marks, a line says how many of Beats' ones your marks agree with
   (within a bar), to see where the rule works and where it doesn't before the app mixes on them.
-- **Marks from Siansa Dev** (0.50.0, temporary, for tuning how breakdowns and drops are found): the app's
-  **Breakdown** and **Drop** buttons put a mark on the song playing, with which one was tapped. **Marked** in the
-  songs list shows every song with marks, with how many Beats agrees with; **Download data** there saves just those
-  songs. Goes again once the tuning is done.
 - **Downloads** (0.50.2): **Download data** is sent as it's made, a song at a time, so the download starts at once
   and runs to the end however big it is (every song's beats came to a file a proxy in front gave up waiting for). Your
   browser downloads it as usual.
+- **The breakdown and drop trial is over** (0.51.1): the marks tapped in Siansa Dev and the Marked filter are gone,
+  and so are those marks from the database. Marks set on a song's page (Section starts here) stay.
 - **Bad blends**: a song change marked as bad in Siansa Dev lands in a list on the page, with how the app blended it
   (technique, bars, tempos, confidence at each end, why it was planned that way), and both songs a tap away. When the
   app heard each song's kicks during the blend, it shows how far they fell from the song's beat grid (more than 20 ms
