@@ -589,6 +589,18 @@ class App:
         out = [s for s in (self.song_data(row["id"], row) for row in self.songs(find, show, 0, server)) if s]
         return {"version": __version__, "model": self.config.model, "songs": out}
 
+    def export_chunks(self, find=None, show="all", server=None):
+        """:meth:`export` as it's made: the same JSON, a song at a time, for :meth:`Handler._stream`."""
+        yield json.dumps({"version": __version__, "model": self.config.model})[:-1].encode() + b', "songs": ['
+        first = True
+        for row in self.songs(find, show, 0, server):
+            song = self.song_data(row["id"], row)
+            if not song:
+                continue
+            yield (b"" if first else b", ") + json.dumps(song).encode()
+            first = False
+        yield b"]}"
+
     def song_data(self, song_id, row=None):
         """One song as the data export has it (its beats, downbeats, sound levels, results and marks), or None when
         it isn't analysed."""
@@ -1182,6 +1194,52 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def _stream(self, chunks, kind, headers=None):
+        """An answer sent as it's made, in chunks (HTTP/1.1 chunked), so the first bytes go at once however long the
+        whole takes: a proxy in front (nginx's 60 s) never waits for it, and nothing big is held in memory. Not gzipped:
+        a phone's download manager saves what it's sent. A failure part-way is logged; the file then ends short."""
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", kind)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")  # nginx: pass it on as it comes
+        for k, v in (headers or {}).items():
+            self.send_header(k, str(v).replace("\r", " ").replace("\n", " "))
+        if self.command == "HEAD":
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+        sent = 0
+        try:
+            buffer = []
+            size = 0
+            last = 0.0  # the first piece goes at once; then every 256 KB, or every 2 s while it's slow to come
+            for chunk in chunks:
+                buffer.append(chunk)
+                size += len(chunk)
+                if size >= 256 * 1024 or time.monotonic() - last >= 2.0:
+                    self._chunk(b"".join(buffer))
+                    sent += size
+                    buffer, size, last = [], 0, time.monotonic()
+            if buffer:
+                self._chunk(b"".join(buffer))
+                sent += size
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
+            _log.info("Sent %s as it was made: %.1f MB", self.path.split("?", 1)[0], sent / 1e6)
+        except (BrokenPipeError, ConnectionResetError):
+            _log.info("%s: the download stopped after %.1f MB (closed at the other end)", self.path.split("?", 1)[0], sent / 1e6)
+            self.close_connection = True
+        except Exception as e:  # noqa: BLE001 - the answer has begun: it can only end short, and say why in the log
+            _log.error("%s failed after %.1f MB: %s", self.path.split("?", 1)[0], sent / 1e6, e)
+            self.close_connection = True
+        return None
+
+    def _chunk(self, data):
+        self.wfile.write(b"%x\r\n" % len(data) + data + b"\r\n")
+        self.wfile.flush()
+
     def _json(self, value, status=HTTPStatus.OK):
         self._send(status, value)
 
@@ -1408,9 +1466,11 @@ class Handler(BaseHTTPRequestHandler):
                                    "grids": [{"track_id": i, **found[here[i]]} for i in ids if here.get(i) in found],
                                    "missing": [i for i in ids if here.get(i) not in found]})
             if path == "/api/export.json":
-                body = json.dumps(app.export(find, show, server)).encode()
-                return self._send(HTTPStatus.OK, body, "application/json",
-                                  {"Content-Disposition": 'attachment; filename="siansa-beats-data.json"'})
+                # Streamed, a song at a time (0.50.2, the owner, 16 Nov: "it should just stream the download until
+                # completion"): every song's beats and levels came to a file too big to make before the first byte, so
+                # a proxy in front gave up waiting (a small error page, saved as "export.html").
+                return self._stream(app.export_chunks(find, show, server), "application/json",
+                                    {"Content-Disposition": 'attachment; filename="siansa-beats-data.json"'})
             if path == "/api/export.csv":
                 return self._send(HTTPStatus.OK, app.csv(find, show, server), "text/csv; charset=utf-8",
                                   {"Content-Disposition": 'attachment; filename="siansa-beats.csv"'})
