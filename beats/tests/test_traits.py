@@ -86,6 +86,80 @@ class Scored(unittest.TestCase):
         self.assertEqual(self.asked, [traits.BATCH, 5])
 
 
+class ThePage(unittest.TestCase):
+    """0.52: the Voice and mood page's numbers and the songs of each of its lines."""
+
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.store = Store(os.path.join(self.folder.name, "beats.db"))
+        self.traits = Traits(self.folder.name, self.store)
+        for file in traits.MODELS:
+            open(self.traits.path(file), "w").close()
+        # song: (voice, female, happy, the strongest MIREX group)
+        self.said = {"woman": (0.9, 0.95, 0.8, "mirex_cheerful"), "high-man": (0.8, 0.55, 0.45, "mirex_cheerful"),
+                     "man": (0.7, 0.1, 0.2, "mirex_intense"), "low-woman": (0.95, 0.45, 0.58, "mirex_bittersweet"),
+                     "piano": (0.1, 0.9, 0.3, "mirex_bittersweet")}
+        order = list(self.said)
+
+        def score(vectors):
+            ids = [order[int(round(float(v[0])))] for v in np.asarray(vectors)]
+            out = {t: np.zeros(len(ids), dtype=np.float32) for t in TRAITS}
+            for i, song in enumerate(ids):
+                voice, female, happy, top = self.said[song]
+                out["voice"][i], out["female"][i], out["happy"][i] = voice, female, happy
+                for m in traits.MIREX:
+                    out[m][i] = 0.4 if m == top else 0.15
+            return out
+
+        self.traits.score = score
+        for n, song in enumerate(order):
+            self.store.add_song({"id": song, "title": song.title(), "artist": "Somebody", "album": "", "duration": 60,
+                                 "suffix": "mp3", "tag_bpm": None, "genres": []})
+            self.store.save_sound([{"song_id": song, "musicnn": vector(n)}])
+        self.store.add_song({"id": "unheard", "title": "Unheard", "artist": "Somebody", "album": "", "duration": 60,
+                             "suffix": "mp3", "tag_bpm": None, "genres": []})
+
+    def test_the_numbers_before_and_after_scoring(self):
+        before = self.traits.report()
+        self.assertEqual((before["available"], before["total"], before["scored"], before["sung"]), (True, 5, 0, 0))
+        self.assertTrue(all(line["songs"] == 0 for line in before["lines"]))
+        self.traits.catch_up()
+        after = self.traits.report()
+        self.assertEqual((after["total"], after["scored"], after["sung"]), (5, 5, 4))
+        songs = {line["key"]: line["songs"] for line in after["lines"]}
+        # Whose voice is counted of sung songs only: the piano's "woman" isn't one. The three add up to the scored.
+        self.assertEqual((songs["female"], songs["male"], songs["instrumental"]), (2, 2, 1))
+        self.assertEqual((songs["happy"], songs["sad"]), (2, 0))
+        # Each song is in one MIREX group, its strongest: they add up to the scored too.
+        self.assertEqual(sum(songs[m] for m in traits.MIREX), 5)
+        self.assertEqual((songs["mirex_cheerful"], songs["mirex_bittersweet"], songs["mirex_humorous"]), (2, 2, 0))
+        self.assertEqual([line["group"] for line in after["lines"]][:4], ["voice", "voice", "voice", "moods"])
+        self.assertEqual({line["key"]: line["right"] for line in after["lines"]}["female"], 85)
+        self.assertEqual(set(traits.LINES), {line["key"] for line in after["lines"]})
+
+    def test_a_lines_songs_most_sure_least_sure_and_the_close_calls(self):
+        self.traits.catch_up()
+        ids = lambda got: [r["id"] for r in got["rows"]]  # noqa: E731
+        most = self.traits.songs("female")
+        self.assertEqual((most["songs"], ids(most), most["rows"][0]["sure"], most["right"]), (2, ["woman", "high-man"], 0.95, 85))
+        self.assertEqual(ids(self.traits.songs("female", "least")), ["high-man", "woman"])
+        # A man's is one less the woman's share: the surest man first.
+        self.assertEqual([(r["id"], r["sure"]) for r in self.traits.songs("male")["rows"]], [("man", 0.9), ("low-woman", 0.55)])
+        self.assertEqual([(r["id"], r["sure"]) for r in self.traits.songs("instrumental")["rows"]], [("piano", 0.9)])
+        # The close calls are on both sides of the line, and say which side; never an instrumental for whose voice.
+        unsure = self.traits.songs("female", "unsure")
+        self.assertEqual([(r["id"], r["holds"]) for r in unsure["rows"]], [("high-man", True), ("low-woman", False)])
+        self.assertEqual([(r["id"], r["holds"]) for r in self.traits.songs("happy", "unsure")["rows"]],
+                         [("low-woman", True), ("high-man", False)])
+        self.assertEqual(ids(self.traits.songs("mirex_cheerful")), ["high-man", "woman"])
+        # A page at a time.
+        self.assertEqual(ids(self.traits.songs("female", limit=1)), ["woman"])
+        second = self.traits.songs("female", limit=1, offset=1)
+        self.assertEqual((ids(second), second["songs"]), (["high-man"], 2))
+        self.assertEqual((self.traits.songs("sad")["songs"], self.traits.songs("sad")["rows"]), (0, []))
+
+
 @unittest.skipUnless(os.environ.get("TRAIT_MODELS"), "the real models: set TRAIT_MODELS to their folder")
 class RealModels(unittest.TestCase):
     def test_each_trait_is_a_share_for_each_song(self):

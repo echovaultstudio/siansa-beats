@@ -569,6 +569,24 @@ class ServiceTest(Service):
             self.call("/api/grids?ids=" + ",".join(str(n) for n in range(2001)))
         self.assertEqual(caught.exception.code, 400)
 
+    def test_the_voice_and_mood_page_asks(self):
+        """0.52: the page's numbers and the songs of a line; on a build without Essentia's models, nothing is scored
+        and the page says so."""
+        self.start()
+        self.call("/api/libraries", "POST", {"ids": ["1"]})
+        self.wait_done()
+        voice = self.call("/api/voice")
+        self.assertEqual((voice["available"], voice["scored"], voice["sung"]), (False, 0, 0))
+        self.assertEqual([line["key"] for line in voice["lines"]][:3], ["female", "male", "instrumental"])
+        self.assertEqual(len(voice["lines"]), 16)
+        self.assertEqual(self.call("/api/status")["traits"], {"available": False, "total": voice["total"], "scored": 0})
+        got = self.call("/api/voice/songs?line=female&order=unsure&limit=50&offset=0")
+        self.assertEqual((got["line"], got["order"], got["songs"], got["rows"]), ("female", "unsure", 0, []))
+        for wrong in ("line=nothing", "line=female&order=sideways", "line=female&limit=many", "order=most"):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/voice/songs?" + wrong)
+            self.assertEqual(caught.exception.code, 400, wrong)
+
     def test_v1_capabilities_and_profiles_for_the_app(self):
         self.start()
         empty = self.call("/api/v1/capabilities")

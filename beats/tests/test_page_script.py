@@ -58,7 +58,9 @@ class PageScriptTest(unittest.TestCase):
         self.assertEqual({b for _, b in menu} - sections, set())
         self.assertEqual(sections, views)
         self.assertEqual([b for _, b in menu], ["overview", "libraries", "songs", "listening", "loudness", "keys", "genres",
-                                                "similar", "activity", "setup", "log", "blends", "report"])
+                                                "voice", "similar", "activity", "setup", "log", "blends", "report"])
+        # 0.52: Voice and mood has its own page, and each of its lines one for its songs.
+        self.assertIn("trait", sections)
         for gone in ("audiomuse", "plugin"):
             self.assertNotIn(gone, page.lower(), gone)
         signin = open(os.path.join(os.path.dirname(PAGE), "signin.html"), encoding="utf-8").read()
