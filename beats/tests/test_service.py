@@ -372,6 +372,11 @@ class ServiceTest(Service):
         self.assertEqual(len(detail["downbeats"]), len(detail["beats"][::4]))
         self.assertTrue(detail["tempo_curve"])
         self.assertEqual(detail["end_seconds"], grid.END_SECONDS)
+        # The breakdowns and drops for the song page (0.49.0): the ones the app has, each with its kind and size.
+        # (None here: the stand-in model saves no sound levels to find them in.)
+        self.assertIn("sections", detail)
+        for found in (detail["sections"] or {}).get("found", []):
+            self.assertIn(found["kind"], ("breakdown", "drop"))
         beats = self.call("/api/beats/t140")
         self.assertEqual((beats["beats_per_bar"], beats["track_id"]), (4, "t140"))
         self.assertTrue(beats["steady"])

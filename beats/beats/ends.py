@@ -7,7 +7,8 @@
 - **Bass** (``intro_bass_bars``, ``outro_bass_bars``): how many bars from the lock the bass stays out (an intro of
   drums alone) or is already gone (an outro of drums alone): those bars blend without a bass swap.
 - **Drops and breakdowns** (``drops_ms``, ``breakdowns_ms``): the phrase starts where the bass comes back in after
-  being out, or drops out.
+  being out, or drops out; ``drops_db`` and ``breakdowns_db`` say by how much (dB, the 4 bars after against the 4
+  before), so a clear one can be told from one only just over :data:`BASS_IN_DB` (0.49.0).
 - **Energy** (``intro_energy``, ``outro_energy``): how loud each end is next to the song's loud part, in dB
   (0 the same, -6 a quieter intro), for the direction of a blend.
 
@@ -78,7 +79,7 @@ def describe(steady, heard, duration, levels):
     intro, outro = lock_points(beats, heard, downs)
     out = {"intro_lock_ms": _ms(intro), "outro_lock_ms": _ms(outro), "mix_track": bool(steady.get("from_mix")),
            "intro_bass_bars": None, "outro_bass_bars": None, "drops_ms": [], "breakdowns_ms": [],
-           "intro_energy": None, "outro_energy": None}
+           "drops_db": [], "breakdowns_db": [], "intro_energy": None, "outro_energy": None}
     hop, frames = features.unpack(levels)
     if not frames or intro is None:
         return out
@@ -110,8 +111,10 @@ def describe(steady, heard, duration, levels):
             continue
         if now - then >= BASS_IN_DB and now >= loud_bass - BASS_IN_DB:
             out["drops_ms"].append(_ms(p))
+            out["drops_db"].append(round(now - then, 1))
         elif then - now >= BASS_IN_DB and then >= loud_bass - BASS_IN_DB:
             out["breakdowns_ms"].append(_ms(p))
+            out["breakdowns_db"].append(round(then - now, 1))
     total = [_total(f) for f in frames]
     loud = statistics.median(sorted(total)[len(total) // 2:])
     span = 30.0

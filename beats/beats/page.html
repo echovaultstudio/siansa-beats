@@ -10,7 +10,7 @@
   --page: #000000; --raised: #0B0F13; --raised-2: #121820; --text: #EEF2F5; --muted: #AFC2D3; --faint: #7F93A4;
   --line: rgba(175, 194, 211, 0.16); --line-strong: rgba(175, 194, 211, 0.32);
   --amber: #FFB547; --on-amber: #1A1200; --amber-text: #FFC56E; --frost: #9DB4C8;
-  --ok: #7FD1A0; --warn: #FFB547; --bad: #FF8A80; --mark: #E879F9;
+  --ok: #7FD1A0; --warn: #FFB547; --bad: #FF8A80; --mark: #E879F9; --cut: #6EC6FF; --drop: #FF9E6E;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
   --nav-w: 232px; --header-h: 58px;
@@ -20,7 +20,8 @@
   :root {
     --page: #F3F6F8; --raised: #FFFFFF; --raised-2: #EDF1F4; --text: #0C1216; --muted: #46576A; --faint: #5C6E80;
     --line: rgba(12, 18, 22, 0.10); --line-strong: rgba(12, 18, 22, 0.22); --amber-text: #8F5200; --frost: #4E6B85;
-    --ok: #1F7A45; --warn: #8F5200; --bad: #B3261E; --mark: #A21CAF; color-scheme: light;
+    --ok: #1F7A45; --warn: #8F5200; --bad: #B3261E; --mark: #A21CAF; --cut: #0B62A0; --drop: #A8431A;
+    color-scheme: light;
   }
 }
 * { box-sizing: border-box; }
@@ -318,6 +319,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .marks .chip { display: inline-flex; gap: 8px; align-items: center; border-color: var(--mark); }
 .marks .chip button { border: 0; background: none; padding: 0 2px; color: inherit; cursor: pointer; }
 .marks .hint { color: var(--muted); font-size: 0.9em; }
+.marks .chip.breakdown { border-color: var(--cut); } .marks .chip.drop { border-color: var(--drop); }
 input[type=text], input[type=search], input[type=url], input[type=password], select { font: inherit; font-size: 0.875rem; border-radius: 999px; padding: 8px 12px;
   border: 1px solid var(--line-strong); background: var(--raised-2); color: var(--text); min-width: 0; }
 :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
@@ -647,8 +649,9 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
           <label class="toggle">Click volume <input type="range" id="click-volume" min="0" max="1" step="0.05" value="0.5"></label>
         </div>
         <div class="marks" id="d-marks" aria-live="polite"></div>
+        <div class="marks" id="d-sections" aria-live="polite"></div>
         <canvas id="beatview" height="120" aria-label="Beats around the playhead"></canvas>
-        <div class="legend"><span><i style="background:var(--frost)"></i>beat</span><span><i style="background:var(--amber)"></i>downbeat (bar number)</span><span><i style="background:var(--ok)"></i>phrase start</span><span><i style="background:var(--mark)"></i>your section marks</span><span id="other-legend"><i style="background:var(--faint);height:6px"></i>the model's beats</span><span><i style="background:var(--text)"></i>now</span><span>8 seconds around what's playing; tap to jump</span></div>
+        <div class="legend"><span><i style="background:var(--frost)"></i>beat</span><span><i style="background:var(--amber)"></i>downbeat (bar number)</span><span><i style="background:var(--ok)"></i>phrase start</span><span><i style="background:var(--mark)"></i>your section marks</span><span><i style="background:var(--cut)"></i>breakdown (Beats)</span><span><i style="background:var(--drop)"></i>drop (Beats)</span><span id="other-legend"><i style="background:var(--faint);height:6px"></i>the model's beats</span><span><i style="background:var(--text)"></i>now</span><span>8 seconds around what's playing; tap to jump</span></div>
         <canvas id="curve" height="170" aria-label="Tempo along the song"></canvas>
         <div class="legend"><span><i style="background:var(--amber)"></i>Beat This! tempo</span><span><i style="background:var(--ok)"></i>BPM tag</span><span><i style="background:var(--line-strong)"></i>the ends (first and last 30 s)</span></div>
         <div id="d-notes"></div>
@@ -1394,6 +1397,10 @@ function drawBeatView() {
   g.fillStyle = css("--mark");  // the owner's marks, under the beats
   for (const m of detail.marks || []) if (m.seconds >= t0 && m.seconds <= t0 + span) { g.fillRect(x(m.seconds) - 3, 0, 6, h); }
   g.font = "11px " + css("--mono");
+  for (const s of sectionsFound()) {  // the breakdowns and drops Beats found, with their name along the top
+    const t = s.ms / 1000; if (t < t0 || t > t0 + span) continue;
+    g.fillStyle = css(s.kind === "drop" ? "--drop" : "--cut"); g.fillRect(x(t) - 2, 18, 4, h - 28); g.fillText(s.kind, x(t) + 5, 30);
+  }
   g.fillStyle = css("--faint");  // the other set, small along the bottom, to see where they part
   for (const b of other) if (b >= t0 && b <= t0 + span) g.fillRect(x(b) - 1, h - 8, 2, 6);
   for (const b of beats) {
@@ -1430,6 +1437,7 @@ function drawCurve() {
   for (const t of (detail.grid && detail.grid.phrases) || []) g.fillRect(x(t) - 1, 10, 2, 8);
   g.fillStyle = css("--mark");  // the owner's marks, along the bottom
   for (const m of detail.marks || []) g.fillRect(x(m.seconds) - 2, h - 28, 4, 10);
+  for (const s of sectionsFound()) { g.fillStyle = css(s.kind === "drop" ? "--drop" : "--cut"); g.fillRect(x(s.ms / 1000) - 2, h - 40, 4, 10); }
   if (pts.length) { g.strokeStyle = css("--amber"); g.lineWidth = 2; g.beginPath(); pts.forEach(([t, v], i) => i ? g.lineTo(x(t), y(v)) : g.moveTo(x(t), y(v))); g.stroke(); }
   const now = $("player").currentTime || 0; g.fillStyle = css("--text"); g.fillRect(x(now) - 1, 10, 2, h - 30);
   g.fillStyle = css("--faint"); g.fillText("0", 40, h - 4); g.fillText(fmt(dur / 60) + " min", w - 60, h - 4);
@@ -1487,7 +1495,39 @@ function drawMarks() {
     return `<span class="chip"><button data-jump="${m.seconds}" title="Play from just before it">${clock(m.seconds)}${where}</button>` +
       `<button data-unmark="${m.id}" aria-label="Take this mark away">✕</button></span>`;
   }).join("") : `<span class="hint">Tap <b>Section starts here</b> (or press M) on every drop, breakdown and big change you hear.</span>`;
+  drawSections();
 }
+// ---- the breakdowns and drops Beats found (0.49.0), against the owner's marks ----
+function sectionsFound() { return (detail && detail.sections && detail.sections.found) || []; }
+// A breakdown or drop and a mark agree within a bar of each other (a tap comes a little late, and may be a bar off).
+function sectionsAgree(found, marks, barS) {
+  const near = (a, list) => list.some((b) => Math.abs(a - b) <= barS);
+  const at = found.map((s) => s.ms / 1000), tapped = marks.map((m) => m.seconds);
+  return {agree: at.filter((t) => near(t, tapped)).length, missed: tapped.filter((t) => !near(t, at)).length};
+}
+function drawSections() {
+  const box = $("d-sections");
+  if (!detail || !detail.sections) { box.innerHTML = detail ? '<span class="hint">Breakdowns and drops: none worked out for this song (no beat grid or sound levels yet).</span>' : ""; return; }
+  const found = sectionsFound(), marks = detail.marks || [];
+  const chips = found.map((s) => {
+    const sure = s.db == null ? "" : ` · bass ${s.kind === "drop" ? "+" : "−"}${fmt(s.db, 0)} dB${s.db >= 10 ? " · clear" : " · faint"}`;
+    return `<span class="chip ${s.kind}"><button data-jump="${s.ms / 1000}" title="Play from just before it">${s.kind === "drop" ? "Drop" : "Breakdown"} ${clock(s.ms / 1000)}${sure}</button></span>`;
+  }).join("");
+  const bpm = detail.grid && detail.grid.bpm, barS = bpm ? 4 * 60 / bpm : 2;
+  let line;
+  if (!found.length) line = "Beats found no breakdown or drop in this song.";
+  else if (!marks.length) line = "Tap <b>Section starts here</b> on the breakdowns and drops you hear, to see whether Beats agrees.";
+  else {
+    const r = sectionsAgree(found, marks, barS);
+    line = `Your marks agree with ${r.agree} of the ${found.length} Beats found, within a bar.` + (r.missed ? ` ${r.missed === 1 ? "1 of your marks has" : r.missed + " of your marks have"} nothing of Beats' near it (a breakdown or drop it missed, or another kind of change).` : "");
+  }
+  const sent = detail.sections.sent ? "" : " Not sent to the app yet: worked out now from the song.";
+  box.innerHTML = `<span class="hint">Found by Beats, where the bass drops out (breakdown) or comes back (drop):</span>${chips}<span class="hint">${line}${sent}</span>`;
+}
+$("d-sections").addEventListener("click", (e) => {
+  const jump = e.target.closest("[data-jump]");
+  if (jump) { const p = $("player"); p.currentTime = Math.max(0, Number(jump.dataset.jump) - 4); p.play(); }
+});
 async function addMark() {
   if (!detail || !selected) return;
   const at = Math.max(0, ($("player").currentTime || 0) - 0.15);  // a tap comes about 150 ms after the sound
