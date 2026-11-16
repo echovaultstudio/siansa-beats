@@ -651,7 +651,7 @@ class ServiceTest(Service):
         end = time.time() + 20
         while time.time() < end and self.app.store.measure_counts(1)["waiting"]:
             time.sleep(0.2)
-        self.assertEqual(self.app.store.measure_counts(1), {"measured": 2, "failed": 1, "waiting": 0})
+        self.assertEqual(self.app.store.measure_counts(1), {"measured": 2, "failed": 1, "waiting": 0, "total": 3})
         self.assertEqual(self.call("/api/v1/profiles?ids=t122")["profiles"][0]["ref_lufs"], -12.25)
 
     def test_the_log_shows_every_step_with_debug_details_and_no_secrets(self):
