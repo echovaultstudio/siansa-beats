@@ -1071,6 +1071,11 @@ class Store:
             r["details"] = json.loads(r["details"] or "{}")
         return rows
 
+    def bad_blend(self, blend_id):
+        """One mark, or None."""
+        rows = self._rows("SELECT * FROM bad_blends WHERE id=?", (blend_id,))
+        return rows[0] if rows else None
+
     def remove_bad_blend(self, blend_id):
         with self._write():
             return self.db.execute("DELETE FROM bad_blends WHERE id=?", (blend_id,)).rowcount > 0
