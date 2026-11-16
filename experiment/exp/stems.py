@@ -48,7 +48,7 @@ def levels(parts):
         index = _frames(mono)
         total, kick = [], []
         for start in range(0, len(index), 1024):  # a thousand frames at a time: little memory for a long song
-            power = np.abs(np.fft.rfft(mono[index[start:start + 1024]] * window, axis=1)) ** 2 / scale
+            power = np.abs(np.fft.rfft((mono[index[start:start + 1024]] * window).astype(np.float64), axis=1)) ** 2 / scale
             total.append(power.sum(axis=1))
             if name == "drums":
                 kick.append(power[:, low:high].sum(axis=1))
@@ -105,7 +105,7 @@ class FakeSeparator:
         return "a stand-in for the tests (no model)"
 
     def __call__(self, audio):
-        spectrum = np.fft.rfft(audio, axis=1)
+        spectrum = np.fft.rfft(audio.astype(np.float64), axis=1)  # in double: single-precision FFTs of minutes of sound differ between numpy builds
         cut = int(200.0 * audio.shape[1] / RATE)
         low = spectrum.copy()
         low[:, cut:] = 0

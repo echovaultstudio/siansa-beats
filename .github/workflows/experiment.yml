@@ -33,7 +33,9 @@ jobs:
           mkdir -p "$HOME/.local/bin" && ln -sf "$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')" "$HOME/.local/bin/ffmpeg"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: The rule, the score and the service against a fake Navidrome
-        run: cd experiment && python3 -P tests/test_experiment.py
+        run: |
+          python3 -c "import sys, numpy; print('python', sys.version.split()[0], 'numpy', numpy.__version__)"
+          cd experiment && python3 -P tests/test_experiment.py
 
   image:
     name: Image with Demucs
