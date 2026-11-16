@@ -53,6 +53,26 @@ MIREX = {
 BATCH = 2000
 HOLDS = 0.5  # a trait at or over this holds for the song (counted on the page)
 
+# ---- the page's Voice and mood (0.52): its lines, each with the songs it holds for ----
+# Songs right of 100, as each model's makers measured it (the comments above): said on the page beside each line.
+RIGHT = {"voice": 98, "female": 85, "acoustic": 93, "aggressive": 97, "electronic": 93, "happy": 84, "party": 90,
+         "relaxed": 89, "sad": 85, "danceable": 95, "mirex": 67}
+_TOP = f"MAX({', '.join('t.' + m for m in MIREX)})"  # a song's strongest MIREX group: the one it is counted in
+# line: (its card on the page, when it holds for a song, how sure of it (0 to 1), the songs it is asked of, right of
+# 100). Whose voice is asked of sung songs only; a MIREX group holds for the songs it is the strongest of (the five
+# add up to 1, so hardly any reaches a half).
+LINES = {
+    "female": ("voice", f"t.voice >= {HOLDS} AND t.female >= {HOLDS}", "t.female", f"t.voice >= {HOLDS}", RIGHT["female"]),
+    "male": ("voice", f"t.voice >= {HOLDS} AND t.female < {HOLDS}", "(1 - t.female)", f"t.voice >= {HOLDS}", RIGHT["female"]),
+    "instrumental": ("voice", f"t.voice < {HOLDS}", "(1 - t.voice)", "1", RIGHT["voice"]),
+    **{m: ("moods", f"t.{m} >= {HOLDS}", f"t.{m}", "1", RIGHT[m]) for m in ("happy", "sad", "relaxed", "party", "aggressive")},
+    **{m: ("sound", f"t.{m} >= {HOLDS}", f"t.{m}", "1", RIGHT[m]) for m in ("danceable", "acoustic", "electronic")},
+    **{m: ("groups", f"t.{m} >= {_TOP}", f"t.{m}", "1", RIGHT["mirex"])
+       for m in ("mirex_cheerful", "mirex_bittersweet", "mirex_passionate", "mirex_intense", "mirex_humorous")},
+}
+ORDERS = ("most", "least", "unsure")
+UNSURE = (0.4, 0.6)  # a close call: the songs most likely wrong, on either side of the line
+
 
 class Traits:
     def __init__(self, models_dir, store, threads=None):
@@ -117,6 +137,7 @@ class Traits:
                     f"INSERT OR REPLACE INTO traits (song_id, {names}, sound_at) VALUES (?, {marks}, ?)",  # noqa: S608 - names are ours
                     [(r["song_id"], *(float(got[t][i]) for t in TRAITS), r["at"]) for i, r in enumerate(rows)])
                 self.store.db.commit()
+                self.store.writes += 1  # the page's kept numbers are worked out again
             done += len(rows)
         if done:
             self.unload()
@@ -140,3 +161,38 @@ class Traits:
             f"COALESCE(SUM(voice >= {HOLDS} AND female >= 0.5), 0) AS female, COALESCE(SUM(voice >= {HOLDS} AND female < 0.5), 0) AS male, "
             f"{sums} FROM traits")[0]
         return dict(r)
+
+    def report(self, server=None):
+        """The page's numbers (0.52), of ``server``'s songs (every server's without one): ``{"available", "total":
+        songs with a sound, "scored", "sung", "lines": [{"key", "group", "songs": it holds for, "right": of 100 in its
+        makers' tests}]}``, the lines in the page's order."""
+        of, args = self.store._of(server, "t.song_id")
+        sums = ", ".join(f"COALESCE(SUM({holds}), 0) AS {key}" for key, (_, holds, *_) in LINES.items())
+        r = self.store._rows(
+            f"SELECT COUNT(*) AS scored, COALESCE(SUM(t.voice >= {HOLDS}), 0) AS sung, {sums} "  # noqa: S608 - names are ours
+            f"FROM traits t JOIN songs s ON s.id = t.song_id WHERE 1=1{of}", args)[0]
+        of, args = self.store._of(server, "o.song_id")
+        total = self.store._rows(
+            "SELECT COUNT(*) AS n FROM sound o JOIN songs s ON s.id = o.song_id "
+            f"WHERE o.musicnn IS NOT NULL AND length(o.musicnn) = 800{of}", args)[0]["n"]
+        return {"available": self.available, "total": max(total, r["scored"]), "scored": r["scored"], "sung": r["sung"],
+                "lines": [{"key": key, "group": group, "songs": r[key], "right": right}
+                          for key, (group, _, _, _, right) in LINES.items()]}
+
+    def songs(self, line, order="most", limit=50, offset=0, server=None):
+        """The songs of one line of the page (0.52): ``{"line", "group", "right", "order", "songs": how many there
+        are, "rows": [{"id", "title", "artist", "sure": 0 to 1, "holds", "genres"}]}``, ``limit`` of them from
+        ``offset``. ``order``: "most" sure first or "least" (of the songs it holds for), or "unsure": the close calls
+        on either side of the line, which is where the wrong ones are."""
+        group, holds, sure, asked, right = LINES[line]
+        where = f"({asked}) AND {sure} BETWEEN {UNSURE[0]} AND {UNSURE[1]}" if order == "unsure" else f"({holds})"
+        of, args = self.store._of(server, "t.song_id")
+        base = f"FROM traits t JOIN songs s ON s.id = t.song_id WHERE {where}{of}"
+        count = self.store._rows(f"SELECT COUNT(*) AS n {base}", args)[0]["n"]  # noqa: S608 - names are ours, values are ?
+        rows = self.store._rows(
+            f"SELECT s.id, s.title, s.artist, {sure} AS sure, ({holds}) AS holds {base} "  # noqa: S608
+            f"ORDER BY sure {'ASC' if order == 'least' else 'DESC'}, s.id LIMIT ? OFFSET ?", (*args, int(limit), int(offset)))
+        genres = self.store._genres_of([r["id"] for r in rows]) if rows else {}
+        return {"line": line, "group": group, "right": right, "order": order, "songs": count,
+                "rows": [{"id": r["id"], "title": r["title"], "artist": r["artist"], "sure": round(r["sure"], 3),
+                          "holds": bool(r["holds"]), "genres": genres.get(r["id"], [])} for r in rows]}

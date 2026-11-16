@@ -500,6 +500,37 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
   section[data-view="songs"] tbody td:empty { display: none; }
   section[data-view="songs"] tbody td.empty { grid-column: 1 / -1; }
 }
+/* ---- 0.52: Voice and mood. Its lines open their songs: a bar each as Genres draws them, but as tall as a thumb;
+   the voices are one bar; a line's songs are the Songs rows with how sure on the right. The page's own colours. ---- */
+.lines { display: grid; }
+.lines .hbar { grid-template-columns: minmax(90px, 30%) minmax(0, 1fr) auto 10px; min-height: 44px; color: inherit; text-decoration: none; }
+.lines a:hover .name { color: var(--amber-text); }
+.lines .none .name, .lines .go { color: var(--faint); }
+.split { height: 10px; border-radius: 999px; background: var(--raised-2); overflow: hidden; display: flex; margin-bottom: 4px; }
+.split span { display: block; height: 100%; }
+.split .female, .dot.female { background: var(--amber); }
+.split .male, .dot.male { background: var(--frost); }
+.split .instrumental, .dot.instrumental { background: color-mix(in srgb, var(--frost) 45%, transparent); }
+.dot.rest { background: var(--raised-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.line { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto 4ch 10px; gap: 12px; align-items: center; min-height: 44px;
+  font-size: 0.875rem; color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); }
+.line:last-child { border-bottom: 0; }
+.line .n { font-weight: 600; font-variant-numeric: tabular-nums; }
+.line .share { color: var(--faint); font-size: 0.8125rem; text-align: right; font-variant-numeric: tabular-nums; }
+.line.rest { color: var(--faint); } .line.rest .n { font-weight: 400; }
+.page-head > button { margin-bottom: 12px; }
+.fact .to { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; font-size: 0.8125rem; font-weight: 400; }
+section[data-view="trait"] table { min-width: 0; }
+section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { text-align: right; }
+@media (max-width: 700px) {
+  section[data-view="trait"] .table { overflow: visible; }
+  section[data-view="trait"] table, section[data-view="trait"] tbody { display: block; width: 100%; }
+  section[data-view="trait"] thead { display: none; }
+  section[data-view="trait"] tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  section[data-view="trait"] tbody td { display: block; padding: 0; border: 0; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  section[data-view="trait"] tbody td:nth-child(2) { display: none; }
+  section[data-view="trait"] tbody td.empty { grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -544,6 +575,7 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
       <a href="#loudness" data-view="loudness">Loudness</a>
       <a href="#keys" data-view="keys">Keys</a>
       <a href="#genres" data-view="genres">Genres</a>
+      <a href="#voice" data-view="voice">Voice and mood</a>
       <a href="#similar" data-view="similar">Similar music</a>
     </div>
     <div class="group">
@@ -751,6 +783,57 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
         <h3>Genres by songs</h3>
         <div class="tools"><input type="search" class="grow" id="genre-find" placeholder="Find a genre" aria-label="Find a genre"></div>
         <div id="genre-top" class="hbars" data-cap="15"></div>
+      </div>
+    </section>
+
+    <!-- Voice and mood (0.52): who sings each song and its moods, by Essentia's trained models (beats/traits.py) -->
+    <section data-view="voice">
+      <div class="page-head"><h2>Voice and mood</h2><p class="sub">Who sings each song and how it feels, read from its sound. Tap a line for its songs.</p></div>
+      <div class="card" id="v-off" hidden><p class="sub">This image has no voice and mood models, so there's nothing to show here.</p></div>
+      <div class="tiles" id="v-tiles"></div>
+      <div class="grid2" id="v-cards">
+        <div class="card">
+          <h3>Voice</h3>
+          <div class="split" id="v-split" aria-hidden="true"></div>
+          <div class="lines" id="v-voice"></div>
+          <details class="how"><summary>How it works</summary><p class="sub">Essentia's trained models read what Siansa Beats already keeps of each song's sound. No song is heard again. A song has a mood when its share is half or more. In the makers' own tests: voice right 98 times in 100, whose voice 85, moods 84 to 97, mood groups 67. Not checked on your music.</p></details>
+        </div>
+        <div class="card">
+          <h3>Moods</h3>
+          <p class="sub" id="v-moods-note">A song can have several moods, or none.</p>
+          <div class="lines" id="v-moods"></div>
+        </div>
+        <div class="card">
+          <h3>Sound</h3>
+          <div class="lines" id="v-sound"></div>
+        </div>
+        <div class="card" data-fold id="v-groups-card">
+          <h3>Mood groups</h3>
+          <p class="sub">One group per song: the one it fits best. The least sure reading here: right about 2 times in 3.</p>
+          <div class="lines" id="v-groups"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- One line of Voice and mood: its songs (#voice=<line>), the most sure first, the least sure, or the close calls. -->
+    <section data-view="trait">
+      <div class="page-head"><button type="button" id="t-back">‹ Voice and mood</button><h2 id="t-name"></h2><p class="sub" id="t-sub" role="status"></p></div>
+      <div class="card">
+        <div class="tools">
+          <div class="seg" role="group" aria-label="Order" id="t-order">
+            <button data-order="most" aria-pressed="true">Most sure</button>
+            <button data-order="least" aria-pressed="false" title="The songs just over the line: the likeliest to be wrong">Least sure</button>
+            <button data-order="unsure" aria-pressed="false" title="The close calls, 40 to 60%, on both sides of the line">Not sure</button>
+          </div>
+        </div>
+        <p class="sub" id="t-note"></p>
+        <div class="table">
+          <table>
+            <thead><tr><th>Song</th><th>Genre</th><th>How sure</th></tr></thead>
+            <tbody id="t-rows"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <button type="button" class="cap-more" id="t-more" hidden>Show more</button>
       </div>
     </section>
 
@@ -1350,10 +1433,13 @@ async function openSong(id, newSong, fromHistory) {
   const MIREX = {mirex_passionate: "Passionate, rousing", mirex_cheerful: "Cheerful, fun", mirex_bittersweet: "Wistful, bittersweet",
     mirex_humorous: "Quirky, playful", mirex_intense: "Intense, fiery"};
   const topMirex = !tr ? null : Object.keys(MIREX).sort((a, b) => tr[b] - tr[a])[0];
+  // 0.52: a third item is the way to every song the same (the lists of Voice and mood).
+  const heldMoods = !tr ? [] : ["happy", "sad", "relaxed", "party", "aggressive"].filter((m) => tr[m] >= 0.5);
   const voiceFacts = !tr ? [] : [
-    ["Voice", tr.voice >= 0.5 ? `Sung (${pct(tr.voice)} sure)` : `Instrumental (${pct(1 - tr.voice)} sure)`],
-    ["Whose voice", tr.voice < 0.5 ? "–" : tr.female >= 0.5 ? `A woman's (${pct(tr.female)} sure)` : `A man's (${pct(1 - tr.female)} sure)`],
-    ["Moods", ["happy", "sad", "relaxed", "party", "aggressive"].filter((m) => tr[m] >= 0.5).map((m) => `${m} ${pct(tr[m])}`).join(", ") || "none strongly"],
+    ["Voice", tr.voice >= 0.5 ? `Sung (${pct(tr.voice)} sure)` : `Instrumental (${pct(1 - tr.voice)} sure)`, tr.voice >= 0.5 ? null : [["instrumental", "All instrumental"]]],
+    ["Whose voice", tr.voice < 0.5 ? "–" : tr.female >= 0.5 ? `A woman's (${pct(tr.female)} sure)` : `A man's (${pct(1 - tr.female)} sure)`,
+      tr.voice < 0.5 ? null : tr.female >= 0.5 ? [["female", "All sung by a woman"]] : [["male", "All sung by a man"]]],
+    ["Moods", heldMoods.map((m) => `${m} ${pct(tr[m])}`).join(", ") || "none strongly", heldMoods.map((m) => [m, `${LINE_NAMES[m]} songs`])],
     ["Mood group (MIREX)", `${MIREX[topMirex]} (${pct(tr[topMirex])})`],
     ["Danceable", sure(tr.danceable)], ["Electronic", sure(tr.electronic)], ["Acoustic", sure(tr.acoustic)],
     ["How positive (valence)", detail.valence != null ? `${fmt(detail.valence, 1)} of 9` : "–"],
@@ -1363,7 +1449,8 @@ async function openSong(id, newSong, fromHistory) {
     ["All its sound said", byGenreSource(detail.genres, "sound").map((g) => `${styleOf(g.label)} ${g.weight.toFixed(2)}`).join(", ") || "–"],
     ["Its tags", byGenreSource(detail.genres, "tag").map((g) => g.label).join(", ") || "–"],
   ];
-  const factCards = (list) => list.map(([k, v]) => `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
+  const factCards = (list) => list.map(([k, v, to]) => `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${
+    to && to.length ? `<div class="to">${to.map(([line, text]) => `<a href="#voice=${line}">${esc(text)} ›</a>`).join("")}</div>` : ""}</div>`).join("");
   $("d-facts").innerHTML = factCards(facts.concat(voiceFacts));
   $("d-sound").innerHTML = factCards(soundFacts(detail.measure));
   $("d-genres").innerHTML = factCards(genreFacts);
@@ -1739,7 +1826,7 @@ function chooseServer(id) {
   server = id || null;
   try { if (server) localStorage.setItem("beats-server", server); else localStorage.removeItem("beats-server"); } catch (e) { /* private window */ }
   // Everything on show is this server's now.
-  songs = []; libraries = []; picked = null; readNote = ""; lastCounts = ""; songsAsked = 0; genresShownAt = 0; serversDrawn = "";
+  songs = []; libraries = []; picked = null; readNote = ""; lastCounts = ""; songsAsked = 0; genresShownAt = 0; voiceAt = 0; serversDrawn = "";
   $("genre-top").innerHTML = ""; $("libs").innerHTML = '<span class="sub">Asking the server…</span>';
   drawRows(); exportLinks();
   statusLoop(); refreshLibraries(); refreshSongs(); refreshGenres(true);
@@ -1919,7 +2006,7 @@ window.addEventListener("scroll", () => { toTop.hidden = window.scrollY < window
 // ---- pages ----
 // One page at a time, chosen in the side menu (tabs on a phone) and kept in the address (#songs, #song=<id>), so Back
 // and a bookmark work.
-const VIEWS = ["overview", "libraries", "songs", "listening", "artist", "loudness", "keys", "genres", "similar", "blends", "activity", "log", "setup", "report"];
+const VIEWS = ["overview", "libraries", "songs", "listening", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
 let currentView = null;
 function showView(view, keepHash) {
   if (!VIEWS.includes(view)) view = "overview";
@@ -1935,6 +2022,12 @@ function showView(view, keepHash) {
   if (view === "log") refreshLog(true);
   if (view === "loudness" || view === "keys") refreshLoudness();
   if (view === "similar") drawSimilarStatus();
+  if (view === "voice") refreshVoice(true);
+  if (view === "trait") {  // part of Voice and mood: its menu entry stays marked
+    document.querySelector('.nav [data-view="voice"]')?.setAttribute("aria-current", "page");
+    $("page-name").textContent = "Voice and mood · " + (LINE_NAMES[trait.line] || "Songs");
+    document.title = `${LINE_NAMES[trait.line] || "Voice and mood"} · Siansa Beats`;
+  }
   if (view === "listening") refreshListening();
   if (view === "artist") {  // part of Listening: its menu entry stays marked
     document.querySelector('.nav [data-view="listening"]')?.setAttribute("aria-current", "page");
@@ -1944,6 +2037,8 @@ function showView(view, keepHash) {
 function route() {
   const a = location.hash.match(/^#artist=(.+)$/);
   if (a) { showView("artist", true); openArtist(decodeURIComponent(a[1])); return; }
+  const v = location.hash.match(/^#voice=(\w+)$/);
+  if (v && LINE_NAMES[v[1]]) { trait.line = v[1]; showView("trait", true); openTrait(v[1]); return; }
   const m = location.hash.match(/^#song=(.+)$/);
   if (m) { showView("songs", true); if (selected !== decodeURIComponent(m[1])) { history.replaceState({song: decodeURIComponent(m[1])}, "", location.hash); openSong(decodeURIComponent(m[1]), true, true); } return; }
   showView(location.hash.slice(1) || "overview", true);
@@ -2390,7 +2485,7 @@ function tile(href, k, v, of, s, meter) {
 function kindsOf(s) {
   const c = s.counts || {}, total = (c.songs || 0) - (c.skipped || 0), done = c.done || 0, failed = c.failed || 0;
   const waiting = (c.queued || 0) + BUSY.reduce((n, k) => n + (c[k] || 0), 0);
-  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0;
+  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0, tr = s.traits || {};
   const where = s.device_name && s.device_name !== "CPU" ? ` on the GPU` : "";
   return [
     {id: "beats", href: "#songs", name: "Beats", what: "Tempo, every beat and the phrases: what DJ blends are laid on.",
@@ -2410,6 +2505,12 @@ function kindsOf(s) {
       // Of the songs a library wants the sound for (0.47.1): a library left out of Sound isn't counted.
       done: so.heard ?? so.sound ?? 0, total: so.wanted ?? so.songs ?? null, failed: soFailed, busy: 0, now: so.hearing ? "hearing a song now" : "",
       left: Math.max(0, (so.wanted ?? so.songs ?? 0) - (so.heard ?? so.sound ?? 0) - soFailed) + (so.again || 0), off: so.hears === false},
+    // 0.52: of the songs with a sound, how many Essentia's models have scored. They're scored at start-up and as songs
+    // are heard, from the sound kept: nothing to wait for but the next minute.
+    {id: "voice", href: "#voice", name: "Voice and mood", what: "Who sings each song, a woman or a man, and its moods.",
+      by: tr.available ? "<b>Essentia's trained models</b>" : "<b>None</b>: this image has no voice and mood models",
+      done: tr.scored || 0, total: tr.available ? tr.total || 0 : null, failed: 0, busy: 0,
+      now: (tr.total || 0) > (tr.scored || 0) ? "scoring songs now" : "", left: Math.max(0, (tr.total || 0) - (tr.scored || 0)), off: !tr.available},
   ];
 }
 const AGAIN_ASK = {
@@ -2434,7 +2535,7 @@ function drawStart(s) {
 function drawTiles(s) {
   $("tiles").innerHTML = kindsOf(s).map((k) => {
     const w = (n) => k.total ? `${Math.max(0, Math.min(100, 100 * n / k.total))}%` : "0";
-    const state = k.off ? "not in this image" : s.paused && k.left ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
+    const state = k.off ? "not in this image" : s.paused && k.left && k.id !== "voice" ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
     return `<div class="kind"><div class="top"><a href="${k.href}">${esc(k.name)}</a><span class="n">${k.total == null ? "–" : `${num(k.done)} <small>of ${num(k.total)}</small>`}</span></div>
       <div class="for">${esc(k.what)}</div>
       <div class="meter" aria-hidden="true"><span class="done" style="width:${w(k.done)}"></span><span class="failed" style="width:${w(k.failed)}"></span><span class="busy" style="width:${w(k.busy)}"></span></div>
@@ -2603,6 +2704,102 @@ $("about-fetch").addEventListener("click", async () => {
   try { await api("api/genres/about/fetch", {method: "POST"}); } catch (e) { banner(e.message); }
   setTimeout(() => refreshGenres(true), 1500);
 });
+
+// ---- voice and mood (0.52) ----
+// Each line of the page as it's said: who sings, the moods, the sound, and MIREX's five mood groups by plain names.
+const LINE_NAMES = {female: "Sung by a woman", male: "Sung by a man", instrumental: "Instrumental",
+  happy: "Happy", sad: "Sad", relaxed: "Relaxed", party: "Party", aggressive: "Aggressive",
+  danceable: "Danceable", acoustic: "Acoustic", electronic: "Electronic",
+  mirex_cheerful: "Cheerful, fun", mirex_bittersweet: "Wistful, bittersweet", mirex_passionate: "Passionate, rousing",
+  mirex_intense: "Intense, fiery", mirex_humorous: "Quirky, playful"};
+let voiceAt = 0;
+async function refreshVoice(force) {
+  // Asked when the page is on show, and at most every 30 s.
+  if (!force && (document.hidden || currentView !== "voice" || Date.now() - voiceAt < 30000)) return;
+  voiceAt = Date.now();
+  let v;
+  try { v = await api("api/voice"); } catch (e) { return; }
+  drawVoice(v);
+}
+function drawVoice(v) {
+  $("v-off").hidden = v.available;
+  $("v-tiles").hidden = $("v-cards").hidden = !v.available;
+  if (!v.available) return;
+  const total = v.total || 0, scored = v.scored || 0, left = Math.max(0, total - scored);
+  $("v-tiles").innerHTML = [
+    tile("#voice", "Scored", num(scored), total, left ? `${num(left)} to go` : total ? "all songs" : "no songs yet", [["done", scored]]),
+    tile("#voice", "Sung", num(v.sung), null, scored ? `${Math.round(100 * v.sung / scored)}% of the songs scored` : "nothing scored yet", null),
+  ].join("");
+  const of = (group) => v.lines.filter((l) => l.group === group);
+  const share = (n) => total ? 100 * n / total : 0;
+  // The voices: one bar of the whole library, the part not scored yet left empty, and a line each.
+  $("v-split").innerHTML = of("voice").map((l) => `<span class="${l.key}" style="width:${share(l.songs)}%"></span>`).join("");
+  $("v-voice").innerHTML = of("voice").map((l) => {
+    const inner = `<span class="dot ${l.key}"></span><span class="name">${LINE_NAMES[l.key]}</span><span class="n">${num(l.songs)}</span><span class="share">${Math.round(share(l.songs))}%</span>`;
+    return l.songs ? `<a class="line" href="#voice=${l.key}">${inner}<span class="go" aria-hidden="true">›</span></a>` : `<div class="line none">${inner}<span></span></div>`;
+  }).join("") + (left ? `<div class="line rest"><span class="dot rest"></span><span class="name">Not scored yet</span><span class="n">${num(left)}</span><span class="share">${Math.round(share(left))}%</span><span></span></div>` : "");
+  // Moods, sound and mood groups: a bar each against the whole library, as Genres draws its bars.
+  const bars = (group) => of(group).map((l) => {
+    const inner = `<span class="name">${LINE_NAMES[l.key]}</span><span class="track"><span style="width:${share(l.songs)}%"></span></span><span class="n">${num(l.songs)}</span>`;
+    return l.songs ? `<a class="hbar" href="#voice=${l.key}">${inner}<span class="go" aria-hidden="true">›</span></a>` : `<div class="hbar none">${inner}<span></span></div>`;
+  }).join("");
+  $("v-moods").innerHTML = bars("moods");
+  $("v-sound").innerHTML = bars("sound");
+  $("v-groups").innerHTML = bars("groups");
+  $("v-moods-note").textContent = left ? `Of the ${num(scored)} songs scored so far.` : "A song can have several moods, or none.";
+}
+setInterval(refreshVoice, 10000);
+
+// One line's songs: the first 50, then 50 more at a time (the owner, 16 Nov), in the order chosen.
+const TRAIT_STEP = 50;
+const trait = {line: null, order: "most", rows: [], songs: 0, asked: 0};
+const TRAIT_NOTES = {
+  most: () => "The surest first.",
+  least: (g) => g === "groups" ? "The weakest fits first: the likeliest to be wrong." : "Just over the line first: the likeliest to be wrong.",
+  unsure: (g, n) => `${num(n)} close ${n === 1 ? "call" : "calls"}, 40 to 60%, on both sides of the line.`,
+};
+async function openTrait(line, more) {
+  if (!more) {
+    trait.rows = []; trait.songs = 0;
+    if (trait.line !== line || !trait.shown) trait.order = "most";
+    trait.line = line; trait.shown = true;
+    $("t-name").textContent = LINE_NAMES[line];
+    $("t-sub").textContent = "Loading…"; $("t-note").textContent = "";
+    $("t-rows").innerHTML = '<tr><td colspan="3" class="empty">Loading…</td></tr>';
+    $("t-more").hidden = true;
+    $("t-order").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.order === trait.order)));
+  }
+  const asked = ++trait.asked, order = trait.order;
+  let got;
+  try { got = await api(`api/voice/songs?line=${line}&order=${order}&limit=${TRAIT_STEP}&offset=${trait.rows.length}`); } catch (e) {
+    if (asked === trait.asked) $("t-sub").textContent = "Siansa Beats isn't answering; try again shortly.";
+    return;
+  }
+  if (asked !== trait.asked) return;  // another line or order was asked for meanwhile
+  trait.rows = trait.rows.concat(got.rows); trait.songs = got.songs;
+  const what = got.group === "voice" && line !== "instrumental" ? "Whose voice is" : got.group === "groups" ? "Mood groups are" : "This is";
+  $("t-sub").textContent = `${order === "unsure" ? "" : `${num(got.songs)} ${got.songs === 1 ? "song" : "songs"}. `}${what} right about ${got.right} times in 100 in the makers' own tests. Tap a song to hear it.`;
+  $("t-note").textContent = TRAIT_NOTES[order](got.group, got.songs);
+  $("t-rows").innerHTML = trait.rows.map((r) => `<tr data-id="${esc(r.id)}">
+      <td><div class="big">${esc(r.title)}</div><div class="sub">${esc(r.artist)}</div></td>
+      <td>${genreChips(r.genres)}</td>
+      <td class="num"><span class="big">${pct(r.sure)}</span>${r.holds ? "" : '<div class="sub">not counted</div>'}</td>
+    </tr>`).join("") || `<tr><td colspan="3" class="empty">${order === "unsure" ? "No close calls." : "No songs."}</td></tr>`;
+  const rest = trait.songs - trait.rows.length;
+  $("t-more").hidden = rest <= 0;
+  $("t-more").textContent = `Show ${num(Math.min(TRAIT_STEP, rest))} more of ${num(rest)}`;
+}
+$("t-order").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-order]");
+  if (!b || b.dataset.order === trait.order) return;
+  trait.order = b.dataset.order;
+  $("t-order").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  trait.rows = []; $("t-more").hidden = true;
+  openTrait(trait.line, true);
+});
+$("t-more").addEventListener("click", () => openTrait(trait.line, true));
+$("t-back").addEventListener("click", () => { location.hash = "#voice"; });
+$("t-rows").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) location.hash = "#song=" + encodeURIComponent(tr.dataset.id); });
 
 // ---- similar music ----
 function drawSimilarStatus() {

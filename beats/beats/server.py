@@ -109,6 +109,7 @@ from .worker import Worker
 from . import genres as genres_module
 from . import log
 from . import memory as memory_module
+from . import traits as traits_module
 
 _log = log.get("server")
 
@@ -382,6 +383,15 @@ class App:
                 "hears": self.hearer.available, "sources": sources,
                 "again": self.store.sound_waiting(),  # 0.46: marked to be heard again, still in use
                 "hearing": dict(self.worker.hearing) if self.worker.hearing else None}
+
+    def voice(self, server=None):
+        """The Voice and mood page's numbers (0.52, :meth:`beats.traits.Traits.report`), kept ready as the sound's are."""
+        server = server or self.servers.default_id
+        return self.kept("voice", server, lambda only: self.traits.report(only), 60, lambda: self.store.writes).get()
+
+    def voice_songs(self, line, order="most", limit=50, offset=0, server=None):
+        """The songs of one of that page's lines (:meth:`beats.traits.Traits.songs`)."""
+        return self.traits.songs(line, order, limit, offset, self.only(server or self.servers.default_id))
 
     # ---- connections and access, set on the page (0.24.0) ----
 
@@ -733,6 +743,7 @@ class App:
         measured = timed("loudness", lambda: self.kept("measure-counts", server, lambda o: self.store.measure_counts(loudness.VERSION, o), 30,
                                                        lambda: self.store.writes).get())
         sound = timed("sound", lambda: self.sound_status(server))
+        voice = timed("voice", lambda: self.voice(server))
         servers = timed("servers", self.server_list)
         events = timed("events", self.store.events)
         self.status_parts = parts
@@ -764,6 +775,8 @@ class App:
             "regridding": dict(worker.regridding) if worker.regridding else None,
             "reading": dict(worker.reading) if worker.reading else None,
             "sound": sound,
+            # Voice and mood (0.52): how many of the songs with a sound are scored, for the Overview's card.
+            "traits": {k: voice[k] for k in ("available", "total", "scored")},
             "libraries": {"chosen": self.store.setting(folders_key(server)) or [],
                           "read_at": self.store.setting("library_read_at")},
             # The server these numbers are of, and all of them (for the page's switch).
@@ -1390,6 +1403,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.genre_songs(name, limit, server))
             if path == "/api/loudness":
                 return self._json(app.loudness_report(server))
+            if path == "/api/voice":  # the Voice and mood page (0.52)
+                return self._json(app.voice(server))
+            if path == "/api/voice/songs":  # the songs of one of its lines: ?line=&order=&limit=&offset=
+                line, order = (query.get("line") or [""])[0], (query.get("order") or ["most"])[0]
+                if line not in traits_module.LINES or order not in traits_module.ORDERS:
+                    return self._error(HTTPStatus.BAD_REQUEST, "line: one of the page's lines (female, happy, ...); order: most, least or unsure")
+                try:
+                    limit = max(1, min(500, int((query.get("limit") or ["50"])[0])))
+                    offset = max(0, int((query.get("offset") or ["0"])[0]))
+                except ValueError:
+                    return self._error(HTTPStatus.BAD_REQUEST, "limit and offset are numbers")
+                return self._json(app.voice_songs(line, order, limit, offset, server))
             if path == "/api/status":
                 return self._json(app.status(server))
             if path == "/api/log":
