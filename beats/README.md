@@ -475,6 +475,9 @@ On the server, after setting it up:
   **Breakdown** and **Drop** buttons put a mark on the song playing, with which one was tapped. **Marked** in the
   songs list shows every song with marks, with how many Beats agrees with; **Download data** there saves just those
   songs. Goes again once the tuning is done.
+- **Downloads** (0.50.1): every Download button on the page fetches its file itself, with your sign-in, and then
+  saves it, so a phone's download manager no longer asks again on its own (it could fail, and saved a small
+  "export.html"). While it's made the button says **Preparing…**; if it fails, the page says why.
 - **Bad blends**: a song change marked as bad in Siansa Dev lands in a list on the page, with how the app blended it
   (technique, bars, tempos, confidence at each end, why it was planned that way), and both songs a tap away. When the
   app heard each song's kicks during the blend, it shows how far they fell from the song's beat grid (more than 20 ms

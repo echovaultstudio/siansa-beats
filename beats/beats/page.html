@@ -1036,6 +1036,45 @@ function banner(text) { $("banner").hidden = !text; $("banner-text").textContent
 $("banner-close").addEventListener("click", () => banner(null));
 function offline(text) { $("offline").hidden = !text; $("offline").textContent = text || ""; }
 
+// Downloads (0.50.1, the owner, 16 Nov: Download data "just fails and doesn't start" on a phone): a link with
+// `download` was handed to the browser's own download manager, which asks again on its own, outside the page; that
+// second request could fail (and was saved as a small "export.html") where the page's own requests work. Every download
+// link is fetched here instead, with the page's sign-in, and saved from what came back; a failure says why on the page.
+async function saveDownload(link) {
+  if (link.dataset.busy) return;
+  const label = link.textContent;
+  link.dataset.busy = "1";
+  link.textContent = "Preparing…";
+  try {
+    const r = await fetch(link.getAttribute("href"));
+    if (r.status === 401 && !signingOut) { signingOut = true; location.reload(); return; }
+    if (!r.ok) {
+      const said = r.headers.get("Content-Type")?.includes("json") ? (await r.json().catch(() => ({}))).error : "";
+      throw new Error(`HTTP ${r.status}${said ? ": " + said : r.statusText ? " " + r.statusText : ""}`);
+    }
+    const blob = await r.blob();
+    const name = /filename="?([^";]+)"?/.exec(r.headers.get("Content-Disposition") || "")?.[1]
+      || link.getAttribute("href").split("?")[0].split("/").pop() || "siansa-beats-download";
+    const url = URL.createObjectURL(blob);
+    const save = document.createElement("a");
+    save.href = url; save.download = name;
+    document.body.appendChild(save); save.click(); save.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    banner(null);
+  } catch (e) {
+    banner(`${label} didn't work: ${e.message || e}`);
+  } finally {
+    link.textContent = label;
+    delete link.dataset.busy;
+  }
+}
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("a[download]");
+  if (!link || !/^api\//.test(link.getAttribute("href") || "")) return;
+  e.preventDefault();
+  saveDownload(link);
+});
+
 // ---- status ----
 let badCount = -1;
 async function refreshBad() {
