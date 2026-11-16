@@ -467,7 +467,11 @@ On the server, after setting it up:
   `outro_energy`, dB), and the song where the bass drops out and comes back (`breakdowns_ms`, `drops_ms`), for the
   app to choose how to blend.
 - **Bad blends**: a song change marked as bad in Siansa Dev lands in a list on the page, with how the app blended it
-  (technique, bars, tempos, confidence at each end), and both songs a tap away. **Clear all** takes them all away for a
+  (technique, bars, tempos, confidence at each end, why it was planned that way), and both songs a tap away. When the
+  app heard each song's kicks during the blend, it shows how far they fell from the song's beat grid (more than 20 ms
+  is off). **Analyse both again** (0.48.0) works the beats out again for the two songs: it helps when the first
+  analysis went wrong; a song that's hard to read usually comes out the same, and the blend is better marked and
+  left. **Clear all** takes them all away for a
   fresh start (download them first if you still want them). **Download bad blends** saves them all
   with both songs' beats, sound levels and results in one file (`GET /api/bad-blends/export`).
 - **Failed songs**: when songs couldn't be analysed, **Download failed songs (N)** beside the exports saves them with

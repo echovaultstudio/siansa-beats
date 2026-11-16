@@ -1181,6 +1181,15 @@ class ServiceTest(Service):
         self.assertEqual((marked["from"]["id"], marked["to"]["id"]), ("t140", "t122"))
         self.assertTrue(marked["from"]["beats"])
         self.assertIsNone(next(b for b in export["bad_blends"] if b["from_id"] == "gone")["from"])
+        # Both songs analysed again from the list (0.48.0): one that isn't here is left out.
+        self.wait_done()
+        self.assertEqual(self.call(f"/api/bad-blends/{made['id']}/analyse", "POST"), {"queued": 2, "songs": ["t140", "t122"]})
+        self.assertEqual(self.call(f"/api/bad-blends/{rows[0]['id']}/analyse", "POST")["songs"], ["t140"])
+        self.assertTrue(any("analysed again" in e["message"] for e in self.call("/api/status")["events"]))
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            self.call("/api/bad-blends/9999/analyse", "POST")
+        self.assertEqual(e.exception.code, 404)
+        self.wait_done()
         self.assertEqual(self.call(f"/api/bad-blends/{made['id']}", "DELETE"), {"removed": True})
         with self.assertRaises(urllib.error.HTTPError) as e:
             self.call(f"/api/bad-blends/{made['id']}", "DELETE")
