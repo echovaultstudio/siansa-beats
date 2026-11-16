@@ -186,6 +186,26 @@ class LogTest(unittest.TestCase):
 
 
 class StoreTest(unittest.TestCase):
+    def test_the_trials_marks_go_and_the_pages_stay(self):
+        """0.51.1: a database from 0.50 has the breakdowns and drops tapped in Siansa Dev (mark_kinds); they go, with
+        their table, and marks set on the page stay."""
+        import sqlite3
+
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+        path = os.path.join(folder, "beats.db")
+        Store(path)
+        db = sqlite3.connect(path)
+        db.executescript("CREATE TABLE mark_kinds (mark_id INTEGER PRIMARY KEY, kind TEXT);"
+                         "INSERT INTO marks (id, song_id, seconds, created_at) VALUES (1, 'a', 10, 0), (2, 'a', 20, 0), (3, 'b', 5, 0);"
+                         "INSERT INTO mark_kinds VALUES (1, 'drop'), (3, 'breakdown');")
+        db.commit()
+        db.close()
+        store = Store(path)
+        self.assertEqual([m["seconds"] for m in store.marks("a")], [20.0])
+        self.assertEqual(store.marks("b"), [])
+        self.assertIsNone(store.db.execute("SELECT 1 FROM sqlite_master WHERE name='mark_kinds'").fetchone())
+
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.path = os.path.join(self.tmp, "beats.db")
@@ -1223,24 +1243,6 @@ class ServiceTest(Service):
         with self.assertRaises(urllib.error.HTTPError) as e:
             self.call(f"/api/bad-blends/{made['id']}", "DELETE")
         self.assertEqual(e.exception.code, 404)
-        # TEMPORARY (0.50.0, siansa-dev #63): breakdowns and drops tapped in Siansa Dev land as marks with their kind;
-        # the Marked songs are those with marks, and the totals count them.
-        mark = self.call("/api/v1/marks", "POST", {"track_id": "t140", "seconds": 31.5, "kind": "breakdown"})
-        self.assertEqual([(m["seconds"], m["kind"]) for m in mark["marks"]], [(31.5, "breakdown")])
-        for bad in ({"track_id": "t140", "seconds": 3, "kind": "chorus"}, {"track_id": "nothing", "seconds": 3, "kind": "drop"},
-                    {"track_id": "t140", "kind": "drop"}):
-            with self.assertRaises(urllib.error.HTTPError) as e:
-                self.call("/api/v1/marks", "POST", bad)
-            self.assertEqual(e.exception.code, 400)
-        self.call("/api/songs/t122/marks", "POST", {"seconds": 12.0})
-        self.assertEqual({r["id"] for r in self.call("/api/songs?show=marked")}, {"t140", "t122"})
-        summary = self.call("/api/marks/summary")
-        self.assertEqual((summary["songs"], summary["marks"], summary["kinds"]), (2, 2, 1))
-        exported = {s["id"]: s for s in self.call("/api/export.json?show=marked")["songs"]}
-        self.assertEqual(exported["t140"]["marked"], [{"seconds": 31.5, "kind": "breakdown"}])
-        self.assertIn("sections", exported["t140"])
-        self.assertTrue(self.call(f"/api/songs/t140/marks/{mark['id']}", "DELETE")["removed"])
-        self.assertEqual(self.app.store.db.execute("SELECT COUNT(*) FROM mark_kinds").fetchone()[0], 0)
         grids = self.call("/api/grids?ids=t140")["grids"][0]
         for key in ("intro_lock_ms", "outro_lock_ms", "mix_track", "intro_bass_bars", "drops_ms", "intro_energy"):
             self.assertIn(key, grids)
