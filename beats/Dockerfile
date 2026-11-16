@@ -150,6 +150,19 @@ RUN pip install numpy==1.26.4 librosa==0.10.2.post1 soundfile==0.12.1 scipy==1.1
       test -s "/models/$(basename "$url")"; \
     done
 
+# Sung or not, a woman's or a man's voice, acoustic (0.51): three of Essentia's small classifiers (MTG, UPF;
+# CC BY-NC-SA 4.0; 82 KB each, already ONNX) that read the MusiCNN vector kept for every song (beats/voice.py).
+ARG ESSENTIA_HEADS=https://essentia.upf.edu/models/classification-heads
+ARG VOICE_SHA256="voice_instrumental/voice_instrumental-msd-musicnn-1.onnx=dd054410fa4f9fcb0086b4223a9a5c66dd098c5d4cef485c03af0b0500443b73 gender/gender-msd-musicnn-1.onnx=6149f3cc61a3625acb2577b89dcca39a2b912925945819f31dadfe2be7cc42e9 mood_acoustic/mood_acoustic-msd-musicnn-1.onnx=9be58be7362d67ad685b84586ad5e7cf6f0144ae76335584f26e8beadd3a973f"
+RUN for pair in $VOICE_SHA256; do \
+      file="${pair%%=*}"; want="${pair#*=}"; to="/models/$(basename "$file")"; ok=""; \
+      for try in 1 2 3 4 5; do \
+        python -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "${ESSENTIA_HEADS}/${file}" "$to" \
+          && echo "$want  $to" | sha256sum -c - && { ok=yes; break; } || { echo "download $try failed, trying again"; rm -f "$to"; sleep 15; }; \
+      done; \
+      [ -n "$ok" ] || { echo "$file couldn't be downloaded"; exit 1; }; \
+    done
+
 # Everything that doesn't change with Beats' own code comes before it, so an update is the layers from here on only.
 COPY --from=arousal /emomusic-msd-musicnn-2.onnx /models/emomusic-msd-musicnn-2.onnx
 RUN useradd --uid 1000 --create-home beats && mkdir -p /data && chown beats /data
@@ -186,6 +199,13 @@ a = Arousal('/models', Store(os.path.join(tempfile.mkdtemp(), 'beats.db'))); ass
 v = numpy.random.default_rng(1).normal(0, 1, (5, 200)).astype(numpy.float32); one, again, single = a.score(v), a.score(v), a.score(v[:1]); \
 assert one.shape == (5,) and numpy.allclose(one, again) and abs(float(single[0]) - float(one[0])) < 1e-4, (one, single); \
 assert numpy.all(numpy.isfinite(one)), one; print('arousal model ok:', numpy.round(one, 3), os.path.getsize('/models/emomusic-msd-musicnn-2.onnx'), 'bytes')"
+
+# The voice models for real: a share from 0 to 1 for each song, the same answer each time.
+RUN python -c "import numpy, tempfile, os; from beats.store import Store; from beats.voice import Voice, NAMES; \
+v = Voice('/models', Store(os.path.join(tempfile.mkdtemp(), 'beats.db'))); assert v.available; \
+x = numpy.random.default_rng(1).normal(0, 1, (5, 200)).astype(numpy.float32); a, b = v.score(x), v.score(x); \
+assert all(a[n].shape == (5,) and numpy.allclose(a[n], b[n]) and float(a[n].min()) >= 0 and float(a[n].max()) <= 1 for n in NAMES), a; \
+print('voice models ok:', {n: numpy.round(a[n], 3).tolist() for n in NAMES})"
 
 USER beats
 # As the service runs it: the model converted for the GPU, from read-only /models (0.17.0 wrote a temporary file there).

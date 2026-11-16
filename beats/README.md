@@ -62,6 +62,14 @@ what he heard far better than loudness, which once on one scale barely tells son
 gives it as `arousal`. Energies kept from before 0.35 on an older scale (about 0.05 to 0.4) are given on today's
 (`energy_source`: `converted`).
 
+**Sung or not, whose voice, acoustic (0.51).** Every song with a sound also gets three shares from 0 to 1, from three
+small Essentia models (MTG, UPF; CC BY-NC-SA 4.0) that read the same kept vector, so the whole library is scored once
+in seconds with no song read again: `voice` (0 instrumental, 1 sung), `female` (of the voice: 0 a man's, 1 a
+woman's; only worth reading where `voice` is high) and `acoustic`. Their makers measured them right for 98, 85 and 93
+songs in 100 on their own collections; a song's page shows what they said, to check on songs you know.
+`/api/v1/sound/songs` gives them beside `arousal`, and `/api/v1/capabilities` counts them under `voice`. A song's
+feelings (danceable, aggressive, happy, party, relaxed, sad) were here already, as `other_features`.
+
 **Memory (0.34).** The models are loaded by the first song and let go again after 10 minutes without a song to
 analyse (the Activity list says so, with the memory held before and after); the next song loads them again in a few
 seconds. What a song needed is handed back to the system when it's done. The log says how much memory is held at the

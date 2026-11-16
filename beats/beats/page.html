@@ -1358,13 +1358,20 @@ async function openSong(id, newSong, fromHistory) {
     ["Beats / downbeats", r.beat_count != null ? `${r.beat_count} / ${r.downbeat_count}` : "–"],
     ["Time", r.model_seconds ? `model ${fmt(r.model_seconds)} s · decode ${fmt(r.decode_seconds)} s · download ${fmt(r.download_seconds)} s` : "–"],
   ];
+  // Sung or not, whose voice, acoustic (0.51): what the models said, to check on songs you know.
+  const v = detail.voice;
+  const voiceFacts = !v ? [] : [
+    ["Voice", v.voice >= 0.5 ? `Sung (${pct(v.voice)} sure)` : `Instrumental (${pct(1 - v.voice)} sure)`],
+    ["Whose voice", v.voice < 0.5 ? "–" : v.female >= 0.5 ? `A woman's (${pct(v.female)} sure)` : `A man's (${pct(1 - v.female)} sure)`],
+    ["Acoustic", v.acoustic >= 0.5 ? `Yes (${pct(v.acoustic)} sure)` : `No (${pct(1 - v.acoustic)} sure)`],
+  ];
   const genreFacts = [
     ["Its genres", heardGenres(detail.genres).map((g) => `${styleOf(g.label)} ${g.weight.toFixed(2)}`).join(", ") || "–"],
     ["All its sound said", byGenreSource(detail.genres, "sound").map((g) => `${styleOf(g.label)} ${g.weight.toFixed(2)}`).join(", ") || "–"],
     ["Its tags", byGenreSource(detail.genres, "tag").map((g) => g.label).join(", ") || "–"],
   ];
   const factCards = (list) => list.map(([k, v]) => `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
-  $("d-facts").innerHTML = factCards(facts);
+  $("d-facts").innerHTML = factCards(facts.concat(voiceFacts));
   $("d-sound").innerHTML = factCards(soundFacts(detail.measure));
   $("d-genres").innerHTML = factCards(genreFacts);
   $("d-servers").innerHTML = factCards((detail.servers || []).map((x) => [x.name, x.item_id]));

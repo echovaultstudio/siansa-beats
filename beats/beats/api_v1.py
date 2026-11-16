@@ -86,6 +86,10 @@ def capabilities(app, server=None):
             "sound": {"available": bool(sound["sound"]), "songs": sound["sound"], "of": sound["songs"],
                       "answers": answered, "prefix": AUDIOMUSE,
                       "paths": {old: SOUND + new for new, old in SOUND_PATHS.items() if old in answered}},
+            # Sung or not, a woman's or a man's voice, acoustic (0.51): "voice", "female" and "acoustic" of each song
+            # in the sound's answers, each 0 to 1. Feelings (danceable, aggressive, happy, party, relaxed, sad) are in
+            # "other_features", as before.
+            "voice": {"available": app.voice.available, **app.voice.count()},
             # The search by words (0.26): the songs that have the vector it needs, and whether the text model is here.
             "words": {"available": bool(sound["words"]) and app.words.available, "songs": sound["words"],
                       "steering": app.words.steers},
@@ -341,6 +345,7 @@ def features(app, ids, server):
     tempos = app.store.tempos(here.values(), app.config.model)
     measured = app.store.measures(here.values())
     arousal = app.arousal.of(here.values())
+    voices = app.voice.of(here.values())
     # Energies taken over from an older AudioMuse-AI are on its old scale: given on today's (beats.drive.converted).
     from . import drive
 
@@ -366,6 +371,10 @@ def features(app, ids, server):
                        # How energetic the song is to a listener (0.35, beats.drive): about 1 (calm) to 9. The one to
                        # order and match songs by; null on an image without the model.
                        "arousal": arousal.get(r["song_id"]),
+                       # Sung or not, whose voice, acoustic (0.51, beats.voice): each 0 to 1. voice: 0 instrumental, 1
+                       # sung; female: of the voice, 0 a man's, 1 a woman's (read it only where voice is high);
+                       # acoustic. All null on an image without the models, or for a song with no sound yet.
+                       **(voices.get(r["song_id"]) or {"voice": None, "female": None, "acoustic": None}),
                        "other_features": r["other"], "fp": r["fp"]})
     return {"tracks": tracks, "total_tracks": len(tracks), "has_more": False, "next_page": None,
             "provider_type": (app.servers.get(server or app.servers.default_id) or {}).get("kind")}

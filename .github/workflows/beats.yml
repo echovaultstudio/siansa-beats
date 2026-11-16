@@ -57,6 +57,8 @@ jobs:
         run: cd beats && python3 -P tests/test_sound.py
       - name: How energetic a song is, from the sound kept (0.35)
         run: cd beats && python3 -P tests/test_drive.py
+      - name: Sung or not, whose voice, acoustic, from the sound kept (0.51)
+        run: cd beats && python3 -P tests/test_voice.py
       - name: Memory handed back (0.34)
         run: cd beats && python3 -P tests/test_memory.py
       - name: The listening history (0.29), its exports and Last.fm

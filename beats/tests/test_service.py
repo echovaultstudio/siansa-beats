@@ -558,6 +558,8 @@ class ServiceTest(Service):
         self.call("/api/libraries", "POST", {"ids": ["1"]})
         self.wait_done()
         caps = self.call("/api/v1/capabilities")
+        # 0.51: sung or not, whose voice, acoustic; none on a build without the models.
+        self.assertEqual(caps["features"]["voice"], {"available": False, "songs": 0, "sung": 0, "female": 0, "male": 0, "acoustic": 0})
         self.assertEqual(caps["songs"]["analysed"], 3)
         self.assertEqual(caps["features"]["beat_grids"]["songs"], 3)
         self.assertEqual(caps["features"]["loudness"]["songs"], 2)  # t96w couldn't be measured
