@@ -68,3 +68,18 @@ class PageScriptTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PageDownloadsTest(unittest.TestCase):
+    def test_every_download_link_is_fetched_by_the_page(self):
+        """0.50.1 (the owner, 16 Nov: Download data failed on a phone, as a small "export.html"): the page fetches every
+        download link of its own, with its sign-in, and saves what came back, instead of the browser's download manager
+        asking again on its own. Each such link is an api/ address, which the page's one handler takes."""
+        page = open(PAGE, encoding="utf-8").read()
+        links = re.findall(r'<a [^>]*href="([^"]+)"[^>]*\bdownload\b', page)
+        self.assertGreaterEqual(len(links), 5)
+        for href in links:
+            self.assertTrue(href.startswith("api/"), href)
+        self.assertIn('e.target.closest("a[download]")', page)
+        self.assertIn("e.preventDefault();", page)
+        self.assertIn("URL.createObjectURL(blob)", page)
