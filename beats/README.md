@@ -343,7 +343,9 @@ and the search by words) and **Genres** (the 400 styles by sound). Tap one to le
 out, and press Start analysis: a library of two-hour mixes can keep its loudness and skip the beats, which take Beat
 This! a long time on such songs. Songs left out of the beats show as *no beats (left out)* and count as settled;
 their loudness is still measured on its own. A song two servers have is left out of a task only when every library
-it's in leaves it out. Putting a task back queues the songs for it.
+it's in leaves it out. Putting a task back queues the songs for it. The Overview's cards count each thing over the
+songs a library wants it for (0.47.1): a library with only Loudness on is in **Loudness & key**'s "of" and not in
+**Beats**', **Sound**'s or **Genres**', and the numbers follow a change at once.
 
 **Tidy the database (0.40).** Under Libraries, **Look for what's gone** asks the server for every ticked library right
 now and shows, by name, songs the server no longer has, songs of libraries left out, songs linked to no server and songs

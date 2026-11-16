@@ -324,11 +324,16 @@ class Store:
         return seen[1]
 
     def sound_counts(self, server=None):
-        """``{"songs", "sound", "words"}``: ``server``'s songs, how many have their sound, how many the vector the
-        search by words needs."""
+        """``{"songs", "sound", "words", "wanted", "heard"}``: ``server``'s songs, how many have their sound, how many
+        the vector the search by words needs; and, of the songs some library of their own wants the sound for
+        (``wanted``), how many have it (``heard``). The page counts with the last two (0.47.1), so its "of" follows
+        the libraries' choices: a library left out of Sound isn't in it."""
         of, args = self._of(server)
-        row = self._rows("SELECT COUNT(*) AS songs, COUNT(o.musicnn) AS sound, COUNT(o.clap) AS words FROM songs s "
-                         f"LEFT JOIN sound o ON o.song_id=s.id WHERE 1=1{of}", args)[0]
+        left_out = skipped("sound", "s.id")
+        row = self._rows("SELECT COUNT(*) AS songs, COUNT(o.musicnn) AS sound, COUNT(o.clap) AS words, "
+                         f"COALESCE(SUM(CASE WHEN NOT {left_out} THEN 1 ELSE 0 END), 0) AS wanted, "
+                         f"COALESCE(SUM(CASE WHEN o.musicnn IS NOT NULL AND NOT {left_out} THEN 1 ELSE 0 END), 0) AS heard "
+                         f"FROM songs s LEFT JOIN sound o ON o.song_id=s.id WHERE 1=1{of}", args)[0]
         return row
 
     def server_song_ids(self, server):
@@ -962,7 +967,12 @@ class Store:
             "SUM(CASE WHEN m.song_id IS NULL OR (m.version < ? AND m.error IS NULL) THEN 1 ELSE 0 END) AS waiting "
             f"FROM jobs j LEFT JOIN measures m ON m.song_id = j.song_id WHERE j.state IN {HAS_BEATS} AND "
             f"NOT {skipped('loudness', 'j.song_id')}{of}", (version, version, *value))[0]
-        return {k: row[k] or 0 for k in ("measured", "failed", "waiting")}
+        # How many songs get their loudness at all (0.47.1): every song some library of its own wants it for, beats
+        # or no beats, less those that couldn't be analysed. The page's "of": it follows the libraries' choices.
+        of, value = self._of(server)
+        total = self._rows("SELECT COUNT(*) AS n FROM songs s LEFT JOIN jobs j ON j.song_id=s.id "
+                           f"WHERE COALESCE(j.state, '') != 'failed' AND NOT {skipped('loudness', 's.id')}{of}", value)[0]["n"]
+        return {**{k: row[k] or 0 for k in ("measured", "failed", "waiting")}, "total": total}
 
     def overview(self, model, find=None, state=None, limit=None, song_id=None, server=None):
         """The songs with their job and result (no beats), for the table: those whose name, artist,

@@ -212,6 +212,11 @@ class LibraryTasksTest(Service):
         measured = self.call("/api/status")["loudness"]
         self.assertEqual(measured["waiting"], 0)
         self.assertGreaterEqual(measured["measured"] + measured["failed"], 3)  # t140, t122, t96w
+        # The page's totals follow the choice (0.47.1): the mixes count for loudness, not for sound.
+        status = self.call("/api/status")
+        self.assertEqual(measured["total"], measured["measured"] + measured["failed"])
+        self.assertEqual(status["sound"]["songs"] - status["sound"]["wanted"], libraries["2"]["songs"])
+        self.assertLessEqual(status["sound"]["heard"], status["sound"]["wanted"])
         self.assertIsNotNone(self.call("/api/songs/t122")["measure"])
         # Analyse again doesn't force the beats on a library that doesn't want them.
         self.assertEqual(self.call("/api/analyse-all", "POST")["queued"], 2)  # t140 and the failed one; not the mixes
@@ -240,6 +245,50 @@ class LibraryTasksTest(Service):
         self.assertEqual(db.skips("emby"), {"2": ["beats", "sound"]})
         self.assertFalse(db.set_skips("emby", "2", ["nonsense"]))  # unknown tasks are ignored
         self.assertEqual(db.skips("emby"), {})
+
+    def test_each_kinds_total_follows_what_the_libraries_get(self):
+        """The owner, 16 Nov: a library that gets loudness only (DJ mixes) was missing from Loudness's total (which
+        was the songs with beats) and counted in Sound's (which was every song)."""
+        from beats import loudness
+        from beats.store import Store
+
+        db = Store(os.path.join(self.tmp, "totals.db"))
+        self.addCleanup(db.close)
+
+        def song(i):
+            return {"id": i, "title": i, "artist": "A", "album": "B", "duration": 60.0, "suffix": "flac", "tag_bpm": None, "genres": []}
+
+        albums = db.link_songs("main", "1", [song("a1"), song("a2"), song("a3")])["queued"]
+        mixes = db.link_songs("main", "2", [song("m1"), song("m2")])["queued"]
+        self.assertEqual((len(albums), len(mixes)), (3, 2))
+        # Everything is wanted everywhere: every kind counts all five songs.
+        self.assertEqual(db.measure_counts(loudness.VERSION)["total"], 5)
+        self.assertEqual((db.sound_counts()["songs"], db.sound_counts()["wanted"]), (5, 5))
+        self.assertEqual(db.style_counts()["total"], 5)
+        # The mixes get loudness only.
+        db.set_skips("main", "2", ["beats", "sound", "styles"])
+        self.assertEqual(db.measure_counts(loudness.VERSION)["total"], 5)  # still all five: loudness is wanted
+        sound = db.sound_counts()
+        self.assertEqual((sound["songs"], sound["wanted"], sound["heard"]), (5, 3, 0))
+        self.assertEqual(db.style_counts()["total"], 3)
+        counts = db.counts()
+        self.assertEqual(counts["songs"] - counts.get("skipped", 0), 3)  # Beats, as the page works it out
+        # A sound the mixes had from before isn't counted as heard: what's heard never passes what's wanted.
+        with db._write():
+            db.db.execute("INSERT INTO sound (song_id, musicnn) VALUES ('m1', x'00'), (?, x'00')", (albums[0],))
+        sound = db.sound_counts()
+        self.assertEqual((sound["sound"], sound["wanted"], sound["heard"]), (2, 3, 1))
+        # Loudness left out of the mixes too: its total follows at once.
+        db.set_skips("main", "2", ["beats", "sound", "styles", "loudness"])
+        self.assertEqual(db.measure_counts(loudness.VERSION)["total"], 3)
+        # Everything back: all five again, for every kind. One server's songs only, when asked.
+        db.set_skips("main", "2", [])
+        self.assertEqual((db.measure_counts(loudness.VERSION)["total"], db.sound_counts()["wanted"], db.style_counts()["total"]), (5, 5, 5))
+        self.assertEqual((db.measure_counts(loudness.VERSION, "main")["total"], db.sound_counts("main")["wanted"]), (5, 5))
+        self.assertEqual((db.measure_counts(loudness.VERSION, "emby")["total"], db.sound_counts("emby")["wanted"]), (0, 0))
+        # A song that couldn't be analysed has no loudness to wait for.
+        db.set_state(albums[0], "failed", "broken file")
+        self.assertEqual(db.measure_counts(loudness.VERSION)["total"], 4)
 
 
 class TidyTest(Service):
