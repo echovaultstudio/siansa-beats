@@ -485,6 +485,26 @@ class ServiceTest(Service):
         self.assertIn("bpm", song["result"])
         self.assertNotIn(TOKEN, json.dumps(data))
 
+    def test_the_data_is_streamed_as_it_is_made(self):
+        """0.50.2 (the owner, 16 Nov: Download data failed through a proxy; "it should just stream the download until
+        completion"): the export goes out in chunks as it's made, not gzipped, as one whole JSON file; HEAD sends none."""
+        self.start()
+        self.call("/api/libraries", "POST", {"ids": ["1"]})
+        self.wait_done()
+        r, body = self.call("/api/export.json", raw=True, headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(r.headers.get("Transfer-Encoding"), "chunked")
+        self.assertIsNone(r.headers.get("Content-Encoding"))
+        self.assertIn("siansa-beats-data.json", r.headers.get("Content-Disposition"))
+        self.assertEqual(r.headers.get("X-Accel-Buffering"), "no")
+        data = json.loads(body)
+        self.assertEqual(data["version"], __version__)
+        self.assertEqual(len(data["songs"]), 3)
+        self.assertEqual([s["id"] for s in json.loads(self.call("/api/export.json?find=nothing-at-all", raw=True)[1])["songs"]], [])
+        head, empty = self.call("/api/export.json", method="HEAD", raw=True)
+        self.assertEqual(empty, b"")
+        # The same connection still answers after a streamed one.
+        self.assertEqual(self.call("/api/status")["counts"]["done"], 3)
+
     def test_section_marks_are_kept_shown_and_exported(self):
         self.start()
         self.call("/api/libraries", "POST", {"ids": ["1"]})
