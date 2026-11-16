@@ -65,6 +65,7 @@ id or name: the default server's without it.
     GET  /api/genre?name=&limit=      the songs of a genre, by their sound: {"ids", "styles", "genres", "songs"}
     POST /api/bad-blends              {"from_id", "to_id", "technique", "details"}: one more (from the app, through
                                       the Siansa Beats (dev) plugin)
+    POST /api/bad-blends/<n>/analyse  both of its songs analysed again (0.48.0): {"queued": n, "songs": [ids]}
     DELETE /api/bad-blends/<n>        takes one away
     DELETE /api/bad-blends            takes them all away (a fresh start): {"removed": n}
     GET  /api/log?after=&limit=&level= the latest log lines (numbered; ``after`` for only newer ones), oldest first
@@ -1521,6 +1522,18 @@ class Handler(BaseHTTPRequestHandler):
                 if not 0 <= seconds < 24 * 3600:
                     return self._error(HTTPStatus.BAD_REQUEST, "seconds out of range")
                 return self._json({"id": app.store.add_mark(song_id, seconds), "marks": app.store.marks(song_id)})
+            m = re.fullmatch(r"/api/bad-blends/(\d+)/analyse", path)
+            if m:  # both songs of a bad blend analysed again (0.48.0), for a grid the app heard off its kicks
+                blend = app.store.bad_blend(int(m[1]))
+                if not blend:
+                    return self._error(HTTPStatus.NOT_FOUND, "no such bad blend")
+                songs = [i for i in dict.fromkeys((blend["from_id"], blend["to_id"])) if app.store.song(i)]
+                queued = sum(app.store.queue(i, force=True) for i in songs)
+                app.store.event(f"Bad blend {blend['id']}: its {len(songs)} songs analysed again ({queued} queued)")
+                if app.worker.paused:
+                    app.worker.pause(False)  # asked for now: a paused service would leave it waiting unseen
+                app.worker.wake()
+                return self._json({"queued": queued, "songs": songs})
             m = re.fullmatch(r"/api/songs/([^/]+)/analyse", path)
             if m:
                 song_id = _id(m[1])
