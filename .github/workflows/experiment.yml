@@ -1,0 +1,73 @@
+# Siansa Beats experiment (experiment/): a trial apart from Siansa Beats (siansa-dev #63). Its tests, then its image
+# (Demucs checked on a made-up song while it's built), published from dev as ghcr.io/echovaultstudio/siansa-beats:experiment.
+name: Beats experiment
+
+on:
+  push:
+    paths:
+      - "experiment/**"
+      - ".github/workflows/experiment.yml"
+  pull_request:
+    paths:
+      - "experiment/**"
+      - ".github/workflows/experiment.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experiment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (no model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: numpy and ffmpeg
+        run: |
+          python3 -m pip install --quiet --break-system-packages --user numpy==1.26.4 imageio-ffmpeg==0.6.0 || python3 -m pip install --quiet --user numpy imageio-ffmpeg==0.6.0
+          mkdir -p "$HOME/.local/bin" && ln -sf "$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')" "$HOME/.local/bin/ffmpeg"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: The rule, the score and the service against a fake Navidrome
+        run: |
+          python3 -c "import sys, numpy; print('python', sys.version.split()[0], 'numpy', numpy.__version__)"
+          cd experiment && python3 -P tests/test_experiment.py
+
+  image:
+    name: Image with Demucs
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/echovaultstudio/siansa-beats
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
+          df -h / | tail -1
+      - name: Build (Demucs splits a made-up song in it)
+        run: |
+          docker buildx create --name experiment --driver docker-container --use
+          docker buildx build --progress=plain --load -t beats-experiment:test experiment 2>&1 | tail -40
+          test "${PIPESTATUS[0]}" = 0
+      - name: The service answers
+        run: |
+          docker run -d --name experiment -p 8095:8095 -e EXPERIMENT_DEVICE=cpu beats-experiment:test
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8095/api/health && break || sleep 2; done
+          curl -fsS http://127.0.0.1:8095/api/state | python3 -c "import json,sys; s=json.load(sys.stdin); assert s['tapped'] == 19 and not s['signed_in'], s; print('state ok:', s['separator'])"
+          docker logs experiment 2>&1 | tail -20
+          docker image ls beats-experiment:test --format 'Image size: {{.Size}}'
+      - name: Publish
+        if: github.ref == 'refs/heads/dev' && github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker buildx build --progress=plain -t "$IMAGE:experiment" -t "$IMAGE:experiment-sha-${GITHUB_SHA::7}" --push experiment 2>&1 | tail -20
+          test "${PIPESTATUS[0]}" = 0

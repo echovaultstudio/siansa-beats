@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siansa Beats experiment</title>
+<style>
+:root { color-scheme: dark; --bg: #111214; --card: #1b1d21; --line: #2c2f36; --text: #ecedf0; --faint: #9a9fa9; --accent: #f5a524; --good: #5fcf80; --bad: #ef6f6c; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 22px; margin: 8px 0 2px; } h1 span { color: var(--accent); }
+h2 { font-size: 17px; margin: 0 0 8px; }
+.sub { color: var(--faint); font-size: 14px; margin: 0 0 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin: 16px 0; }
+label { display: block; font-size: 13px; color: var(--faint); margin: 8px 0 4px; }
+input, select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+button, a.btn { display: inline-block; margin: 12px 8px 0 0; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; text-decoration: none; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.error { color: var(--bad); margin: 8px 0 0; font-size: 14px; }
+.big { font-size: 20px; font-weight: 600; }
+ul { list-style: none; margin: 0; padding: 0; }
+li.song { border-top: 1px solid var(--line); padding: 10px 0; }
+li.song .name { font-weight: 600; } li.song .who { color: var(--faint); font-size: 14px; }
+.tap { display: inline-block; margin: 4px 6px 0 0; padding: 2px 8px; border-radius: 999px; font-size: 13px; border: 1px solid var(--line); }
+.tap.hit { border-color: var(--good); color: var(--good); } .tap.miss { border-color: var(--bad); color: var(--bad); } .tap.shown { color: var(--faint); }
+pre { margin: 0; max-height: 320px; overflow: auto; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+pre .warn { color: var(--accent); } pre .error { color: var(--bad); }
+progress { width: 100%; height: 8px; accent-color: var(--accent); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1><span>S</span>iansa Beats experiment <small class="sub" id="version"></small></h1>
+  <p class="sub">A trial: does splitting off the drums find breakdowns and drops? Temporary, and apart from Siansa Beats.</p>
+
+  <section class="card" id="signin-card">
+    <h2>1. Sign in to Navidrome</h2>
+    <p class="sub">Kept in memory only, until this container restarts.</p>
+    <form id="signin">
+      <label for="url">Address</label><input id="url" placeholder="http://192.168.1.106:30043" autocomplete="url" required>
+      <label for="user">User name</label><input id="user" autocomplete="username" required>
+      <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+      <button class="primary" id="signin-go">Sign in</button>
+      <p class="error" id="signin-error" hidden></p>
+    </form>
+  </section>
+
+  <section class="card" id="playlist-card" hidden>
+    <h2>2. Pick the playlist</h2>
+    <p class="sub" id="signed"></p>
+    <label for="playlist">Playlist</label><select id="playlist"></select>
+    <button class="primary" id="analyse">Analyse this playlist</button>
+    <button id="make">Make it for me</button>
+    <button id="signout">Sign out</button>
+    <p class="sub" id="make-note">"Make it for me" adds a playlist "Beats experiment" to Navidrome with the songs you tapped.</p>
+    <p class="error" id="playlist-error" hidden></p>
+  </section>
+
+  <section class="card" id="run-card" hidden>
+    <h2>3. Analysing</h2>
+    <p id="run-text"></p>
+    <progress id="run-bar" value="0" max="1"></progress>
+    <button id="stop">Stop after this song</button>
+  </section>
+
+  <section class="card" id="result-card" hidden>
+    <h2>Result</h2>
+    <p class="big" id="result-big"></p>
+    <p class="sub" id="result-sub"></p>
+    <a class="btn" href="api/results.json" download>Download results</a>
+    <a class="btn" href="api/log.txt" download>Download log</a>
+    <ul id="songs"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const answer = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(answer.error || r.statusText);
+  return answer;
+}
+function problem(id, text) { $(id).hidden = !text; $(id).textContent = text || ""; }
+let chosen = null, listed = "";
+async function refresh() {
+  let s; try { s = await api("api/state"); } catch (e) { return; }
+  $("version").textContent = s.version;
+  $("signin-card").hidden = s.signed_in;
+  const running = s.run.state === "running";
+  $("playlist-card").hidden = !s.signed_in || running;
+  if (s.signed_in) $("signed").textContent = `${s.server.user} at ${s.server.url} (${s.server.says})`;
+  if (s.playlists) {
+    const key = JSON.stringify(s.playlists);
+    if (key !== listed) {
+      listed = key;
+      const keep = chosen || $("playlist").value || (s.playlists.find((p) => p.name === "Beats experiment") || {}).id;
+      $("playlist").innerHTML = s.playlists.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} (${p.songs})</option>`).join("");
+      if (keep) $("playlist").value = keep;
+      chosen = null;
+    }
+    $("analyse").disabled = !s.playlists.length;
+  }
+  if (s.playlist_problem) problem("playlist-error", s.playlist_problem);
+  $("run-card").hidden = !running;
+  if (running) {
+    $("run-text").textContent = `${s.run.done} of ${s.run.of} · ${s.run.current || "starting"}`;
+    $("run-bar").max = s.run.of; $("run-bar").value = s.run.done;
+  }
+  const t = s.total;
+  $("result-card").hidden = !s.songs.length;
+  if (s.songs.length) {
+    const share = t.scored ? Math.round(100 * t.hits / t.scored) : 0;
+    $("result-big").textContent = t.scored ? `${t.hits} of ${t.scored} taps found (${share} %)` : "No tapped songs analysed yet";
+    $("result-sub").textContent = (t.between ? `${t.extra} of ${t.between} finds between your taps are not at a tap. ` : "")
+      + `Needed: 80 % found, at most 1 in 5 not at a tap. ${s.separator}.`;
+    $("songs").innerHTML = s.songs.map((x) => {
+      if (x.error) return `<li class="song"><div class="name">${esc(x.title)}</div><div class="who">${esc(x.artist)}</div><div class="error">${esc(x.error)}</div></li>`;
+      const taps = x.score ? x.score.taps.map((m) => `<span class="tap ${m.found === null ? "shown" : m.found === false ? "miss" : "hit"}">${esc(m.kind)} ${clock(m.seconds)}</span>`).join("") : '<span class="tap shown">not tapped</span>';
+      const found = x.found.map((f) => `${f.kind} ${clock(f.seconds)}`).join(", ") || "nothing";
+      return `<li class="song"><div class="name">${esc(x.title)}</div><div class="who">${esc(x.artist)} · split in ${x.seconds.split}s</div><div>${taps}</div><div class="who">Found: ${esc(found)}</div></li>`;
+    }).join("");
+  }
+  const log = $("log"), atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+  log.innerHTML = s.log.map((l) => `<span class="${esc(l.level)}">${new Date(l.at * 1000).toLocaleTimeString()} ${esc(l.message)}</span>`).join("\n");
+  if (atEnd) log.scrollTop = log.scrollHeight;
+}
+$("signin").addEventListener("submit", async (e) => {
+  e.preventDefault(); problem("signin-error"); $("signin-go").disabled = true;
+  try { await api("api/signin", {url: $("url").value, user: $("user").value, password: $("password").value}); $("password").value = ""; }
+  catch (err) { problem("signin-error", err.message); }
+  $("signin-go").disabled = false; refresh();
+});
+$("signout").addEventListener("click", async () => { await api("api/signout", {}); listed = ""; refresh(); });
+$("make").addEventListener("click", async () => {
+  problem("playlist-error"); $("make").disabled = true;
+  try { const made = await api("api/playlist/make", {}); chosen = made.id; listed = ""; $("make-note").textContent = `Made "${made.name}": ${made.songs} of your ${made.tapped} tapped songs are on this server.`; }
+  catch (err) { problem("playlist-error", err.message); }
+  $("make").disabled = false; refresh();
+});
+$("analyse").addEventListener("click", async () => {
+  problem("playlist-error");
+  try { await api("api/analyse", {playlist: $("playlist").value}); } catch (err) { problem("playlist-error", err.message); }
+  refresh();
+});
+$("stop").addEventListener("click", async () => { await api("api/stop", {}); refresh(); });
+refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>
