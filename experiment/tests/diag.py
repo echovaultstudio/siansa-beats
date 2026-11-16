@@ -1,0 +1,15 @@
+import sys; sys.path.insert(0,'tests'); sys.path.insert(0,'.')
+import numpy as np, test_experiment as t
+from exp import stems
+print(np.__file__)
+a=t.song([(6,True)]); print("song", a.dtype, a.shape, float(np.abs(a).max()))
+sp=np.fft.rfft(a.astype(np.float64),axis=1); print("spec", sp.dtype, sp.shape, float(np.abs(sp).max()), int(np.abs(sp[0]).argmax()))
+cut=int(200.0*a.shape[1]/stems.RATE); print("cut",cut)
+p=stems.FakeSeparator()(a); print({k:(str(v.dtype), v.shape, float(np.abs(v).max())) for k,v in p.items()})
+mono=p['drums'].mean(axis=0).astype(np.float32); print("mono", float(np.abs(mono).max()))
+idx=stems._frames(mono); print("idx", idx.dtype, idx.shape, int(idx.max()))
+w=np.hanning(stems.FFT).astype(np.float32); print("w", float(w.sum()))
+x=(mono[idx[:4]]*w).astype(np.float64); print("x", float(np.abs(x).max()))
+pw=np.abs(np.fft.rfft(x,axis=1))**2; print("pw", float(pw.max()), int(pw[0].argmax()))
+fr=np.fft.rfftfreq(stems.FFT,1.0/stems.RATE); print("fr", fr[:3], [int(np.searchsorted(fr,f)) for f in stems.KICK_HZ])
+l=stems.levels(p); print("levels", max(l['kick']), max(l['drums']), max(l['other']))
