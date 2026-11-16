@@ -35,7 +35,7 @@ jobs:
       - name: The rule, the score and the service against a fake Navidrome
         run: |
           python3 -c "import sys, numpy; print('python', sys.version.split()[0], 'numpy', numpy.__version__)"
-          cd experiment && python3 -P tests/diag.py; python3 -P tests/test_experiment.py
+          cd experiment && python3 -P tests/test_experiment.py
 
   image:
     name: Image with Demucs

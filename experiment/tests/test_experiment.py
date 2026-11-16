@@ -2,6 +2,7 @@
 Navidrome with a stand-in for Demucs (everything under 200 Hz is "drums")."""
 import hashlib
 import json
+import math
 import os
 import shutil
 import sys
@@ -37,8 +38,10 @@ def song(parts, bpm=120.0):
         hat = 0.02 * rng.standard_normal(n) * (np.mod(t, beat / 2) < 0.03)
         part = hat
         if kick:
-            inside = np.mod(t, beat)
-            part = part + 0.6 * np.sin(2 * np.pi * 60 * inside) * np.exp(-inside * 18)
+            # One beat's kick worked out with Python's own maths and repeated: the runner's numpy (built there for a
+            # Python newer than it knows) gave silence for the same sum done with numpy's sin and exp.
+            one = np.array([0.6 * math.sin(2 * math.pi * 60 * i / RATE) * math.exp(-18 * i / RATE) for i in range(int(beat * RATE))])
+            part = part + np.resize(one, n)
         out.append(part)
     mono = np.concatenate(out).astype(np.float32)
     return np.stack([mono, mono])
