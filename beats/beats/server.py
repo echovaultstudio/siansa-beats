@@ -521,11 +521,15 @@ class App:
     SONGS_SHOWN, SONGS_MOST = 200, 1000  # songs in one answer for the table, unless asked for more (at most)
 
     def songs(self, find=None, show="all", limit=None, server=None):
-        """The table's songs: those ``find`` finds, of those to ``show`` (all, "differ" or "failed"), at most
+        """The table's songs: those ``find`` finds, of those to ``show`` (all, "differ", "failed" or "marked": with
+        section marks, temporary 0.50.0), at most
         ``limit`` (``0``: every one, for the exports), of ``server``'s (every server's without one)."""
         limit = None if limit == 0 else min(int(limit or self.SONGS_SHOWN), self.SONGS_MOST)
         rows = self.store.overview(self.config.model, find, show if show in ("done", "failed") else None,
-                                   None if show == "differ" else limit, server=self.only(server))
+                                   None if show in ("differ", "marked") else limit, server=self.only(server))
+        if show == "marked":
+            counts = self.store.mark_counts()
+            rows = [r for r in rows if counts.get(r["id"])]
         rows = [self.song_row(r) for r in rows]
         if show == "differ":
             rows = [r for r in rows if any(level == "warn" for level, _ in r["verdict"])]
@@ -597,7 +601,31 @@ class App:
                 "duration": row.get("duration"), "tag_bpm": row.get("tag_bpm"),
                 "result": {k: v for k, v in full.items() if k not in ("beats", "downbeats", "levels")},
                 "beats": full["beats"], "downbeats": full["downbeats"], "levels": full.get("levels"),
-                "marks": [m["seconds"] for m in self.store.marks(song_id)]}
+                "marks": [m["seconds"] for m in self.store.marks(song_id)],
+                # Temporary (0.50.0, siansa-dev #63): each mark with what was tapped, and what Beats found.
+                "marked": [{"seconds": m["seconds"], "kind": m["kind"]} for m in self.store.marks(song_id)],
+                "sections": self.sections(song_id, full, self.steady_grid(full), row.get("duration"))}
+
+    def marked_summary(self):
+        """TEMPORARY (0.50.0, siansa-dev #63): over every song with marks, how many of the marks have a breakdown or
+        drop Beats found within a bar (of the same kind, when the mark says which): ``{"songs", "marks", "agree",
+        "kind_agree", "kinds"}``."""
+        out = {"songs": 0, "marks": 0, "agree": 0, "kinds": 0, "kind_agree": 0}
+        for song_id in self.store.mark_counts():
+            full = self.store.result(song_id, self.config.model, with_beats=True)
+            steady = self.steady_grid(full)
+            row = self.store.song(song_id) or {}
+            found = (self.sections(song_id, full, steady, row.get("duration")) or {}).get("found") or []
+            bar = 4 * 60.0 / steady["bpm"] if steady and steady.get("bpm") else 2.0
+            out["songs"] += 1
+            for m in self.store.marks(song_id):
+                out["marks"] += 1
+                near = [s for s in found if abs(s["ms"] / 1000.0 - m["seconds"]) <= bar]
+                out["agree"] += bool(near)
+                if m["kind"]:
+                    out["kinds"] += 1
+                    out["kind_agree"] += any(s["kind"] == m["kind"] for s in near)
+        return out
 
     def failed_export(self, server=None):
         """Every song that couldn't be analysed, with why and what kind of file it is: one file to look into them with."""
@@ -1368,6 +1396,8 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     return self._error(HTTPStatus.BAD_REQUEST, "limit is a number")
                 return self._json(app.songs(find, show, limit or None, server))
+            if path == "/api/marks/summary":  # temporary (0.50.0): the marked songs against what Beats found
+                return self._json(app.marked_summary())
             if path == "/api/grids":
                 ids = [i for i in dict.fromkeys(p.strip() for p in (query.get("ids") or [""])[0].split(",")) if i]
                 if len(ids) > 2000:

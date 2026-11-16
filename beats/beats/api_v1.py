@@ -258,6 +258,11 @@ def post(handler, path, body, server=None):
         if not handler.app.listens.set_playing(body.get("user"), body, here):
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True
         return handler._json({"playing": True}) or True
+    if path == "/api/v1/marks":  # TEMPORARY (0.50.0, siansa-dev #63): a breakdown or drop tapped in Siansa Dev
+        answer, problem = add_app_mark(handler.app, body, server)
+        if problem:
+            return handler._error(HTTPStatus.BAD_REQUEST, problem) or True
+        return handler._json(answer) or True
     if path == "/api/v1/bad-blends":
         answer, problem = add_bad_blend(handler.app, body, server)
         if problem:
@@ -500,6 +505,24 @@ def add_bad_blend(app, body, server=None):
     app.store.event(f"Bad blend marked in the app: {names[from_id]} into {names[to_id]}"
                     + (f" ({technique})" if technique else ""), "warn")
     return {"id": blend_id}, None
+
+
+def add_app_mark(app, body, server=None):
+    """TEMPORARY (0.50.0, siansa-dev #63): a breakdown or drop the owner tapped in Siansa Dev, kept as a section mark
+    on the song (``{"track_id", "seconds", "kind"}``): ``({"id", "marks"}, None)`` or ``(None, why)``."""
+    track = str(body.get("track_id") or "").strip()
+    kind = body.get("kind")
+    try:
+        seconds = float(body.get("seconds"))
+    except (TypeError, ValueError):
+        return None, "seconds needed"
+    if not track or kind not in ("breakdown", "drop") or not 0 <= seconds < 24 * 3600:
+        return None, 'track_id, seconds and kind ("breakdown" or "drop") needed'
+    song_id = app.store.resolve([track], server).get(track, track)
+    if not app.store.song(song_id):
+        return None, "no such song here"
+    mark = app.store.add_mark(song_id, seconds, kind)
+    return {"id": mark, "marks": app.store.marks(song_id)}, None
 
 
 def spec():
