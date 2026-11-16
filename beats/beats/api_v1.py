@@ -37,6 +37,7 @@ from http import HTTPStatus
 
 from . import genres as genres_module
 from . import listens as listens_module
+from . import traits as traits_module
 from . import __version__
 from . import loudness
 
@@ -86,6 +87,10 @@ def capabilities(app, server=None):
             "sound": {"available": bool(sound["sound"]), "songs": sound["sound"], "of": sound["songs"],
                       "answers": answered, "prefix": AUDIOMUSE,
                       "paths": {old: SOUND + new for new, old in SOUND_PATHS.items() if old in answered}},
+            # Essentia's trained traits of each song (0.51): voice, whose voice, moods, danceable, MIREX moods, each 0
+            # to 1, in the sound's answers as "traits", with "valence" beside "arousal". How many songs each holds for.
+            # AudioMuse-AI's feelings stay in "other_features", as before.
+            "traits": {"available": app.traits.available, "names": list(traits_module.TRAITS), **app.traits.count()},
             # The search by words (0.26): the songs that have the vector it needs, and whether the text model is here.
             "words": {"available": bool(sound["words"]) and app.words.available, "songs": sound["words"],
                       "steering": app.words.steers},
@@ -341,6 +346,8 @@ def features(app, ids, server):
     tempos = app.store.tempos(here.values(), app.config.model)
     measured = app.store.measures(here.values())
     arousal = app.arousal.of(here.values())
+    traits = app.traits.of(here.values())
+    valence = app.arousal.valence_of(here.values())
     # Energies taken over from an older AudioMuse-AI are on its old scale: given on today's (beats.drive.converted).
     from . import drive
 
@@ -366,6 +373,13 @@ def features(app, ids, server):
                        # How energetic the song is to a listener (0.35, beats.drive): about 1 (calm) to 9. The one to
                        # order and match songs by; null on an image without the model.
                        "arousal": arousal.get(r["song_id"]),
+                       # How positive it feels (0.51): the same model's other answer, about 1 (dark) to 9 (bright).
+                       "valence": valence.get(r["song_id"]),
+                       # Essentia's trained models (0.51, beats.traits), each 0 to 1: voice (0 instrumental, 1 sung),
+                       # female (of the voice: 0 a man's, 1 a woman's; read it only where voice is high), acoustic,
+                       # aggressive, electronic, happy, party, relaxed, sad, danceable, and MIREX's five moods
+                       # (mirex_*, adding up to 1). Null on an image without the models, or a song with no sound yet.
+                       "traits": traits.get(r["song_id"]),
                        "other_features": r["other"], "fp": r["fp"]})
     return {"tracks": tracks, "total_tracks": len(tracks), "has_more": False, "next_page": None,
             "provider_type": (app.servers.get(server or app.servers.default_id) or {}).get("kind")}

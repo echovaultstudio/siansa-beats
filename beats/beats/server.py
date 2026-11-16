@@ -248,6 +248,10 @@ class App:
         from .drive import Arousal
 
         self.arousal = Arousal(config.models_dir, self.store, config.threads)
+        # Sung or not, whose voice, moods, danceable (0.51, beats.traits): Essentia's models, from the same kept sound.
+        from .traits import Traits
+
+        self.traits = Traits(config.models_dir, self.store, config.threads)
         self.worker = Worker(self.store, self.servers, self.tracker, decode or analyser.decode,
                              config.data_dir, config.model, measure, self.style, sound, self.hearer)
         self.started = time.time()
@@ -295,6 +299,8 @@ class App:
                 memory.trim()
             self.worker.let_models_go_if_idle()
             if self.arousal.catch_up():  # songs heard since the last minute
+                memory.trim()
+            if self.traits.catch_up():
                 memory.trim()
         except Exception as e:  # never the timer's end
             _log.debug("Minding the memory failed: %s", e)
@@ -550,6 +556,8 @@ class App:
         row["end_seconds"] = grid.END_SECONDS
         row["sections"] = self.sections(song_id, full, row["grid"], row.get("duration"))
         row["marks"] = self.store.marks(song_id)
+        row["traits"] = self.traits.of([song_id]).get(song_id)  # voice, moods, danceable (0.51); None without
+        row["valence"] = self.arousal.valence_of([song_id]).get(song_id)
         names = {s["id"]: s["name"] for s in self.servers.all()}
         row["servers"] = [{"id": server, "name": names.get(server, server), "item_id": item_id}
                           for server, item_id in self.store.where(song_id)]
@@ -1851,6 +1859,16 @@ def main():
                 app.store.event(f"Worked out how energetic {scored} songs are, from the sound kept for each (no song was read again)")
         except Exception:
             _log.exception("Working out how energetic the songs are went wrong")
+        try:  # sung or not, whose voice, moods, danceable (0.51): the whole library, once, from the sound already kept
+            scored = app.traits.catch_up()
+            if scored:
+                c = app.traits.count()
+                app.store.event(f"Worked out the voice, moods and danceability of {scored} songs from the sound kept for each "
+                                f"(no song was read again): {c['sung']} sung ({c['female']} by a woman, {c['male']} by a man), "
+                                f"{c['danceable']} danceable, {c['happy']} happy, {c['sad']} sad, {c['relaxed']} relaxed, "
+                                f"{c['party']} party, {c['aggressive']} aggressive, {c['acoustic']} acoustic")
+        except Exception:
+            _log.exception("Working out the songs' voices and moods went wrong")
         try:  # genres are the sound's alone from 0.28: the ones voted with the tags go
             gone = app.store.drop_votes()
             if gone:
