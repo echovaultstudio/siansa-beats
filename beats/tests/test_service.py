@@ -1199,6 +1199,24 @@ class ServiceTest(Service):
         with self.assertRaises(urllib.error.HTTPError) as e:
             self.call(f"/api/bad-blends/{made['id']}", "DELETE")
         self.assertEqual(e.exception.code, 404)
+        # TEMPORARY (0.50.0, siansa-dev #63): breakdowns and drops tapped in Siansa Dev land as marks with their kind;
+        # the Marked songs are those with marks, and the totals count them.
+        mark = self.call("/api/v1/marks", "POST", {"track_id": "t140", "seconds": 31.5, "kind": "breakdown"})
+        self.assertEqual([(m["seconds"], m["kind"]) for m in mark["marks"]], [(31.5, "breakdown")])
+        for bad in ({"track_id": "t140", "seconds": 3, "kind": "chorus"}, {"track_id": "nothing", "seconds": 3, "kind": "drop"},
+                    {"track_id": "t140", "kind": "drop"}):
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                self.call("/api/v1/marks", "POST", bad)
+            self.assertEqual(e.exception.code, 400)
+        self.call("/api/songs/t122/marks", "POST", {"seconds": 12.0})
+        self.assertEqual({r["id"] for r in self.call("/api/songs?show=marked")}, {"t140", "t122"})
+        summary = self.call("/api/marks/summary")
+        self.assertEqual((summary["songs"], summary["marks"], summary["kinds"]), (2, 2, 1))
+        exported = {s["id"]: s for s in self.call("/api/export.json?show=marked")["songs"]}
+        self.assertEqual(exported["t140"]["marked"], [{"seconds": 31.5, "kind": "breakdown"}])
+        self.assertIn("sections", exported["t140"])
+        self.assertTrue(self.call(f"/api/songs/t140/marks/{mark['id']}", "DELETE")["removed"])
+        self.assertEqual(self.app.store.db.execute("SELECT COUNT(*) FROM mark_kinds").fetchone()[0], 0)
         grids = self.call("/api/grids?ids=t140")["grids"][0]
         for key in ("intro_lock_ms", "outro_lock_ms", "mix_track", "intro_bass_bars", "drops_ms", "intro_energy"):
             self.assertIn(key, grids)

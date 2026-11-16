@@ -672,8 +672,10 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
             <button data-filter="differ" aria-pressed="false" title="Songs where a reading really disagrees: half and double speed count as the same beat">Worth a listen</button>
             <button data-filter="done" aria-pressed="false" title="Songs analysed">Done</button>
             <button data-filter="failed" aria-pressed="false">Failed</button>
+            <button data-filter="marked" aria-pressed="false" title="Songs with section marks: tapped here or in Siansa Dev (testing)">Marked</button>
           </div>
         </div>
+        <p class="sub" id="marked-sum" hidden></p>
         <div class="table">
           <table>
             <thead><tr>
@@ -1187,7 +1189,19 @@ document.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("cl
   filter = b.dataset.filter;
   document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", x === b));
   songsChanged();
+  markedSummary();
 }));
+// TEMPORARY (0.50.0, siansa-dev #63): the marked songs against what Beats found, over all of them.
+async function markedSummary() {
+  const box = $("marked-sum");
+  box.hidden = filter !== "marked";
+  if (box.hidden) return;
+  let r; try { r = await api("api/marks/summary"); } catch (e) { box.textContent = ""; return; }
+  box.textContent = !r.marks ? "No marks yet: tap Breakdown or Drop in Siansa Dev while a song plays, or Section starts here on a song's page."
+    : `${r.marks} marks on ${r.songs} songs: Beats found a breakdown or drop within a bar of ${r.agree} of them`
+      + (r.kinds ? `, the same kind for ${r.kind_agree} of the ${r.kinds} tapped in Siansa Dev.` : ".")
+      + " Download data saves these songs for tuning.";
+}
 function exportLinks() {
   const q = new URLSearchParams({show: filter});
   if ($("search").value.trim()) q.set("find", $("search").value.trim());
@@ -1492,7 +1506,8 @@ function drawMarks() {
     const at = markBar(m.seconds);
     const where = !at ? "" : !at.hasPhrases ? ` · bar ${at.bar}` : at.phraseBar === 0 ? ` · bar ${at.bar} · on a phrase start ✓` :
       ` · bar ${at.bar} · ${at.phraseBar === null ? "before the first phrase" : at.phraseBar + " bars after a phrase start"}`;
-    return `<span class="chip"><button data-jump="${m.seconds}" title="Play from just before it">${clock(m.seconds)}${where}</button>` +
+    const kind = m.kind ? ` · ${m.kind} (Siansa Dev)` : "";
+    return `<span class="chip"><button data-jump="${m.seconds}" title="Play from just before it">${clock(m.seconds)}${kind}${where}</button>` +
       `<button data-unmark="${m.id}" aria-label="Take this mark away">✕</button></span>`;
   }).join("") : `<span class="hint">Tap <b>Section starts here</b> (or press M) on every drop, breakdown and big change you hear.</span>`;
   drawSections();

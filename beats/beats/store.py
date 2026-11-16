@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS marks (
     id INTEGER PRIMARY KEY AUTOINCREMENT, song_id TEXT, seconds REAL, created_at REAL
 );
 CREATE INDEX IF NOT EXISTS marks_song ON marks (song_id);
+-- TEMPORARY (0.50.0, siansa-dev #63): what the owner tapped in Siansa Dev, a breakdown or a drop, for tuning how
+-- they're found. Goes with the app's section buttons; dropping it loses only that.
+CREATE TABLE IF NOT EXISTS mark_kinds (mark_id INTEGER PRIMARY KEY, kind TEXT);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS measures (
     song_id TEXT PRIMARY KEY, ref_lufs REAL, start_ramp TEXT, end_ramp TEXT, duration_ms INTEGER, key TEXT, scale TEXT,
@@ -1029,18 +1032,25 @@ class Store:
 
     # ---- marks: where the owner heard a section start, to check the phrases against ----
 
-    def add_mark(self, song_id, seconds):
+    def add_mark(self, song_id, seconds, kind=None):
+        """``kind``: "breakdown" or "drop" when tapped in Siansa Dev (temporary, 0.50.0); None from the page."""
         with self._write():
             cursor = self.db.execute("INSERT INTO marks (song_id, seconds, created_at) VALUES (?, ?, ?)",
                                      (song_id, round(float(seconds), 3), time.time()))
+            if kind:
+                self.db.execute("INSERT OR REPLACE INTO mark_kinds (mark_id, kind) VALUES (?, ?)", (cursor.lastrowid, kind))
             return cursor.lastrowid
 
     def marks(self, song_id):
-        return self._rows("SELECT id, seconds FROM marks WHERE song_id=? ORDER BY seconds", (song_id,))
+        return self._rows("SELECT m.id, m.seconds, k.kind FROM marks m LEFT JOIN mark_kinds k ON k.mark_id = m.id "
+                          "WHERE m.song_id=? ORDER BY m.seconds", (song_id,))
 
     def remove_mark(self, song_id, mark_id):
         with self._write():
-            return self.db.execute("DELETE FROM marks WHERE song_id=? AND id=?", (song_id, mark_id)).rowcount > 0
+            gone = self.db.execute("DELETE FROM marks WHERE song_id=? AND id=?", (song_id, mark_id)).rowcount > 0
+            if gone:
+                self.db.execute("DELETE FROM mark_kinds WHERE mark_id=?", (mark_id,))
+            return gone
 
     def mark_counts(self):
         return {r["song_id"]: r["n"] for r in self._rows("SELECT song_id, COUNT(*) AS n FROM marks GROUP BY song_id")}
