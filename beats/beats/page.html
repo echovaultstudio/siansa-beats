@@ -1609,8 +1609,8 @@ function drawWork(s) {
     jobs.push(job("styles", "Genres by sound", st.done || 0, st.total || 0, st.current ? who(st.current) : "", st.failed || 0));
   }
   // Every thing that's measured has its bar, also when it's done (the owner, 14 Nov), so the page says what's complete.
-  jobs.push(job("loudness", "Loudness & key", l.measured || 0, (l.measured || 0) + (l.waiting || 0) + (l.failed || 0), l.measuring ? who(l.measuring) : "", l.failed || 0));
-  if (so.hears !== false) jobs.push(job("sound", "Sound", so.sound || 0, so.songs || 0, so.hearing ? who(so.hearing) : "", (so.sources || {}).failed || 0));
+  jobs.push(job("loudness", "Loudness & key", l.measured || 0, l.total ?? ((l.measured || 0) + (l.waiting || 0) + (l.failed || 0)), l.measuring ? who(l.measuring) : "", l.failed || 0));
+  if (so.hears !== false) jobs.push(job("sound", "Sound", so.heard ?? so.sound ?? 0, so.wanted ?? so.songs ?? 0, so.hearing ? who(so.hearing) : "", (so.sources || {}).failed || 0));
   if (s.regridding) jobs.push(job("regrid", "Working out beats again", s.regridding.done, s.regridding.total, ""));
   if (st.switch && $("style-note").textContent.indexOf("…") < 0) $("style-note").innerHTML = st.switch.phase === "marking" ? `Switching to ${esc(st.switch.model_name)}: marking ${num(st.switch.songs)} songs to be heard again (${st.switch.for_seconds} s)…` : `${esc(st.switch.model_name)}: ${num(st.done || 0)} of ${num(st.switch.doubted || 0)} songs heard again so far. <a href="#libraries">Progress is under Libraries.</a>`;
   $("work").innerHTML = jobs.join("") + (!toGo && !s.current && !st.current && !l.measuring && !so.hearing && !s.reading ? `<div class="sub">Nothing is running now. Start analysis looks for new songs; what's new is analysed as it comes. Check what's new on the Overview looks for new songs too.</div>` : "");
@@ -2328,15 +2328,18 @@ function kindsOf(s) {
       now: s.current ? "analysing a song now" : "", left: waiting},
     {id: "loudness", href: "#loudness", name: "Loudness & key", what: "How loud each song is, how it starts and ends, and its key: for even volume, fades and mixing in key.",
       by: `<b>No AI model</b>: loudness by the broadcast standard (ITU-R BS.1770), the key by Krumhansl–Kessler profiles`,
-      done: l.measured || 0, total: done, failed: l.failed || 0, busy: 0, now: l.measuring ? "measuring a song now" : "", left: l.waiting || 0},
+      // Of every song a library wants the loudness for, beats or no beats (0.47.1): a library left out of Beats only
+      // (DJ mixes) still counts here.
+      done: l.measured || 0, total: l.total ?? done, failed: l.failed || 0, busy: 0, now: l.measuring ? "measuring a song now" : "", left: l.waiting || 0},
     {id: "genres", href: "#genres", name: "Genres", what: "The 400 Discogs styles each song sounds like: the genre list and genre radios.",
       by: st.available ? `<b>${esc(st.model_name || "Discogs-EffNet")}</b> on the ${esc(st.device || "CPU")}` : "<b>None</b>: this image has no genre model",
       done: st.done || 0, total: st.available ? st.total || 0 : null, failed: st.failed || 0, busy: 0,
       now: st.current ? "hearing a song now" : "", left: Math.max(0, (st.total || 0) - (st.done || 0) - (st.failed || 0)), off: !st.available},
     {id: "sound", href: "#similar", name: "Sound", what: "What each song sounds and feels like: similar songs, albums and artists, moods, and the search by words.",
       by: so.hears === false ? "<b>None</b>: this image can't hear songs" : `<b>MusiCNN</b> (how it sounds) and <b>CLAP</b> (moods and words)`,
-      done: so.sound || 0, total: so.songs ?? null, failed: soFailed, busy: 0, now: so.hearing ? "hearing a song now" : "",
-      left: Math.max(0, (so.songs || 0) - (so.sound || 0) - soFailed) + (so.again || 0), off: so.hears === false},
+      // Of the songs a library wants the sound for (0.47.1): a library left out of Sound isn't counted.
+      done: so.heard ?? so.sound ?? 0, total: so.wanted ?? so.songs ?? null, failed: soFailed, busy: 0, now: so.hearing ? "hearing a song now" : "",
+      left: Math.max(0, (so.wanted ?? so.songs ?? 0) - (so.heard ?? so.sound ?? 0) - soFailed) + (so.again || 0), off: so.hears === false},
   ];
 }
 const AGAIN_ASK = {
