@@ -73,6 +73,21 @@ measured the models right for 84 to 98 songs in 100 on their own collections (MI
 shows what they said, to check on songs you know. `/api/v1/sound/songs` gives them as `traits` and `valence`;
 `/api/v1/capabilities` counts them under `traits`. AudioMuse-AI's feelings stay as `other_features`.
 
+**Mixes made from your listening (0.53).** The app's mixes for the time of day were a fixed list by the clock
+("sunshine mixes in Finland at 6:40 am, it's winter and dark outside"). Siansa Beats now makes them itself
+(`beats/mixes.py`), from what it keeps: when each listen was (the week in ten parts: early morning, morning, afternoon,
+evening and night, on weekdays and at the weekend), what the songs sound like (the songs played in a part fall into a
+few kinds that sound alike; each kind is a mix of some of them and of songs like them that weren't played for 45
+days), and where the sun is (from the date and the time zone's city, or a latitude and longitude from the app: no
+weather service). A recent listen counts for more, and one from this time of year in earlier years for a little more.
+In the dark the calmer kinds come first; the less is known of a part of the week, the more the hour and the light
+count. A mix is named by its sound ("Calm Indie Rock"), never by the weather, and is the same all day. Beside them:
+the listener's all-time kinds ("Made for you"), On repeat, Rediscover and New for you. With too little listening a
+part borrows from that time on other days, then from all the listening, then from the library. Skips aren't counted:
+the app sends finished listens only. The page has **Mixes** in its menu (any part of the week can be looked at), and
+the app reads the same from `GET /api/v1/mixes?user=&tz=&at=&lat=&lon=&part=&days=&size=` (`features.mixes` in the
+capabilities). The app's own mixes stay as they are.
+
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
 acoustic and electronic with its songs against the whole library; and MIREX's five groups by plain names, each song
@@ -619,7 +634,7 @@ before). A paused service starts again.
 
 `GET /api/health`, `/api/status`, `/api/libraries`, `/api/songs`, `/api/songs/<id>` (with every beat),
 `/api/beats/<id>`, `/api/audio/<id>`, `/api/grids?ids=`, `/api/export.csv`, `/api/export.json`;
-`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/voice` (the Voice and mood page's numbers, 0.52), `/api/voice/songs?line=&order=&limit=&offset=` (the songs of one of its lines; order: `most`, `least` or `unsure`), `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
+`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/mixes?user=&tz=&part=&days=` (the Mixes page, 0.53), `/api/voice` (the Voice and mood page's numbers, 0.52), `/api/voice/songs?line=&order=&limit=&offset=` (the songs of one of its lines; order: `most`, `least` or `unsure`), `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
 `beats/server.py`.
 
 ## Building the image
