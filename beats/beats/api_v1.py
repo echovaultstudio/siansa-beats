@@ -98,7 +98,9 @@ def capabilities(app, server=None):
             # The listening history (0.29): listens taken from the app, and sent on to Last.fm for who connected it.
             # Mixes made from each listener's own listening (0.53): /api/v1/mixes. Made from the songs' sound, so
             # there are none before any is known; with no listens yet they come from the library.
-            "mixes": {"available": bool(sound["sound"]), "listeners": len(app.mixes.listeners())},
+            # 0.54: named by an AI when one is set up on the page ("named" on each mix), and made ahead.
+            "mixes": {"available": bool(sound["sound"]), "listeners": len(app.mixes.listeners()), "ai_names": app.ai.ready,
+                      "ahead": True},
             "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
                            "totals": True},  # /api/v1/listens/totals (0.33)
         },
@@ -185,6 +187,9 @@ def get(handler, path, query, server=None):
         part, days = arg("part") or None, arg("days") or None
         if (part and part not in mixes_module.SUITS) or (days and days not in mixes_module.DAYS):
             return handler._error(HTTPStatus.BAD_REQUEST, "part: " + ", ".join(mixes_module.SUITS) + "; days: weekdays or weekend") or True
+        if not part and not days and at is None:  # asked for now: this listener's are made ahead the same way (0.54)
+            app.mixes.remember(arg("user") or app.default_listener(), arg("tz") or None, lat, lon,
+                               app.only(server or app.servers.default_id), size or mixes_module.SIZE)
         made = app.mixes_for(arg("user"), arg("tz") or None, at, server, lat, lon, part, days, size)
         # Each song by the id of the server the app plays from; a song that server hasn't is left out.
         named = server or app.servers.default_id

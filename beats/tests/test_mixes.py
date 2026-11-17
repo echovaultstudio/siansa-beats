@@ -225,6 +225,48 @@ class TheMixes(Library):
         self.play("rock", "2026-11-10 06:30")
         self.assertEqual(self.mixes.listeners(), ["max"])
 
+    def test_the_ai_names_the_mixes_of_a_kind_and_they_are_kept_for_the_day(self):
+        class Namer:
+            ready, asked = True, []
+
+            def name_mixes(self, described):
+                self.asked.append(described)
+                return {d["id"]: f"Name {d['id']}" for d in described if d["id"] != "daily-2"}
+
+        self.play("rock", "2026-11-10 06:30")
+        self.play("piano", "2026-02-02 21:00", songs=range(20), times=3)
+        namer = Namer()
+        self.mixes.ai, self.mixes.background = namer, False
+        got = self.make()
+        mixes = {m["id"]: m for s in got["shelves"] for m in s["mixes"]}
+        self.assertEqual((mixes["now-1"]["name"], mixes["now-1"]["named"]), ("Name now-1", "ai"))
+        self.assertEqual((mixes["daily-2"]["named"], mixes["daily-2"]["name"]), ("sound", "Hushed Piano"))  # not named: its own
+        self.assertEqual((mixes["rediscover"]["name"], mixes["rediscover"]["named"]), ("Rediscover", "sound"))
+        self.assertNotIn("rediscover", [d["id"] for d in namer.asked[0]])
+        self.assertTrue(all("signature" not in m for m in mixes.values()))
+        described = {d["id"]: d for d in namer.asked[0]}["now-1"]
+        self.assertEqual((described["genres"], described["energy"]), (["Rock"], "steady"))
+        # Asked again the same day: the names are kept, and only the one without asked for again.
+        self.make(at=NOW + 600)
+        self.assertEqual([[d["id"] for d in a] for a in namer.asked[1:]], [["daily-2"]])
+
+    def test_made_ahead_for_how_the_app_asked(self):
+        """Ten minutes before nine the morning's mixes are made, so the app finds them ready."""
+        self.play("rock", "2026-11-10 06:30")
+        self.play("piano", "2026-11-10 09:30")
+        self.mixes.remember("max", TZ)
+        self.clock[0] = at("2026-11-17 08:52")
+        self.assertEqual(self.mixes.ahead(), 2)  # now's (early morning) and nine's (morning)
+        self.assertEqual(self.mixes.ahead(), 0)  # already made
+        kept = len(self.mixes._kept)
+        self.clock[0] = at("2026-11-17 09:01")
+        got = self.make()
+        self.assertEqual((got["part"], len(self.mixes._kept)), ("morning", kept))  # nothing made: it was ready
+        # With nobody asked for, the listener with most listens.
+        self.mixes.asked.clear()
+        self.clock[0] = at("2026-11-17 12:00")
+        self.assertEqual(self.mixes.ahead(default_tz=TZ), 1)  # now and ten minutes on are both the afternoon
+
     def test_where_the_listener_is_can_be_said(self):
         """A latitude and longitude from the app: Cape Town's November morning is light."""
         got = self.mixes.make("max", TZ, lat=-33.92, lon=18.42)

@@ -1785,7 +1785,7 @@
     "/api/v1/mixes": {
       "get": {
         "summary": "Mixes made for a listener from their own listening: by when they listen, what they listen to and the light outside",
-        "description": "The first shelf (now) is for this part of the day on weekdays or at the weekend, made from what the listener plays then; then their all-time kinds of music (daily), and On repeat, Rediscover and New for you (more). The same all day. With too little listening the mixes come from the library.",
+        "description": "The first shelf (now) is for this part of the day on weekdays or at the weekend, made from what the listener plays then; then their all-time kinds of music (daily), and On repeat, Rediscover and New for you (more). The same all day. With too little listening the mixes come from the library. From 0.54 the mixes of now and of the next part of the day are made ahead for every listener the app asks for (asking for now, with no part, days or at), so they answer at once; and the mixes of a kind of music are named by an AI when one is set up.",
         "parameters": [
           {
             "name": "user",
@@ -2512,6 +2512,14 @@
             "items": {
               "$ref": "#/components/schemas/MixSong"
             }
+          },
+          "named": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "sound"
+            ],
+            "description": "Who named it (0.54): the AI service set up on Siansa Beats' page, or its sound. A mix shows its sound's name until the AI's comes"
           }
         }
       },

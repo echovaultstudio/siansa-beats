@@ -24,8 +24,16 @@ Beside the slot's mixes: the listener's all-time groups ("Made for you"), **On r
 :data:`REPEAT_DAYS` days), **Rediscover** (played often, not for :data:`FORGOTTEN_DAYS` days) and **New for you**
 (never played, close to what is).
 
-A mix is the same all day: what's picked by chance is picked by the day's date. Not counted: skips (the app sends
-finished listens only).
+A mix is the same all day: what's picked by chance is picked by the day's date, and what's made is kept until the
+part of the day, the light or the date changes (or the library or the listening grows by much: :meth:`Mixes._grown`),
+not every time a song is heard. Not counted: skips (the app sends finished listens only).
+
+**Names** (0.54): with an AI service set up (:mod:`beats.ai`), the mixes of a kind of music are named by it, from
+their description only ("Velvet Undertow"); the names are kept for the day and the mix shows its sound's name until
+they come, so nothing waits on the AI. On repeat, Rediscover and New for you keep their names.
+
+**Ahead** (0.54): :meth:`Mixes.ahead` makes the next part of the day's mixes (and names them) a few minutes before it
+starts, for every listener the app has asked for, so the app finds them made.
 
 Plain Python and numpy, on :mod:`beats.sound`'s matrix and :mod:`beats.listens`' books.
 """
@@ -72,6 +80,8 @@ DARK_SUITS = -0.12  # in the dark, a little calmer still
 # A group's name: its energy (rows: low, middle, high) and its valence (columns: dark, middle, bright).
 NAMES = (("Hushed", "Calm", "Gentle"), ("Moody", "Easy", "Warm"), ("Driving", "Lively", "Upbeat"))
 LOW, HIGH = 0.42, 0.58  # where low ends and high starts, as a share of the library
+AHEAD_MINUTES = 10  # the next part of the day's mixes are made this long before it starts
+KEPT = 64  # answers kept
 SAME = 0.5  # two groups are one when their centres are nearer than this share of their songs' own distance to them
 REACH = 1.3  # a mix reaches this far past where most of its group's songs are (REACH_OF of them), and no further
 REACH_OF = 0.9
@@ -256,10 +266,14 @@ def groups(vectors, weights, k, rounds=12):
 # ---- the mixes ----
 
 class Mixes:
-    def __init__(self, store, sound, listens, traits=None, arousal=None, now=time.time):
+    def __init__(self, store, sound, listens, traits=None, arousal=None, now=time.time, ai=None, background=True):
         self.store, self.sound, self.listens, self.traits, self.arousal, self.now = store, sound, listens, traits, arousal, now
+        self.ai, self.background = ai, background
         self._lock = threading.Lock()
         self._kept = {}  # what was asked -> its answer, while nothing it's made from changed
+        self._names = {}  # (listener, day, mix id, its songs) -> the AI's name for it
+        self._naming = set()  # what's being named now
+        self.asked = {}  # listener -> (tz, lat, lon, server, size): how the app last asked, to make theirs ahead
         self._scale = None  # (the store's writes it was read at, energies sorted, valences sorted, {song: (energy, valence)})
 
     def listeners(self):
@@ -274,6 +288,11 @@ class Mixes:
         at another time); ``lat`` and ``lon`` say where the listener is, instead of the time zone's city."""
         user = self.listens.who(user)
         at = int(at if at is not None else self.now())
+        kept, light = self._made(user, tz, at, server, lat, lon, part, days, size)
+        return {"user": user, "at": at, "tz": tz, **self._named(user, kept)}
+
+    def _made(self, user, tz, at, server, lat, lon, part, days, size):
+        """The mixes of that slot, made or kept; and the light they were made for."""
         local = self.listens._local(tz)
         year, month, day, hour, weekday, ordinal = local(at)
         slot_part = part if part in SUITS else part_of(hour)
@@ -285,20 +304,103 @@ class Mixes:
         sun = daylight(spot[0], spot[1], at, tz) if spot else None
         size = max(A_FEW, min(100, int(size)))
         self.sound._load()
-        key = (user, tz, server, ordinal, slot_part, slot_days, spot, sun and sun["light"], size,
-               self.listens.changes, self.store.sound_changes, self.store.writes)
+        key = (user, tz, server, ordinal, slot_part, slot_days, spot and (round(spot[0], 1), round(spot[1], 1)),
+               sun and sun["light"], size, self._grown(user))
         with self._lock:
             kept = self._kept.get(key)
         if kept is None:
             started = time.monotonic()
             kept = self._make(user, tz, at, server, slot_part, slot_days, sun, size, local, ordinal)
             with self._lock:
-                if len(self._kept) > 24:
+                if len(self._kept) > KEPT:
                     self._kept.clear()
                 self._kept[key] = kept
             _log.info("Mixes for %s, %s on %s: %d made from %s in %.1fs", user or "nobody", said(slot_part), slot_days,
                       sum(len(s["mixes"]) for s in kept["shelves"]), kept["basis"], time.monotonic() - started)
-        return {"user": user, "at": at, "tz": tz, **kept}
+        if self.ai is not None and self.ai.ready:
+            self._name_soon(user, ordinal, kept)
+        return kept, sun and sun["light"]
+
+    def _grown(self, user):
+        """What the mixes are made from, roughly: the songs whose sound is known (by the thousand) and the listener's
+        listens (by the 500). Made again when either moves on, not at every listen."""
+        return (len(self.sound.ids) // 1000, (self.listens.count(user) // 500) if user else 0)
+
+    # ---- names from the AI ----
+
+    def _named(self, user, kept):
+        """``kept`` with the AI's names put in where it gave one: each mix has ``named`` ("ai" or "sound")."""
+        shelves = []
+        for shelf in kept["shelves"]:
+            mixes = []
+            for m in shelf["mixes"]:
+                name = self._names.get((user, kept["day"], m["id"], m["signature"])) if m.get("signature") else None
+                mixes.append({k: v for k, v in m.items() if k != "signature"} | {"name": name or m["name"], "named": "ai" if name else "sound"})
+            shelves.append(dict(shelf, mixes=mixes))
+        return {k: v for k, v in kept.items() if k != "day"} | {"shelves": shelves}
+
+    def _name_soon(self, user, day, kept):
+        """Has the AI name the mixes of a kind of music that have no name yet, in the background (at once without it)."""
+        wanted = [m for shelf in kept["shelves"] for m in shelf["mixes"]
+                  if m.get("signature") and (user, day, m["id"], m["signature"]) not in self._names]
+        token = (user, day, tuple(m["signature"] for m in wanted))
+        with self._lock:
+            if not wanted or token in self._naming:
+                return
+            self._naming.add(token)
+
+        def work():
+            try:
+                described = [{"id": m["id"], "genres": m["genres"][:2], "artists": m["artists"][:3], "tags": m["tags"],
+                              "energy": _word(m["energy"], ("calm", "steady", "high-energy")),
+                              "mood": _word(m["mood"], ("dark", "even", "bright"))} for m in wanted]
+                names = self.ai.name_mixes(described)
+                with self._lock:
+                    if len(self._names) > 2000:
+                        self._names.clear()
+                    for m in wanted:
+                        if m["id"] in names:
+                            self._names[(user, day, m["id"], m["signature"])] = names[m["id"]]
+                if names:
+                    _log.info("The AI named %d of %d mixes for %s", len(names), len(wanted), user or "nobody")
+            finally:
+                with self._lock:
+                    self._naming.discard(token)
+        if self.background:
+            threading.Thread(target=work, name="mix-names", daemon=True).start()
+        else:
+            work()
+
+    # ---- made ahead ----
+
+    def remember(self, user, tz, lat=None, lon=None, server=None, size=SIZE):
+        """How the app asked for ``user``'s mixes: theirs are made ahead the same way."""
+        user = self.listens.who(user)
+        with self._lock:
+            if len(self.asked) > 50:
+                self.asked.clear()
+            self.asked[user] = (tz, lat, lon, server, size)
+
+    def ahead(self, minutes=AHEAD_MINUTES, default_tz=None, servers=(None,)):
+        """Makes, for each listener the app has asked for (else the one with most listens), the mixes of now and of
+        ``minutes`` from now: when the part of the day or the light is about to change, the next ones are ready (and
+        named) before the app asks. How many were made fresh."""
+        with self._lock:
+            asked = dict(self.asked)
+        if not asked:
+            first = next(iter(self.listeners()), None)
+            asked = {first: (default_tz, None, None, server, SIZE) for server in servers} if first is not None else {}
+        made = 0
+        for user, (tz, lat, lon, server, size) in asked.items():
+            for at in (self.now(), self.now() + minutes * 60):
+                before = len(self._kept)
+                try:
+                    self._made(self.listens.who(user), tz or default_tz, int(at), server, lat, lon, None, None, size)
+                except Exception:  # noqa: BLE001 - made again when asked; never stops the loop
+                    _log.exception("The mixes for %s weren't made ahead", user or "nobody")
+                    continue
+                made += len(self._kept) > before
+        return made
 
     # ---- what the listener played ----
 
@@ -450,7 +552,9 @@ class Mixes:
     def _mix(self, mix_id, picked, why, taken, name=None, like=None):
         rows = [row for row, _ in picked]
         like = like or self._like(rows)
-        return {"id": mix_id, "name": name or self._name(like, taken), "why": why, "tags": like["tags"],
+        # What the AI's name is kept by (none for a mix with a name of its own): the same songs the same day.
+        signature = None if name else hashlib.sha256(",".join(sorted(self.sound.ids[row] for row in rows)).encode()).hexdigest()[:16]
+        return {"id": mix_id, "name": name or self._name(like, taken), "signature": signature, "why": why, "tags": like["tags"],
                 "genres": like["genres"], "artists": like["artists"], "energy": like["energy"], "mood": like["mood"],
                 "own": sum(1 for _, own in picked if own),
                 "songs": [{"id": self.sound.ids[row], "title": self.sound.rows[row]["title"] or "",
@@ -560,8 +664,15 @@ class Mixes:
                 mixes.append(self._mix("new", [(row, False) for row, _ in picked], "Never played by you, and close to what you play.", taken, name="New for you"))
         if mixes:
             shelves.append({"key": "more", "title": "More of you", "note": "", "mixes": mixes})
-        return {"part": part, "days": days, "said": said(part), "hours": hours(part), "basis": basis, "based": based,
+        return {"day": ordinal, "part": part, "days": days, "said": said(part), "hours": hours(part), "basis": basis, "based": based,
                 "listens": played["listens"], "songs": int(len(have)), "daylight": sun, "shelves": shelves}
+
+
+def _word(share, words):
+    """``share`` (0 to 1, or None) as one of three ``words``."""
+    if share is None:
+        return None
+    return words[0] if share < LOW else words[2] if share > HIGH else words[1]
 
 
 def _and(names):

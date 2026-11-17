@@ -88,6 +88,16 @@ the app sends finished listens only. The page has **Mixes** in its menu (any par
 the app reads the same from `GET /api/v1/mixes?user=&tz=&at=&lat=&lon=&part=&days=&size=` (`features.mixes` in the
 capabilities). The app's own mixes stay as they are.
 
+**Mix names by AI, and mixes made ahead (0.54).** On Setup, **AI for mix names** takes the same AI services as the
+Siansa app (OpenRouter, OpenAI, Anthropic, Google Gemini, Mistral, Groq, Ollama, or any other with an OpenAI-style
+API; `beats/ai.py`): the mixes of a kind of music are then named by it, like a streaming service's editors would
+("Velvet Undertow"), from their genres, energy, mood and three artists only, never the listening. Names that promise
+weather or a time of day are thrown away, and the names are kept for the day; until they come a mix shows its sound's
+name (`named` on each mix says which). The key is kept encrypted and never shown. And every minute, the mixes of now and
+of ten minutes on are made for each listener the app asks for, the way it asked (time zone, place, server): when the
+part of the day or the light changes, the app finds the next ones ready. Mixes are kept until the part of the day, the
+light or the date changes, or the library or the listening grows by much, not made again at every listen.
+
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
 acoustic and electronic with its songs against the whole library; and MIREX's five groups by plain names, each song

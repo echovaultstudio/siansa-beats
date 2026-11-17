@@ -593,7 +593,7 @@ class ServiceTest(Service):
         self.start()
         self.call("/api/libraries", "POST", {"ids": ["1"]})
         self.wait_done()
-        self.assertEqual(self.call("/api/v1/capabilities")["features"]["mixes"], {"available": False, "listeners": 0})
+        self.assertEqual(self.call("/api/v1/capabilities")["features"]["mixes"], {"available": False, "listeners": 0, "ai_names": False, "ahead": True})
         page = self.call("/api/mixes?tz=Europe/Helsinki&part=early&days=weekdays")
         self.assertEqual((page["part"], page["days"], page["said"], page["hours"], page["basis"], page["songs"]),
                          ("early", "weekdays", "early morning", "05:00–09:00", "library", 0))
@@ -609,6 +609,27 @@ class ServiceTest(Service):
                 self.call("/api/v1/mixes?" + wrong)
             self.assertEqual(caught.exception.code, 400, wrong)
         self.assertIn("/api/v1/mixes", self.call("/api/v1/openapi.json")["paths"])
+        self.assertEqual(self.app.mixes.asked, {})  # asked for a moment of their own: not remembered
+        self.call("/api/v1/mixes?user=max&tz=Europe/Helsinki")
+        self.assertEqual(self.app.mixes.asked["max"][0], "Europe/Helsinki")  # asked for now: theirs are made ahead (0.54)
+
+    def test_the_ai_service_for_mix_names(self):
+        """0.54: set on the page, its key never sent back; a test with what's typed; refused when wrong."""
+        self.start()
+        first = self.call("/api/ai")
+        self.assertEqual((first["on"], first["has_key"], first["ready"], len(first["providers"])), (False, False, False, 8))
+        saved = self.call("/api/ai", "POST", {"on": True, "provider": "OLLAMA", "address": "127.0.0.1:9", "model": "llama3.2"})
+        self.assertEqual((saved["ready"], saved["provider"]), (True, "OLLAMA"))
+        saved = self.call("/api/ai", "POST", {"provider": "OPENAI", "key": "sk-never-shown"})
+        self.assertTrue(saved["has_key"])
+        self.assertNotIn("sk-never-shown", json.dumps(self.call("/api/ai")))
+        self.assertTrue(self.call("/api/v1/capabilities")["features"]["mixes"]["ai_names"])
+        tested = self.call("/api/ai/test", "POST", {"provider": "OLLAMA", "address": "127.0.0.1:9"})
+        self.assertFalse(tested["ok"])
+        self.assertIn("Ollama can't be reached", tested["said"])
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/ai", "POST", {"provider": "NOPE"})
+        self.assertEqual(caught.exception.code, 400)
 
     def test_v1_capabilities_and_profiles_for_the_app(self):
         self.start()
