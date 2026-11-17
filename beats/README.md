@@ -104,6 +104,13 @@ like stay in `why`, for the mix's own page. Every mix given out is kept, by a `k
 long as **Keep mixes for** on the Mixes page says (1 to 90 days), so a mix played from the app's recent plays still plays
 days later: `GET /api/v1/mixes/kept?user=&key=` gives it back.
 
+**What goes into the mixes (0.56).** Every choice the mixes made by themselves can be changed, per listener, on the
+Mixes page (**What goes into your mixes**) or from the Siansa app: which shelves and mixes are made and how many, songs
+in a mix, how many of them you know, songs by one artist, how long a song you played stays out, genres and artists to
+leave out, whether the part of the day, weekends, the dark and this time of year count, how far back listening counts,
+On repeat's and Rediscover's spans, and AI names (`beats/mix_settings.py`, `GET`/`POST /api/v1/mixes/settings`). Left
+as they come, the mixes are made as before.
+
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
 acoustic and electronic with its songs against the whole library; and MIREX's five groups by plain names, each song
