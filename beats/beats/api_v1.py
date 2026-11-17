@@ -18,6 +18,8 @@ that would break that is v2, next to v1. The full description is ``openapi.json`
     GET  /api/v1/listens/totals?user=&from=&to=&tz=         that stretch in numbers: listens, seconds, artists, hours
     GET  /api/v1/similar/albums?track_id=          albums that sound like that song's album (asked of AudioMuse-AI)
     GET  /api/v1/similar/artists?track_id=|artist= artists that sound like that one (asked of AudioMuse-AI)
+    GET  /api/v1/mixes/settings?user=  what goes into a listener's mixes, each setting described (0.56)
+    POST /api/v1/mixes/settings        {"user", "settings": {name: value}}: changes the ones named
     POST /api/v1/bad-blends            {"from_id", "to_id", "technique", "details"}: a song change marked as bad
     GET  /api/v1/openapi.json          this API described
 
@@ -100,7 +102,7 @@ def capabilities(app, server=None):
             # there are none before any is known; with no listens yet they come from the library.
             # 0.54: named by an AI when one is set up on the page ("named" on each mix), and made ahead.
             "mixes": {"available": bool(sound["sound"]), "listeners": len(app.mixes.listeners()), "ai_names": app.ai.ready,
-                      "ahead": True, "keep_days": app.mixes.keep_days(), "about": True},  # 0.55: about, key, /mixes/kept
+                      "ahead": True, "keep_days": app.mixes.keep_days(), "about": True, "settings": True},  # 0.55: about, key, /mixes/kept
             "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
                            "totals": True},  # /api/v1/listens/totals (0.33)
         },
@@ -181,6 +183,8 @@ def get(handler, path, query, server=None):
         if arg("key") and not mixes:
             return handler._error(HTTPStatus.NOT_FOUND, "No such mix kept: it may be older than the days mixes are kept for") or True
         return handler._json({"schema_version": SCHEMA_VERSION, "keep_days": app.mixes.keep_days(), "mixes": mixes}) or True
+    if path == "/api/v1/mixes/settings":  # what goes into a listener's mixes (0.56): ?user=
+        return handler._json({"schema_version": SCHEMA_VERSION, **app.mix_settings_of(arg("user"))}) or True
     if path == "/api/v1/mixes":  # mixes made for a listener from their own listening (0.53)
         from . import mixes as mixes_module
 
@@ -291,6 +295,11 @@ def post(handler, path, body, server=None):
             return handler._error(HTTPStatus.BAD_REQUEST, f"at most {listens_module.MOST_AT_ONCE} listens at a time") or True
         answer = handler.app.listens.add(body.get("user"), rows, "siansa", server or handler.app.servers.default_id)
         return handler._json(answer) or True
+    if path == "/api/v1/mixes/settings":  # {"user", "settings": {name: value}}: only the ones named change (0.56)
+        try:
+            return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.set_mix_settings(body.get("user"), body.get("settings"))}) or True
+        except ValueError as e:
+            return handler._error(HTTPStatus.BAD_REQUEST, str(e)) or True
     if path == "/api/v1/loves":  # a heart from the app: on to Last.fm for a listener who sends listens on
         if not str(body.get("artist") or "").strip() or not str(body.get("title") or "").strip():
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True

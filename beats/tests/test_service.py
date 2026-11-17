@@ -594,7 +594,7 @@ class ServiceTest(Service):
         self.call("/api/libraries", "POST", {"ids": ["1"]})
         self.wait_done()
         self.assertEqual(self.call("/api/v1/capabilities")["features"]["mixes"],
-                         {"available": False, "listeners": 0, "ai_names": False, "ahead": True, "keep_days": 7, "about": True})
+                         {"available": False, "listeners": 0, "ai_names": False, "ahead": True, "keep_days": 7, "about": True, "settings": True})
         page = self.call("/api/mixes?tz=Europe/Helsinki&part=early&days=weekdays")
         self.assertEqual((page["part"], page["days"], page["said"], page["hours"], page["basis"], page["songs"]),
                          ("early", "weekdays", "early morning", "05:00–09:00", "library", 0))
@@ -612,6 +612,17 @@ class ServiceTest(Service):
             self.call("/api/v1/mixes/kept?user=max&key=2026-11-17-daily-1")
         self.assertEqual(caught.exception.code, 404)
         self.assertEqual(self.call("/api/mixes/keep", "POST", {"days": 14}), {"keep_days": 14})
+        # 0.56: what goes into a listener's mixes, from the app and the page.
+        got = self.call("/api/v1/mixes/settings?user=max")
+        self.assertEqual((got["settings"]["size"], got["settings"]["daily"]), (40, True))
+        self.assertIn({"name": "leave_genres", "kind": "words", "default": [], "low": None, "high": None, "label": "Genres to leave out"}, got["described"])
+        got = self.call("/api/v1/mixes/settings", "POST", {"user": "max", "settings": {"size": 25, "leave_artists": ["A"], "keep_days": 30}})
+        self.assertEqual((got["settings"]["size"], got["settings"]["leave_artists"], got["keep_days"]), (25, ["A"], 30))
+        self.assertEqual(self.call("/api/mixes/settings?user=max")["settings"]["size"], 25)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/v1/mixes/settings", "POST", {"user": "max", "settings": {"size": "big"}})
+        self.assertEqual(caught.exception.code, 400)
+        self.call("/api/mixes/keep", "POST", {"days": 14})
         self.assertEqual(self.call("/api/mixes?tz=Europe/Helsinki")["keep_days"], 14)
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.call("/api/mixes/keep", "POST", {"days": "a week"})

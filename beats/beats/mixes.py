@@ -59,6 +59,8 @@ import time
 
 import numpy as np
 
+from . import mix_settings
+
 from . import genres as genres_module
 from . import log
 from .listens import AT, SONG, zone
@@ -314,6 +316,13 @@ class Mixes:
         at = int(at if at is not None else self.now())
         kept, light = self._made(user, tz, at, server, lat, lon, part, days, size)
         answer = {"user": user, "at": at, "tz": tz, "keep_days": self.keep_days(), **self._named(user, kept)}
+        if not self.settings(user)["ai_names"]:  # names from the sound only, as the listener chose
+            answer["shelves"] = [dict(sh, mixes=[dict(m, name=m["sound_name"], about=m["sound_about"], named="sound") for m in sh["mixes"]])
+                                 for sh in answer["shelves"]]
+        for sh in answer["shelves"]:
+            for m in sh["mixes"]:
+                m.pop("sound_name", None)
+                m.pop("sound_about", None)
         self._keep(user, answer)
         return answer
 
@@ -327,23 +336,25 @@ class Mixes:
             first = next(f for key, _, f, _ in PARTS if key == part)
             at += ((first + 1 - hour) % 24) * 3600 if first > hour else -((hour - first - 1) % 24) * 3600
         spot = (float(lat), float(lon)) if lat is not None and lon is not None else place(tz)
+        chosen = self.settings(user)
         sun = daylight(spot[0], spot[1], at, tz) if spot else None
-        size = max(A_FEW, min(100, int(size)))
+        # The listener's own size, from the page or the app's settings; the app's ask only when they set none.
+        size = max(A_FEW, min(100, int(chosen["size"] if chosen["size"] != mix_settings.SETTINGS["size"][0] else size)))
         self.sound._load()
         key = (user, tz, server, ordinal, slot_part, slot_days, spot and (round(spot[0], 1), round(spot[1], 1)),
-               sun and sun["light"], size, self._grown(user))
+               sun and sun["light"], size, self._grown(user), mix_settings.signature(chosen))
         with self._lock:
             kept = self._kept.get(key)
         if kept is None:
             started = time.monotonic()
-            kept = self._make(user, tz, at, server, slot_part, slot_days, sun, size, local, ordinal)
+            kept = self._make(user, tz, at, server, slot_part, slot_days, sun, size, local, ordinal, chosen)
             with self._lock:
                 if len(self._kept) > KEPT:
                     self._kept.clear()
                 self._kept[key] = kept
             _log.info("Mixes for %s, %s on %s: %d made from %s in %.1fs", user or "nobody", said(slot_part), slot_days,
                       sum(len(s["mixes"]) for s in kept["shelves"]), kept["basis"], time.monotonic() - started)
-        if self.ai is not None and self.ai.ready:
+        if self.ai is not None and self.ai.ready and chosen["ai_names"]:
             self._name_soon(user, ordinal, kept)
         return kept, sun and sun["light"]
 
@@ -366,10 +377,54 @@ class Mixes:
                 # The mixes of now are for one part of the week; the others are the same all day.
                 key = f"{day}-{kept['part']}-{kept['days']}-{m['id']}" if m["id"].startswith("now-") else f"{day}-{m['id']}"
                 mixes.append({k: v for k, v in m.items() if k != "signature"} |
-                             {"key": key, "name": (given or {}).get("name") or m["name"], "about": (given or {}).get("about") or m["about"],
+                             {"sound_name": m["name"], "sound_about": m["about"], "key": key, "name": (given or {}).get("name") or m["name"], "about": (given or {}).get("about") or m["about"],
                               "named": "ai" if given else "sound"})
             shelves.append(dict(shelf, mixes=mixes))
         return {k: v for k, v in kept.items() if k != "day"} | {"shelves": shelves}
+
+    # ---- the listener's choices ----
+
+    def settings(self, user):
+        """What ``user`` chose to go into their mixes (:mod:`beats.mix_settings`), every setting."""
+        return mix_settings.load(self.store, self.listens.who(user))
+
+    def set_settings(self, user, given):
+        """Changes ``user``'s choices by ``given``; their mixes are made again at the next ask."""
+        user = self.listens.who(user)
+        chosen = mix_settings.save(self.store, user, given)
+        _log.info("Mix settings for %s: %s", user or "nobody",
+                  ", ".join(f"{k} {v}" for k, v in chosen.items() if v != mix_settings.defaults()[k]) or "as they come")
+        return chosen
+
+    def _left_out(self, chosen):
+        """Whether a row of the sound is one the listener left out (a genre or an artist of theirs): a function,
+        remembering what it found for the songs it was asked about."""
+        genres = {g.lower() for g in chosen["leave_genres"]}
+        artists = {a.lower() for a in chosen["leave_artists"]}
+        if not genres and not artists:
+            return lambda row: False
+        seen = {}
+
+        def out(row):
+            found = seen.get(row)
+            if found is None:
+                found = (self.sound.rows[row]["artist"] or "").lower() in artists
+                if not found and genres:
+                    found = bool(genres & self._genres_of_row(row))
+                seen[row] = found
+            return found
+        return out
+
+    def _genres_of_row(self, row):
+        """A song's genres, lower case: by its sound (a style and the family above it), and its tags."""
+        song_id = self.sound.ids[row]
+        names = set()
+        for label, _ in self.store.heard_of([song_id], genres_module.HEARD_MIN, 3).get(song_id, ()):
+            family, _, name = label.partition("---")
+            names |= {family.lower(), (name or family).lower()}
+        for g in self.store._genres_of([song_id]).get(song_id, ()):
+            names.add(str(g["label"]).lower())
+        return names
 
     # ---- kept for days ----
 
@@ -486,10 +541,12 @@ class Mixes:
 
     # ---- what the listener played ----
 
-    def _played(self, user, at, server, local, ordinal):
+    def _played(self, user, at, server, local, ordinal, chosen=None, out=lambda row: False):
         """The listener's listens of songs whose sound is known (and that ``server`` has), by row of the sound's
         matrix: ``{"slots": {(part, days): {row: weight}}, "parts": {part: {…}}, "all": {…}, "last": {row: at},
         "count": {row: listens}, "recent": {row: listens in the last REPEAT_DAYS days}, "listens": how many}``."""
+        chosen = chosen or mix_settings.defaults()
+        half_life, repeat_days = chosen["half_life"], chosen["repeat_days"]
         index, mask = self.sound.index, self.sound._mask(server)
         slots, parts, everything, last, count, recent = {}, {}, {}, {}, {}, {}
         first_of_year, listens = {}, 0
@@ -497,12 +554,12 @@ class Mixes:
         day_of_year = today.timetuple().tm_yday
         for r in self.listens.book(user).rows if user else ():
             row = index.get(r[SONG]) if r[SONG] else None
-            if row is None or (mask is not None and not mask[row]) or r[AT] > at:
+            if row is None or (mask is not None and not mask[row]) or r[AT] > at or out(row):
                 continue
             year, _, _, hour, weekday, day = local(r[AT])
             age = max(0, ordinal - day)
-            weight = 0.5 ** (age / HALF_LIFE)
-            if age > 300:  # the same weeks of an earlier year
+            weight = 0.5 ** (age / half_life)
+            if age > 300 and chosen["season"]:  # the same weeks of an earlier year
                 start = first_of_year.get(year)
                 if start is None:
                     start = first_of_year[year] = datetime.date(year, 1, 1).toordinal()
@@ -513,7 +570,7 @@ class Mixes:
             for into in (slots.setdefault((part, days_of(weekday)), {}), parts.setdefault(part, {}), everything):
                 into[row] = into.get(row, 0.0) + weight
             count[row] = count.get(row, 0) + 1
-            if age <= REPEAT_DAYS:
+            if age <= repeat_days:
                 recent[row] = recent.get(row, 0) + 1
             if r[AT] > last.get(row, 0):
                 last[row] = r[AT]
@@ -602,7 +659,8 @@ class Mixes:
 
     # ---- a mix's songs ----
 
-    def _fill(self, centre, own, stale, server, size, rng, taken=(), familiar=FAMILIAR, reach=None):
+    def _fill(self, centre, own, stale, server, size, rng, taken=(), familiar=FAMILIAR, reach=None, per_artist=PER_ARTIST,
+              out=lambda row: False):
         """Up to ``size`` songs around ``centre``: ``familiar`` of them from ``own`` (the listener's rows of this
         group, the heaviest first), the rest the nearest songs not in ``stale`` (played lately), in turns, none
         further off than ``reach`` (a mix is of one kind: a small library gives a shorter mix, not another kind's
@@ -610,6 +668,8 @@ class Mixes:
         near = self.sound.near(centre, server, wanted=min(len(self.sound.ids), size * 8 + 50))
         if reach is not None:
             near = [f for f in near if f[1] <= reach]
+        near = [f for f in near if not out(f[0])]
+        own = [row for row in own if not out(row)]
         wanted = min(len(own), round(size * familiar))
         pool = list(own[:wanted * 2])
         mine = sorted(rng.sample(pool, wanted), key=pool.index) if wanted else []
@@ -623,11 +683,11 @@ class Mixes:
                 row = mine_left.pop(0)
                 found.append((row, distance.get(row, 1.0 - float(self.sound.matrix[row] @ centre))))
             found += [fresh_left.pop(0) for _ in range(min(2, len(fresh_left)))]
-        picked = self.sound._pick(found, size, taken=set(taken), per_artist=PER_ARTIST)
+        picked = self.sound._pick(found, size, taken=set(taken), per_artist=per_artist)
         if len(picked) < size:  # an artist too often, a song twice: the next nearest fill the places
             have = {row for row, _ in picked}
             picked += self.sound._pick([f for f in near if f[0] not in have and f[0] not in avoid], size - len(picked),
-                                       taken=have | set(taken), per_artist=PER_ARTIST)
+                                       taken=have | set(taken), per_artist=per_artist)
         mine = set(mine)
         return [(row, row in mine) for row, _ in picked]
 
@@ -661,13 +721,23 @@ class Mixes:
         centre = unit((self.sound.matrix[rows] * weights[:, None]).sum(axis=0))[0]
         return centre, max(0.02, REACH * float(np.quantile(1.0 - self.sound.matrix[rows] @ centre, REACH_OF)))
 
-    def _make(self, user, tz, at, server, part, days, sun, size, local, ordinal):
-        played = self._played(user, at, server, local, ordinal)
+    def _make(self, user, tz, at, server, part, days, sun, size, local, ordinal, chosen=None):
+        chosen = chosen or mix_settings.defaults()
+        out = self._left_out(chosen)
+        played = self._played(user, at, server, local, ordinal, chosen, out)
+        familiar, per_artist = chosen["familiar"] / 100, chosen["per_artist"]
+        repeat_days, forgotten_days = chosen["repeat_days"], chosen["forgotten_days"]
+        if not chosen["daylight"]:  # the light outside isn't to count: as if it were always light
+            sun = None
+        fill = lambda *a, **k: self._fill(*a, familiar=k.pop("familiar", familiar), per_artist=per_artist, out=out, **k)  # noqa: E731
         seed = lambda what: random.Random(int(hashlib.sha256(f"{user}|{ordinal}|{what}".encode()).hexdigest()[:12], 16))  # noqa: E731
-        stale = {row for row, when in played["last"].items() if at - when < FRESH_DAYS * 86400}
+        stale = {row for row, when in played["last"].items() if at - when < chosen["fresh_days"] * 86400}
         weekly = "weekdays" if days == DAYS[0] else "the weekend"
-        slot = played["slots"].get((part, days), {})
-        if len(slot) >= ENOUGH:
+        slot = played["slots"].get((part, days), {}) if chosen["weekend_apart"] else {}
+        if not chosen["time_of_day"] and len(played["all"]) >= A_FEW:
+            basis, weights = "all", played["all"]
+            based = "From all your listening, whatever the time of day (as you set it)."
+        elif len(slot) >= ENOUGH:
             basis, weights = "slot", slot
             based = f"From what you play in the {said(part)} on {weekly}."
         elif len(played["parts"].get(part, {})) >= ENOUGH:
@@ -686,13 +756,14 @@ class Mixes:
         # For now: the slot's groups, the ones that suit the hour and the light first.
         if weights is None:
             rng = seed("library")
-            sample = np.array(sorted(rng.sample(list(map(int, have)), min(len(have), 1500)))) if len(have) else np.array([], int)
+            have_in = [int(row) for row in have if not out(int(row))] if chosen["leave_genres"] or chosen["leave_artists"] else list(map(int, have))
+            sample = np.array(sorted(rng.sample(have_in, min(len(have_in), 1500)))) if have_in else np.array([], int)
             ones = np.ones(len(sample), np.float32)
             found = [(sample[members], ones[members], *self._middle(sample[members], ones[members]))
                      for members in groups(self.sound.matrix[sample], ones, 6)] if len(sample) >= A_FEW else []
         else:
             found = self._grouped(weights, 150, min(4, max(1, len(weights) // GROUP)))
-        suits = SUITS[part] + (DARK_SUITS if sun and sun["light"] == "dark" else 0.0)
+        suits = (SUITS[part] if chosen["time_of_day"] else 0.5) + (DARK_SUITS if sun and sun["light"] == "dark" else 0.0)
         ranked = []
         for own, own_w, centre, reach in found:
             like = self._like(own[:60], own_w[:60])
@@ -702,21 +773,22 @@ class Mixes:
             ranked.append((float(own_w.sum()) / max(1e-9, sum(float(f[1].sum()) for f in found)) * max(0.05, fit), own, centre, like, reach))
         ranked.sort(key=lambda r: -r[0])
         mixes = []
-        for n, (_, own, centre, like, reach) in enumerate(ranked[:4]):
-            picked = self._fill(centre, list(map(int, own)) if weights is not None else [], stale, server, size, seed(f"now-{n}"), reach=reach)
+        for n, (_, own, centre, like, reach) in enumerate(ranked[:chosen["now_count"]] if chosen["now"] else []):
+            picked = fill(centre, list(map(int, own)) if weights is not None else [], stale, server, size, seed(f"now-{n}"), reach=reach)
             if len(picked) >= A_FEW:
                 why = ("Like " + _and(like["artists"]) + ".") if like["artists"] and weights is not None else "From your library."
                 mixes.append(self._mix(f"now-{n + 1}", picked, why, taken))
         note = " · ".join(x for x in (f"{weekly.capitalize()}, {hours(part)}", sun and sun["said"]) if x)
-        shelves.append({"key": "now", "title": f"Your {said(part)}", "note": note, "mixes": mixes})
+        if chosen["now"]:
+            shelves.append({"key": "now", "title": f"Your {said(part)}", "note": note, "mixes": mixes})
 
         # Made for you: the listener's all-time groups.
         taken = set()
         everything = played["all"]
-        daily = self._grouped(everything, 300, min(5, len(everything) // GROUP)) if len(everything) >= ENOUGH else []
+        daily = self._grouped(everything, 300, min(chosen["daily_count"], len(everything) // GROUP)) if len(everything) >= ENOUGH else []
         mixes = []
-        for n, (own, own_w, centre, reach) in enumerate(daily):
-            picked = self._fill(centre, list(map(int, own)), stale, server, size, seed(f"daily-{n}"), reach=reach)
+        for n, (own, own_w, centre, reach) in enumerate(daily if chosen["daily"] else []):
+            picked = fill(centre, list(map(int, own)), stale, server, size, seed(f"daily-{n}"), reach=reach)
             if len(picked) >= A_FEW:
                 like = self._like(own[:60], own_w[:60])
                 mixes.append(self._mix(f"daily-{n + 1}", picked, "Like " + _and(like["artists"]) + "." if like["artists"] else "", taken, like=like))
@@ -726,29 +798,34 @@ class Mixes:
         # More of you: on repeat, to rediscover, and new.
         mixes, taken = [], set()
         repeat = sorted((row for row, n in played["recent"].items() if n >= 2), key=lambda row: (-played["recent"][row], row))[:size]
-        if len(repeat) >= A_FEW:
-            mixes.append(self._mix("repeat", [(row, True) for row in repeat], f"What you played most in the last {REPEAT_DAYS} days.", taken, name="On repeat"))
-        forgotten = sorted((row for row, n in played["count"].items() if n >= 3 and at - played["last"][row] > FORGOTTEN_DAYS * 86400),
+        if chosen["repeat"] and len(repeat) >= A_FEW:
+            mixes.append(self._mix("repeat", [(row, True) for row in repeat], f"What you played most in the last {repeat_days} days.", taken, name="On repeat"))
+        forgotten = sorted((row for row, n in played["count"].items() if n >= 3 and at - played["last"][row] > forgotten_days * 86400),
                            key=lambda row: (-played["count"][row], row))[:size * 3]
-        if len(forgotten) >= A_FEW:
+        if chosen["rediscover"] and len(forgotten) >= A_FEW:
             rng = seed("rediscover")
             some = sorted(rng.sample(forgotten, min(len(forgotten), size)), key=forgotten.index)
-            picked = self.sound._pick([(row, 0.0) for row in some], size, per_artist=PER_ARTIST + 1)
+            picked = self.sound._pick([(row, 0.0) for row in some], size, per_artist=per_artist + 1)
             if len(picked) >= A_FEW:
-                mixes.append(self._mix("rediscover", [(row, True) for row, _ in picked], "Songs you played a lot, and not for six months.", taken, name="Rediscover"))
-        if daily:
+                mixes.append(self._mix("rediscover", [(row, True) for row, _ in picked], f"Songs you played a lot, and not for {_span(forgotten_days)}.", taken, name="Rediscover"))
+        if chosen["new"] and daily:
             ever, fresh, each = set(played["count"]), [], max(A_FEW, size // len(daily))
             for n, (_, _, centre, reach) in enumerate(daily):
-                fresh += self._fill(centre, [], ever, server, each, seed(f"new-{n}"), taken={row for row, _ in fresh}, reach=reach)
+                fresh += fill(centre, [], ever, server, each, seed(f"new-{n}"), taken={row for row, _ in fresh}, reach=reach, familiar=0.0)
             rng = seed("new")
             rng.shuffle(fresh)
-            picked = self.sound._pick([(row, 0.0) for row, _ in fresh], size, per_artist=PER_ARTIST)
+            picked = self.sound._pick([(row, 0.0) for row, _ in fresh], size, per_artist=per_artist)
             if len(picked) >= A_FEW:
                 mixes.append(self._mix("new", [(row, False) for row, _ in picked], "Never played by you, and close to what you play.", taken, name="New for you"))
         if mixes:
             shelves.append({"key": "more", "title": "More of you", "note": "", "mixes": mixes})
         return {"day": ordinal, "part": part, "days": days, "said": said(part), "hours": hours(part), "basis": basis, "based": based,
                 "listens": played["listens"], "songs": int(len(have)), "daylight": sun, "shelves": shelves}
+
+
+def _span(days):
+    """How long ``days`` is, as people say it: "six months", "90 days"."""
+    return {180: "six months", 365: "a year", 730: "two years"}.get(days) or f"{days} days"
 
 
 def _about(like):

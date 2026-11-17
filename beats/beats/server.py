@@ -393,6 +393,29 @@ class App:
                 time.sleep(60)
         threading.Thread(target=loop, name="mixes-ahead", daemon=True).start()
 
+    def mix_settings_of(self, user=None):
+        """What goes into ``user``'s mixes (0.56): ``{"user", "settings": {name: value}, "described": [{"name", "kind",
+        "default", "low", "high", "label"}], "keep_days"}``."""
+        from . import mix_settings
+        who = self.listens.who(user or self.default_listener())
+        return {"user": who, "settings": self.mixes.settings(who), "described": mix_settings.described(),
+                "keep_days": self.mixes.keep_days()}
+
+    def set_mix_settings(self, user, given):
+        """Changes ``user``'s choices by ``given`` (a ``ValueError`` names one that can't be read); ``keep_days`` in it
+        sets how long every listener's mixes are kept."""
+        if not isinstance(given, dict):
+            raise ValueError('settings needed: {"name": value}')
+        given = dict(given)
+        if "keep_days" in given:
+            try:
+                self.mixes.set_keep_days(given.pop("keep_days"))
+            except (TypeError, ValueError):
+                raise ValueError("keep_days is a number: 1 to 90") from None
+        who = self.listens.who(user or self.default_listener())
+        self.mixes.set_settings(who, given)
+        return self.mix_settings_of(who)
+
     def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None):
         """The mixes made for ``user`` (:meth:`beats.mixes.Mixes.make`; the listener Listening shows first without
         one) from ``server``'s songs, on the clock of ``tz`` (the one Listening last used without one). With
@@ -1404,6 +1427,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.listening(user, number("year"), month, (query.get("tz") or [None])[0]))
             if path == "/api/ai":  # the AI service's settings, without its key
                 return self._json(app.ai.settings())
+            if path == "/api/mixes/settings":  # what goes into a listener's mixes (0.56): ?user=
+                return self._json(app.mix_settings_of((query.get("user") or [None])[0]))
             if path == "/api/mixes":  # the page's Mixes (0.53): ?user=&tz=&part=&days=
                 return self._json(app.mixes_for((query.get("user") or [None])[0], (query.get("tz") or [None])[0], None, server,
                                                 part=(query.get("part") or [None])[0], days=(query.get("days") or [None])[0]))
@@ -1566,6 +1591,11 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self._json(app.ai.save(body.get("on"), body.get("provider"), body.get("address"), body.get("model"), body.get("key")))
                 except AiError as e:
+                    return self._error(HTTPStatus.BAD_REQUEST, str(e))
+            if path == "/api/mixes/settings":  # {"user", "settings": {…}}: changes what goes into their mixes (0.56)
+                try:
+                    return self._json(app.set_mix_settings(body.get("user"), body.get("settings")))
+                except ValueError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
             if path == "/api/mixes/keep":  # {"days"}: how long the mixes given out are kept (0.55)
                 try:

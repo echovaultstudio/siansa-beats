@@ -10,6 +10,7 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from beats import mix_settings
 from beats import mixes as M  # noqa: E402
 from beats.drive import Arousal  # noqa: E402
 from beats.listens import Listens  # noqa: E402
@@ -287,6 +288,49 @@ class TheMixes(Library):
         self.assertEqual(self.mixes.set_keep_days(30), 30)
         self.assertTrue(self.mixes.kept("max", first["key"]))
         self.assertEqual((self.mixes.set_keep_days(500), self.mixes.set_keep_days(0)), (90, 1))
+
+    def test_the_listener_chooses_what_goes_in(self):
+        self.play("rock", "2026-11-10 06:30")
+        self.play("piano", "2026-02-02 21:00", songs=range(20), times=3)
+        before = self.make()
+        self.assertEqual(self.mixes.settings("max"), mix_settings.defaults())  # nothing chosen: as they came
+        # Fewer shelves and mixes, shorter, one song an artist, no piano (New for you has some without it).
+        self.mixes.set_settings("max", {"daily": False, "repeat": False, "rediscover": False, "now_count": 1,
+                                        "size": 12, "per_artist": 1, "leave_genres": ["Piano"]})
+        got = self.make()
+        self.assertEqual([s["key"] for s in got["shelves"]], ["now", "more"])
+        self.assertEqual([m["id"] for m in got["shelves"][1]["mixes"]], ["new"])
+        now = got["shelves"][0]["mixes"]
+        self.assertEqual(len(now), 1)
+        for m in now + got["shelves"][1]["mixes"]:
+            self.assertLessEqual(len(m["songs"]), 12)
+            self.assertNotIn("piano", self.kinds(m))
+            artists = [x["artist"] for x in m["songs"]]
+            self.assertEqual(len(artists), len(set(artists)))
+        self.assertNotEqual(before["shelves"], got["shelves"])
+        # An artist left out, and only what's new to you.
+        self.mixes.set_settings("max", {"leave_genres": [], "leave_artists": ["Piano Artist 1", "piano artist 2"], "familiar": 0, "now_count": 4})
+        for shelf in self.make()["shelves"]:
+            for m in shelf["mixes"]:
+                self.assertFalse({"Piano Artist 1", "Piano Artist 2"} & {x["artist"] for x in m["songs"]})
+                if m["id"].startswith("now-"):
+                    self.assertEqual(m["own"], 0)
+        # The time of day not to count: made from all the listening.
+        self.mixes.set_settings("max", {"time_of_day": False})
+        self.assertEqual(self.make()["basis"], "all")
+        # Only what differs is kept; the defaults back with "As they come".
+        self.assertEqual(self.store.setting("mix_settings:max")["time_of_day"], False)
+        self.mixes.set_settings("max", mix_settings.defaults())
+        self.assertEqual(self.store.setting("mix_settings:max"), {})
+
+    def test_settings_are_checked(self):
+        with self.assertRaises(ValueError):
+            mix_settings.clean({"size": "lots"})
+        with self.assertRaises(ValueError):
+            mix_settings.clean({"daily": "yes"})
+        got = mix_settings.clean({"size": 500, "per_artist": 0, "leave_genres": " Rock ,  rock, Jazz,,", "nonsense": 1})
+        self.assertEqual((got["size"], got["per_artist"], got["leave_genres"]), (100, 1, ["Rock", "Jazz"]))
+        self.assertNotIn("nonsense", got)
 
     def test_made_ahead_for_how_the_app_asked(self):
         """Ten minutes before nine the morning's mixes are made, so the app finds them ready."""

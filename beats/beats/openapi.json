@@ -1974,6 +1974,177 @@
           }
         }
       }
+    },
+    "/api/v1/mixes/settings": {
+      "get": {
+        "summary": "What goes into a listener's mixes (0.56), each setting described",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "description": "The listener",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Their settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer"
+                    },
+                    "user": {
+                      "type": "string"
+                    },
+                    "settings": {
+                      "type": "object",
+                      "description": "Every setting by name: true/false, a number, or a list of names",
+                      "additionalProperties": true
+                    },
+                    "described": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "on",
+                              "number",
+                              "words"
+                            ]
+                          },
+                          "default": {},
+                          "low": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "high": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "keep_days": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The password or API key is needed"
+          }
+        }
+      },
+      "post": {
+        "summary": "Changes the settings named (0.56); keep_days sets how long every listener's mixes are kept",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Their settings, all of them",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer"
+                    },
+                    "user": {
+                      "type": "string"
+                    },
+                    "settings": {
+                      "type": "object",
+                      "description": "Every setting by name: true/false, a number, or a list of names",
+                      "additionalProperties": true
+                    },
+                    "described": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "on",
+                              "number",
+                              "words"
+                            ]
+                          },
+                          "default": {},
+                          "low": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "high": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "keep_days": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A setting that can't be read, named"
+          },
+          "401": {
+            "description": "The password or API key is needed"
+          }
+        }
+      }
     }
   },
   "components": {
