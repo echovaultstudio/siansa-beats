@@ -829,6 +829,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <p class="sub">Siansa Beats looks at when you play what. The week is cut in ten parts: early morning, morning, afternoon, evening and night, on weekdays and at the weekend. The songs you play in a part fall into a few kinds that sound alike, and each kind is a mix: some of your own songs, and around them songs that sound like them and that you haven't played for a while. A recent listen counts for more, and so does one from this time of year in earlier years.</p>
           <p class="sub">The sun is worked out from the date and your time zone's city: no weather service is asked. In the dark the calmer mixes come first. A mix is named by its sound, never by the weather, and stays the same all day.</p>
           <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. Skips aren't counted: the app sends finished listens only.</p>
+          <p class="sub">The next part of the day's mixes are made ten minutes before it starts, so the app finds them ready. With an AI service set up in Setup, each mix of a kind of music gets a name from it.</p>
         </details>
       </div>
     </section>
@@ -1086,6 +1087,26 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
               kept encrypted. None is ever shown, logged or put in a report, and Siansa Beats only reads from the server.</p>
           </form>
         </details>
+      </div>
+      <!-- The AI service that names the mixes (0.54): the Siansa app's providers. The key is kept encrypted, never shown. -->
+      <div class="card" id="ai-card" data-fold>
+        <h3>AI for mix names</h3>
+        <p class="sub">Mixes get a name from an AI service, like a streaming service's editors would give them. Only a mix's genres, energy, mood and three of its artists are sent: never your listening. Without it, a mix is named by its sound ("Calm Indie Rock").</p>
+        <form id="ai-form" autocomplete="off">
+          <label class="toggle"><input type="checkbox" id="ai-on"> Name mixes with AI</label>
+          <div class="form">
+            <label>Service<select id="ai-provider"></select></label>
+            <label>Model <input type="text" id="ai-model" autocapitalize="none" spellcheck="false"></label>
+            <label class="wide" id="ai-address-row" hidden>Address <input type="text" id="ai-address" placeholder="192.168.1.10:11434" autocapitalize="none" spellcheck="false"></label>
+            <label class="wide" id="ai-key-row">API key <input type="password" id="ai-key" autocomplete="new-password"></label>
+          </div>
+          <p class="sub" id="ai-hint"></p>
+          <div class="controls">
+            <button type="submit" class="primary" id="ai-save">Save</button>
+            <button type="button" id="ai-test">Test</button>
+            <span class="sub" id="ai-note" role="status"></span>
+          </div>
+        </form>
       </div>
       <div class="card" id="access-card" data-fold>
           <h3>Access</h3>
@@ -2086,6 +2107,7 @@ function showView(view, keepHash) {
   }
   if (view === "listening") refreshListening();
   if (view === "mixes") refreshMixes();
+  if (view === "setup") refreshAi();
   if (view === "mix") {  // part of Mixes: its menu entry stays marked
     document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
     $("page-name").textContent = "Mixes · " + (mx.open || "Mix");
@@ -2180,6 +2202,52 @@ $("mx-parts").addEventListener("click", (e) => {
 $("mx-days").addEventListener("click", (e) => { const b = e.target.closest("button[data-days]"); if (b) { mx.days = b.dataset.days; refreshMixes(); } });
 $("mx-user").addEventListener("change", () => { mx.user = $("mx-user").value; refreshMixes(); });
 $("mx-back").addEventListener("click", () => { location.hash = "#mixes"; });
+
+// ---- the AI service that names the mixes (0.54) ----
+const ai = {data: null};
+async function refreshAi() {
+  try { ai.data = await api("api/ai"); } catch (e) { return; }
+  drawAi(true);
+}
+function drawAi(fill) {
+  const d = ai.data;
+  if (!d) return;
+  if (fill) {
+    $("ai-provider").innerHTML = d.providers.map((p) => `<option value="${p.key}"${p.key === d.provider ? " selected" : ""}>${esc(p.label)}</option>`).join("");
+    $("ai-on").checked = d.on;
+    $("ai-model").value = d.model;
+    $("ai-address").value = d.address;
+    $("ai-key").value = "";
+  }
+  const p = d.providers.find((x) => x.key === $("ai-provider").value) || d.providers[0];
+  $("ai-address-row").hidden = !p.own_address;
+  $("ai-key-row").hidden = !p.needs_key && !p.own_address;
+  $("ai-key").placeholder = d.has_key && $("ai-provider").value === d.provider ? "Saved: type a new one to change it" : p.needs_key ? "Needed" : "Only if it asks for one";
+  $("ai-model").placeholder = p.model;
+  $("ai-hint").textContent = p.hint;
+  if (fill) $("ai-note").textContent = d.error ? "Last try: " + d.error : d.ready ? "In use" : d.on ? "Not ready: something's missing" : "";
+}
+function aiTyped() {
+  const typed = {provider: $("ai-provider").value, model: $("ai-model").value.trim(), address: $("ai-address").value.trim()};
+  if ($("ai-key").value.trim()) typed.key = $("ai-key").value.trim();
+  return typed;
+}
+$("ai-provider").addEventListener("change", () => {
+  const p = ai.data && ai.data.providers.find((x) => x.key === $("ai-provider").value);
+  if (p) $("ai-model").value = $("ai-provider").value === ai.data.provider ? ai.data.model : p.model;
+  drawAi(false);
+});
+$("ai-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("ai-note").textContent = "Saving…";
+  try { ai.data = await api("api/ai", {method: "POST", body: JSON.stringify({on: $("ai-on").checked, ...aiTyped()})}); drawAi(true); }
+  catch (err) { $("ai-note").textContent = err.message; }
+});
+$("ai-test").addEventListener("click", async () => {
+  $("ai-note").textContent = "Asking…";
+  try { const got = await api("api/ai/test", {method: "POST", body: JSON.stringify(aiTyped())}); $("ai-note").textContent = got.ok ? `Works: it said "${got.said}"` : got.said; }
+  catch (err) { $("ai-note").textContent = err.message; }
+});
 
 // ---- listening: the time machine ----
 // A listener's history a month or a year at a time (or all of it). The days and hours are this browser's clock's.

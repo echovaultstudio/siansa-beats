@@ -274,9 +274,12 @@ class App:
         self.listens = Listens(self.store, self.vault)
         self._listening_zone = self.store.setting("listening_zone")
         # Mixes made from each listener's own listening (0.53): by when they listen, what, and the light outside.
+        from .ai import Ai
         from .mixes import Mixes
 
-        self.mixes = Mixes(self.store, self.sound, self.listens, self.traits, self.arousal)
+        self.ai = Ai(self.store, self.vault)  # names the mixes (0.54), with the AI service set on the page
+        self.mixes = Mixes(self.store, self.sound, self.listens, self.traits, self.arousal, ai=self.ai)
+        self._mixes_ahead()
         self.listens.warm(self.default_listener(), self._listening_zone)
         self.cleaner = Cleaner(self)  # tidying the database (0.40): looked at first, removed as shown
         self.style_switch = None  # {"model", "model_name", "phase", "since", "songs", "doubted"} while a switch runs
@@ -373,6 +376,22 @@ class App:
             found[kind] = [dict(r, cover=self.art.song_for("cover", r.get("song"), r.get("artist"), r.get("album")))
                            for r in found[kind]]
         return found
+
+    def _mixes_ahead(self):
+        """Every minute: the mixes of now and of a few minutes on are made (and named) for the listeners the app asks
+        for, so when the part of the day changes the app finds the next ones ready (0.54)."""
+        def loop():
+            time.sleep(30)  # after the start's own work
+            while True:
+                try:
+                    servers = [self.only(s["id"]) for s in self.server_list()] or [None]
+                    made = self.mixes.ahead(default_tz=self._listening_zone, servers=list(dict.fromkeys(servers)))
+                    if made:
+                        _log.info("Made %d listener's mixes ahead", made)
+                except Exception:  # noqa: BLE001 - tried again next minute
+                    _log.exception("The mixes weren't made ahead")
+                time.sleep(60)
+        threading.Thread(target=loop, name="mixes-ahead", daemon=True).start()
 
     def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None):
         """The mixes made for ``user`` (:meth:`beats.mixes.Mixes.make`; the listener Listening shows first without
@@ -1383,6 +1402,8 @@ class Handler(BaseHTTPRequestHandler):
                 if month is not None and not 1 <= month <= 12:
                     return self._error(HTTPStatus.BAD_REQUEST, "month is 1 to 12")
                 return self._json(app.listening(user, number("year"), month, (query.get("tz") or [None])[0]))
+            if path == "/api/ai":  # the AI service's settings, without its key
+                return self._json(app.ai.settings())
             if path == "/api/mixes":  # the page's Mixes (0.53): ?user=&tz=&part=&days=
                 return self._json(app.mixes_for((query.get("user") or [None])[0], (query.get("tz") or [None])[0], None, server,
                                                 part=(query.get("part") or [None])[0], days=(query.get("days") or [None])[0]))
@@ -1540,6 +1561,14 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
                 return self._json({"doubted": doubted, **app.style_models()})
+            if path == "/api/ai":  # the AI service that names the mixes (0.54): {on, provider, address, model, key}
+                from .ai import AiError
+                try:
+                    return self._json(app.ai.save(body.get("on"), body.get("provider"), body.get("address"), body.get("model"), body.get("key")))
+                except AiError as e:
+                    return self._error(HTTPStatus.BAD_REQUEST, str(e))
+            if path == "/api/ai/test":  # a short call with what's typed, before it's saved
+                return self._json(app.ai.test(**{k: body.get(k) for k in ("provider", "address", "model", "key")}))
             if path == "/api/listens/lastfm":  # on to Last.fm, with the listener's own API account
                 from .listens import LastFmError
                 user = str(body.get("user") or "")
