@@ -32,6 +32,15 @@ not every time a song is heard. Not counted: skips (the app sends finished liste
 their description only ("Velvet Undertow"); the names are kept for the day and the mix shows its sound's name until
 they come, so nothing waits on the AI. On repeat, Rediscover and New for you keep their names.
 
+**What's in it** (0.55, the owner, 17 Nov: under a mix, "briefly describe its contents using the AI model, very
+short and snappy"): each mix has ``about``, a line on its sound ("Wiry guitars and restless drums") from the AI with its
+name, else from its sound ("Calm ambient, mostly instrumental"). ``why`` (the artists it's like) stays for the mix's
+own page.
+
+**Kept** (0.55, the owner: a mix played from Home should still play days later, from the recent plays): every mix
+given out is kept, its songs and its words, for :data:`KEEP_DAYS` days (set on the page, 1 to :data:`KEEP_MOST`), by
+its ``key``, which no other mix has: the day, and for the mixes of now the part of the week too.
+
 **Ahead** (0.54): :meth:`Mixes.ahead` makes the next part of the day's mixes (and names them) a few minutes before it
 starts, for every listener the app has asked for, so the app finds them made.
 
@@ -40,6 +49,7 @@ Plain Python and numpy, on :mod:`beats.sound`'s matrix and :mod:`beats.listens`'
 
 import datetime
 import hashlib
+import json
 import math
 import os
 import random
@@ -81,6 +91,17 @@ DARK_SUITS = -0.12  # in the dark, a little calmer still
 NAMES = (("Hushed", "Calm", "Gentle"), ("Moody", "Easy", "Warm"), ("Driving", "Lively", "Upbeat"))
 LOW, HIGH = 0.42, 0.58  # where low ends and high starts, as a share of the library
 AHEAD_MINUTES = 10  # the next part of the day's mixes are made this long before it starts
+KEEP_DAYS = 7  # how long a mix given out is kept, unless the page says otherwise (setting "mixes_keep_days")
+KEEP_MOST = 90
+KEEP_SETTING = "mixes_keep_days"
+# The fixed mixes' lines.
+ABOUT = {"repeat": "Your most played, lately", "rediscover": "Old favourites, back again", "new": "Fresh finds near your taste"}
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS kept_mixes (
+    user TEXT, key TEXT, name TEXT, about TEXT, why TEXT, songs TEXT, made REAL, PRIMARY KEY (user, key)
+);
+CREATE INDEX IF NOT EXISTS kept_mixes_by_made ON kept_mixes (made);
+"""
 KEPT = 64  # answers kept
 SAME = 0.5  # two groups are one when their centres are nearer than this share of their songs' own distance to them
 REACH = 1.3  # a mix reaches this far past where most of its group's songs are (REACH_OF of them), and no further
@@ -274,6 +295,9 @@ class Mixes:
         self._names = {}  # (listener, day, mix id, its songs) -> the AI's name for it
         self._naming = set()  # what's being named now
         self.asked = {}  # listener -> (tz, lat, lon, server, size): how the app last asked, to make theirs ahead
+        self._stored = {}  # (listener, key) -> (name, about) as kept in the database: written again only when changed
+        with store._write():
+            store.db.executescript(SCHEMA)
         self._scale = None  # (the store's writes it was read at, energies sorted, valences sorted, {song: (energy, valence)})
 
     def listeners(self):
@@ -289,7 +313,9 @@ class Mixes:
         user = self.listens.who(user)
         at = int(at if at is not None else self.now())
         kept, light = self._made(user, tz, at, server, lat, lon, part, days, size)
-        return {"user": user, "at": at, "tz": tz, **self._named(user, kept)}
+        answer = {"user": user, "at": at, "tz": tz, "keep_days": self.keep_days(), **self._named(user, kept)}
+        self._keep(user, answer)
+        return answer
 
     def _made(self, user, tz, at, server, lat, lon, part, days, size):
         """The mixes of that slot, made or kept; and the light they were made for."""
@@ -329,15 +355,71 @@ class Mixes:
     # ---- names from the AI ----
 
     def _named(self, user, kept):
-        """``kept`` with the AI's names put in where it gave one: each mix has ``named`` ("ai" or "sound")."""
+        """``kept`` with the AI's names and lines put in where it gave them: each mix has ``named`` ("ai" or "sound")
+        and its ``key``."""
         shelves = []
+        day = datetime.date.fromordinal(kept["day"]).isoformat()
         for shelf in kept["shelves"]:
             mixes = []
             for m in shelf["mixes"]:
-                name = self._names.get((user, kept["day"], m["id"], m["signature"])) if m.get("signature") else None
-                mixes.append({k: v for k, v in m.items() if k != "signature"} | {"name": name or m["name"], "named": "ai" if name else "sound"})
+                given = self._names.get((user, kept["day"], m["id"], m["signature"])) if m.get("signature") else None
+                # The mixes of now are for one part of the week; the others are the same all day.
+                key = f"{day}-{kept['part']}-{kept['days']}-{m['id']}" if m["id"].startswith("now-") else f"{day}-{m['id']}"
+                mixes.append({k: v for k, v in m.items() if k != "signature"} |
+                             {"key": key, "name": (given or {}).get("name") or m["name"], "about": (given or {}).get("about") or m["about"],
+                              "named": "ai" if given else "sound"})
             shelves.append(dict(shelf, mixes=mixes))
         return {k: v for k, v in kept.items() if k != "day"} | {"shelves": shelves}
+
+    # ---- kept for days ----
+
+    def keep_days(self):
+        """How many days a mix given out is kept (the page's setting)."""
+        try:
+            return max(1, min(KEEP_MOST, int(self.store.setting(KEEP_SETTING, KEEP_DAYS))))
+        except (TypeError, ValueError):
+            return KEEP_DAYS
+
+    def set_keep_days(self, days):
+        days = max(1, min(KEEP_MOST, int(days)))
+        self.store.set_setting(KEEP_SETTING, days)
+        self._tidy()
+        return days
+
+    def _keep(self, user, answer):
+        """Keeps the mixes of ``answer`` (new ones, and ones whose name or line changed), and lets go of old ones."""
+        rows = []
+        for shelf in answer["shelves"]:
+            for m in shelf["mixes"]:
+                said = (m["name"], m["about"])
+                if self._stored.get((user, m["key"])) == said:
+                    continue
+                rows.append((user, m["key"], m["name"], m["about"], m["why"], json.dumps([s["id"] for s in m["songs"]]), self.now()))
+                self._stored[(user, m["key"])] = said
+        if not rows:
+            return
+        if len(self._stored) > 5000:
+            self._stored.clear()
+        with self.store._write():
+            # A mix kept before keeps the day it was first made: it's let go of that many days after.
+            self.store.db.executemany(
+                "INSERT INTO kept_mixes (user, key, name, about, why, songs, made) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (user, key) DO UPDATE SET name=excluded.name, about=excluded.about", rows)
+        self._tidy()
+
+    def _tidy(self):
+        with self.store._write():
+            self.store.db.execute("DELETE FROM kept_mixes WHERE made < ?", (self.now() - self.keep_days() * 86400,))
+
+    def kept(self, user, key=None):
+        """``user``'s kept mixes, the newest first (or the one by ``key``): ``[{"key", "name", "about", "why", "made",
+        "songs": [song ids here]}]``."""
+        user = self.listens.who(user)
+        sql, args = "SELECT key, name, about, why, songs, made FROM kept_mixes WHERE user=? AND made >= ?", \
+            [user, self.now() - self.keep_days() * 86400]
+        if key is not None:
+            sql, args = sql + " AND key=?", args + [key]
+        return [dict(r, songs=json.loads(r["songs"] or "[]"), made=int(r["made"])) for r in self.store._rows(sql + " ORDER BY made DESC, key", args)]
 
     def _name_soon(self, user, day, kept):
         """Has the AI name the mixes of a kind of music that have no name yet, in the background (at once without it)."""
@@ -554,7 +636,8 @@ class Mixes:
         like = like or self._like(rows)
         # What the AI's name is kept by (none for a mix with a name of its own): the same songs the same day.
         signature = None if name else hashlib.sha256(",".join(sorted(self.sound.ids[row] for row in rows)).encode()).hexdigest()[:16]
-        return {"id": mix_id, "name": name or self._name(like, taken), "signature": signature, "why": why, "tags": like["tags"],
+        return {"id": mix_id, "name": name or self._name(like, taken), "signature": signature, "why": why,
+                "about": ABOUT.get(mix_id) or _about(like), "tags": like["tags"],
                 "genres": like["genres"], "artists": like["artists"], "energy": like["energy"], "mood": like["mood"],
                 "own": sum(1 for _, own in picked if own),
                 "songs": [{"id": self.sound.ids[row], "title": self.sound.rows[row]["title"] or "",
@@ -666,6 +749,15 @@ class Mixes:
             shelves.append({"key": "more", "title": "More of you", "note": "", "mixes": mixes})
         return {"day": ordinal, "part": part, "days": days, "said": said(part), "hours": hours(part), "basis": basis, "based": based,
                 "listens": played["listens"], "songs": int(len(have)), "daylight": sun, "shelves": shelves}
+
+
+def _about(like):
+    """A mix's line from its sound, without an AI: "Calm ambient, mostly instrumental"."""
+    feel = _word(like["energy"], ("Calm", "Steady", "High-energy"))
+    genre = like["genres"][0].lower() if like["genres"] else "music"
+    tag = next((t.lower() for t in like["tags"] if t in ("Mostly instrumental", "Sung")), None)
+    words = f"{feel} {genre}" if feel else genre[:1].upper() + genre[1:]
+    return words + (f", {tag}" if tag else "")
 
 
 def _word(share, words):

@@ -39,6 +39,7 @@ PROVIDERS = {
 SETTING = "ai"
 TIMEOUT = 45
 MOST_NAME = 28  # characters in a name
+MOST_ABOUT = 60  # characters in a mix's line under its name (0.55)
 # A name never promises weather, a season or a time of day: the mixes are for now, whatever it's like outside.
 BANNED = re.compile(r"\b(sun|suns|sunny|sunshine|sunlit|sunrise|sunset|summer|summery|spring|autumn|fall|winter|wintry|"
                     r"snow|snowy|rain|rainy|storm|stormy|beach|tropical|morning|afternoon|evening|night|midnight|tonight|"
@@ -174,8 +175,10 @@ class Ai:
             return {"ok": False, "said": str(e)}
 
     def name_mixes(self, described):
-        """Names for mixes, from ``described`` (``[{"id", "genres", "energy", "mood", "artists", "tags"}]``):
-        ``{id: name}`` of those it named well; the rest keep their own. Nothing when it isn't set up or fails."""
+        """Names for mixes, and a short line on what's in each (0.55, the owner: "briefly describe its contents, very
+        short and snappy"), from ``described`` (``[{"id", "genres", "energy", "mood", "artists", "tags"}]``):
+        ``{id: {"name", "about"}}`` of those it named well (``about`` may be missing); the rest keep their own.
+        Nothing when it isn't set up or fails."""
         if not described or not self.ready:
             return {}
         lines = "\n".join(json.dumps({k: d.get(k) for k in ("id", "genres", "energy", "mood", "artists", "tags")}, ensure_ascii=False)
@@ -183,8 +186,10 @@ class Ai:
         system = ("You name playlists for a music streaming app, like a good editor at a streaming service would. "
                   "Each name is 1 to 4 words, evocative and specific to the music, in title case. No emoji, no quotes, "
                   "no artist names, no genre name on its own, and never weather, seasons, the sun or a time of day: "
-                  "the listener hears these at any hour. Every name is different. Answer with JSON only: "
-                  '{"<id>": "<name>", ...}')
+                  "the listener hears these at any hour. Every name is different. For each, also a line on what's in it: "
+                  "3 to 7 words, snappy, about the sound and feel, no artist names, no weather or time of day "
+                  '("Wiry guitars and restless drums"). Answer with JSON only: '
+                  '{"<id>": {"name": "<name>", "about": "<line>"}, ...}')
         user = "The playlists (energy and mood are in words, against the listener's own library):\n" + lines
         try:
             text = self.complete(system, user)
@@ -197,23 +202,26 @@ class Ai:
 
 
 def clean_names(text, ids):
-    """The names in an AI's answer that can be used: one of ``ids`` each, short, no weather or time of day, none
-    twice."""
+    """The names in an AI's answer that can be used, as ``{id: {"name", "about"}}``: one of ``ids`` each, short, no
+    weather or time of day, none twice; ``about`` only when it's short and has none either. A plain name for an id
+    (``{"id": "Name"}``, as before 0.55) is a name without a line."""
     match = re.search(r"\{.*\}", text or "", re.S)
     try:
         found = json.loads(match.group(0)) if match else {}
     except ValueError:
         return {}
     out, seen = {}, set()
+    def tidy(text):
+        return re.sub(r"\s+", " ", text.strip().strip("\"'“”‘’.")).strip() if isinstance(text, str) else ""
+
     for mix_id in ids:
-        name = found.get(mix_id) if isinstance(found, dict) else None
-        if not isinstance(name, str):
-            continue
-        name = re.sub(r"\s+", " ", name.strip().strip("\"'“”‘’.")).strip()
+        given = found.get(mix_id) if isinstance(found, dict) else None
+        name = tidy(given.get("name") if isinstance(given, dict) else given)
         if not name or len(name) > MOST_NAME or BANNED.search(name) or name.casefold() in seen or not re.search(r"\w", name):
             continue
         seen.add(name.casefold())
-        out[mix_id] = name
+        about = tidy(given.get("about")) if isinstance(given, dict) else ""
+        out[mix_id] = {"name": name, **({"about": about} if about and len(about) <= MOST_ABOUT and not BANNED.search(about) else {})}
     return out
 
 

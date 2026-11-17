@@ -1567,6 +1567,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(app.ai.save(body.get("on"), body.get("provider"), body.get("address"), body.get("model"), body.get("key")))
                 except AiError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
+            if path == "/api/mixes/keep":  # {"days"}: how long the mixes given out are kept (0.55)
+                try:
+                    return self._json({"keep_days": app.mixes.set_keep_days(body.get("days"))})
+                except (TypeError, ValueError):
+                    return self._error(HTTPStatus.BAD_REQUEST, "days is a number: 1 to 90")
             if path == "/api/ai/test":  # a short call with what's typed, before it's saved
                 return self._json(app.ai.test(**{k: body.get(k) for k in ("provider", "address", "model", "key")}))
             if path == "/api/listens/lastfm":  # on to Last.fm, with the listener's own API account

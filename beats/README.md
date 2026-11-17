@@ -98,6 +98,12 @@ of ten minutes on are made for each listener the app asks for, the way it asked 
 part of the day or the light changes, the app finds the next ones ready. Mixes are kept until the part of the day, the
 light or the date changes, or the library or the listening grows by much, not made again at every listen.
 
+**What's in a mix, and how long it's kept (0.55).** Each mix has a short line on its sound (`about`: "Wiry guitars and
+restless drums"), from the AI with its name, else from its sound ("Calm ambient, mostly instrumental"); the artists it's
+like stay in `why`, for the mix's own page. Every mix given out is kept, by a `key` no other mix has, for 7 days, or as
+long as **Keep mixes for** on the Mixes page says (1 to 90 days), so a mix played from the app's recent plays still plays
+days later: `GET /api/v1/mixes/kept?user=&key=` gives it back.
+
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
 acoustic and electronic with its songs against the whole library; and MIREX's five groups by plain names, each song

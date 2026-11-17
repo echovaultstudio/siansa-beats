@@ -829,8 +829,15 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <p class="sub">Siansa Beats looks at when you play what. The week is cut in ten parts: early morning, morning, afternoon, evening and night, on weekdays and at the weekend. The songs you play in a part fall into a few kinds that sound alike, and each kind is a mix: some of your own songs, and around them songs that sound like them and that you haven't played for a while. A recent listen counts for more, and so does one from this time of year in earlier years.</p>
           <p class="sub">The sun is worked out from the date and your time zone's city: no weather service is asked. In the dark the calmer mixes come first. A mix is named by its sound, never by the weather, and stays the same all day.</p>
           <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. Skips aren't counted: the app sends finished listens only.</p>
-          <p class="sub">The next part of the day's mixes are made ten minutes before it starts, so the app finds them ready. With an AI service set up in Setup, each mix of a kind of music gets a name from it.</p>
+          <p class="sub">The next part of the day's mixes are made ten minutes before it starts, so the app finds them ready. With an AI service set up in Setup, each mix of a kind of music gets a name and a short line from it.</p>
         </details>
+        <div class="controls" style="margin-top:12px">
+          <label class="sub" for="mx-keep">Keep mixes for</label>
+          <select id="mx-keep" title="How long a mix stays playable after it was made, from the app's recent plays">
+            <option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="90">90 days</option>
+          </select>
+          <span class="sub" id="mx-keep-note" role="status"></span>
+        </div>
       </div>
     </section>
 
@@ -2158,6 +2165,9 @@ function drawMixes(d) {
   const now = d.shelves.find((s) => s.key === "now");
   $("mx-note").textContent = now ? now.note : "";
   $("mx-based").textContent = d.based;
+  const keep = $("mx-keep");
+  if (![...keep.options].some((o) => +o.value === d.keep_days)) keep.add(new Option(`${d.keep_days} days`, d.keep_days));
+  keep.value = String(d.keep_days);
   const users = d.listeners || [];
   $("mx-who").hidden = users.length < 2;
   $("mx-user").innerHTML = users.map((u) => `<option value="${esc(u)}"${u === d.user ? " selected" : ""}>${esc(u || "No name")}</option>`).join("");
@@ -2176,7 +2186,7 @@ function mixTile(m) {
   const first = m.songs[0] || {};
   const energy = m.energy === null ? "" : `<span class="mx-meter" title="Energy, against your library">Energy<span class="meter"><span class="done" style="width:${Math.round(m.energy * 100)}%"></span></span></span>`;
   return `<a class="ar-album" href="#mixes=${esc(m.id)}">${art("cover", first.id, m.name, 300, "", first.artist)}<b>${esc(m.name)}</b>` +
-    `<span class="why">${esc(m.why || `${m.songs.length} songs`)}</span>${energy}</a>`;
+    `<span class="why">${esc(m.about || m.why || `${m.songs.length} songs`)}</span>${energy}</a>`;
 }
 async function openMix(id) {
   const d = mx.data || await refreshMixes();
@@ -2186,7 +2196,7 @@ async function openMix(id) {
   showView("mix", true);
   $("mx-name").textContent = m.name;
   const yours = m.own && m.own < m.songs.length ? `, ${num(m.own)} of them yours` : "";
-  $("mx-why").textContent = `${m.why ? m.why + " " : ""}${num(m.songs.length)} songs${yours}.`;
+  $("mx-why").textContent = `${[m.about, m.why].filter(Boolean).join(" · ")} ${num(m.songs.length)} songs${yours}.`.trim();
   $("mx-tags").innerHTML = [...(m.genres || []).slice(0, 2), ...(m.tags || [])].map((t) => `<span class="chip">${esc(t)}</span>`).join("");
   $("mx-songs").innerHTML = m.songs.map((s) => `<li><a href="#song=${encodeURIComponent(s.id)}">${art("cover", s.id, s.title, 96, "s", s.artist)}` +
     `<div class="t"><b>${esc(s.title)}</b><span>${esc(s.artist)}</span></div><span class="own">${s.own && m.own < m.songs.length ? "yours" : ""}</span></a></li>`).join("");
@@ -2202,6 +2212,11 @@ $("mx-parts").addEventListener("click", (e) => {
 $("mx-days").addEventListener("click", (e) => { const b = e.target.closest("button[data-days]"); if (b) { mx.days = b.dataset.days; refreshMixes(); } });
 $("mx-user").addEventListener("change", () => { mx.user = $("mx-user").value; refreshMixes(); });
 $("mx-back").addEventListener("click", () => { location.hash = "#mixes"; });
+$("mx-keep").addEventListener("change", async () => {
+  $("mx-keep-note").textContent = "Saving…";
+  try { const got = await api("api/mixes/keep", {method: "POST", body: JSON.stringify({days: +$("mx-keep").value})}); $("mx-keep-note").textContent = `Kept ${got.keep_days} days`; }
+  catch (e) { $("mx-keep-note").textContent = e.message; }
+});
 
 // ---- the AI service that names the mixes (0.54) ----
 const ai = {data: null};

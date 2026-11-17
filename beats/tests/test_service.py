@@ -593,7 +593,8 @@ class ServiceTest(Service):
         self.start()
         self.call("/api/libraries", "POST", {"ids": ["1"]})
         self.wait_done()
-        self.assertEqual(self.call("/api/v1/capabilities")["features"]["mixes"], {"available": False, "listeners": 0, "ai_names": False, "ahead": True})
+        self.assertEqual(self.call("/api/v1/capabilities")["features"]["mixes"],
+                         {"available": False, "listeners": 0, "ai_names": False, "ahead": True, "keep_days": 7, "about": True})
         page = self.call("/api/mixes?tz=Europe/Helsinki&part=early&days=weekdays")
         self.assertEqual((page["part"], page["days"], page["said"], page["hours"], page["basis"], page["songs"]),
                          ("early", "weekdays", "early morning", "05:00–09:00", "library", 0))
@@ -604,6 +605,17 @@ class ServiceTest(Service):
         self.assertEqual((app["schema_version"], app["user"], app["part"], app["days"], app["daylight"]["light"]),
                          (1, "max", "early", "weekdays", "dark"))
         self.assertNotIn("listeners", app)
+        self.assertEqual(app["keep_days"], 7)
+        # 0.55: the mixes given out lately, kept for days; and how long, set on the page.
+        self.assertEqual(self.call("/api/v1/mixes/kept?user=max"), {"schema_version": 1, "keep_days": 7, "mixes": []})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/v1/mixes/kept?user=max&key=2026-11-17-daily-1")
+        self.assertEqual(caught.exception.code, 404)
+        self.assertEqual(self.call("/api/mixes/keep", "POST", {"days": 14}), {"keep_days": 14})
+        self.assertEqual(self.call("/api/mixes?tz=Europe/Helsinki")["keep_days"], 14)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/mixes/keep", "POST", {"days": "a week"})
+        self.assertEqual(caught.exception.code, 400)
         for wrong in ("at=soon", "lat=60", "lat=95&lon=0", "part=teatime", "days=someday"):
             with self.assertRaises(urllib.error.HTTPError) as caught:
                 self.call("/api/v1/mixes?" + wrong)
