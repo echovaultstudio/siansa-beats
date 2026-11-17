@@ -100,7 +100,7 @@ def capabilities(app, server=None):
             # there are none before any is known; with no listens yet they come from the library.
             # 0.54: named by an AI when one is set up on the page ("named" on each mix), and made ahead.
             "mixes": {"available": bool(sound["sound"]), "listeners": len(app.mixes.listeners()), "ai_names": app.ai.ready,
-                      "ahead": True},
+                      "ahead": True, "keep_days": app.mixes.keep_days(), "about": True},  # 0.55: about, key, /mixes/kept
             "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
                            "totals": True},  # /api/v1/listens/totals (0.33)
         },
@@ -173,6 +173,14 @@ def get(handler, path, query, server=None):
         # The sound of that song (or artist) isn't known here yet: nothing similar to give, said as such.
         return handler._json({"schema_version": SCHEMA_VERSION, "similar": [], "source": "beats",
                               "note": "its sound isn't known here yet"}) or True
+    if path == "/api/v1/mixes/kept":  # the mixes given out lately, kept for days (0.55): ?user=&key=
+        named = server or app.servers.default_id
+        found = app.mixes.kept(arg("user") or app.default_listener(), arg("key") or None)
+        ids = app.store.item_ids([s for m in found for s in m["songs"]], named)
+        mixes = [{**m, "songs": [ids[s] for s in m["songs"] if s in ids]} for m in found]
+        if arg("key") and not mixes:
+            return handler._error(HTTPStatus.NOT_FOUND, "No such mix kept: it may be older than the days mixes are kept for") or True
+        return handler._json({"schema_version": SCHEMA_VERSION, "keep_days": app.mixes.keep_days(), "mixes": mixes}) or True
     if path == "/api/v1/mixes":  # mixes made for a listener from their own listening (0.53)
         from . import mixes as mixes_module
 

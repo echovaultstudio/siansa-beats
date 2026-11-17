@@ -45,9 +45,15 @@ class Providers(unittest.TestCase):
     def test_only_names_that_can_be_used_are_kept(self):
         got = A.clean_names('Sure! {"a": "Velvet Undertow", "b": "Sunny Side Up", "c": "velvet undertow", "d": "A Name Far Too Long To Fit On A Card", '
                             '"e": " \\"Low Lanterns.\\" ", "f": 7, "z": "Not Asked"}', ["a", "b", "c", "d", "e", "f", "g"])
-        self.assertEqual(got, {"a": "Velvet Undertow", "e": "Low Lanterns"})
+        self.assertEqual(got, {"a": {"name": "Velvet Undertow"}, "e": {"name": "Low Lanterns"}})
         self.assertEqual(A.clean_names("no json here", ["a"]), {})
         self.assertEqual(A.clean_names('{"a": "Midnight Drive", "b": "Winter Coat", "c": "Rainy Days"}', ["a", "b", "c"]), {})
+        # A name with a line on what's in it (0.55): the line kept when it's short and promises no weather.
+        got = A.clean_names('{"a": {"name": "Velvet Undertow", "about": "Slow synths and hazy voices."}, '
+                            '"b": {"name": "Glass Rooms", "about": "Bright pop for summer days"}, '
+                            '"c": {"name": "Long Way", "about": "' + "word " * 20 + '"}}', ["a", "b", "c"])
+        self.assertEqual(got, {"a": {"name": "Velvet Undertow", "about": "Slow synths and hazy voices"},
+                               "b": {"name": "Glass Rooms"}, "c": {"name": "Long Way"}})
 
 
 class TheService(unittest.TestCase):
@@ -99,10 +105,10 @@ class TheService(unittest.TestCase):
         self.assertEqual(self.ai.name_mixes([{"id": "now-1"}]), {})  # not set up: nothing asked
         self.assertEqual(self.fake.sent, [])
         self.ai.save(on=True, provider="OPENAI", key="k")
-        self.fake.reply = '```json\n{"now-1": "Velvet Undertow", "now-2": "Sunshine Pop"}\n```'
+        self.fake.reply = '```json\n{"now-1": {"name": "Velvet Undertow", "about": "Hazy synths, slow pulse"}, "now-2": "Sunshine Pop"}\n```'
         got = self.ai.name_mixes([{"id": "now-1", "genres": ["Ambient"], "energy": "calm", "mood": "dark", "artists": ["A"], "tags": []},
                                   {"id": "now-2", "genres": ["Pop"], "energy": "high-energy", "mood": "bright", "artists": ["B"], "tags": []}])
-        self.assertEqual(got, {"now-1": "Velvet Undertow"})
+        self.assertEqual(got, {"now-1": {"name": "Velvet Undertow", "about": "Hazy synths, slow pulse"}})
         sent = self.fake.sent[0][2]["messages"]
         self.assertIn("never weather", sent[0]["content"])
         self.assertIn('"genres": ["Ambient"]', sent[1]["content"])

@@ -1892,6 +1892,88 @@
           }
         }
       }
+    },
+    "/api/v1/mixes/kept": {
+      "get": {
+        "summary": "The mixes given out lately, kept for keep_days days (0.55)",
+        "description": "So a mix played days ago can be played again (from the recent plays). Each song by the named server's id; songs it doesn't have are left out.",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "description": "The listener",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "description": "One mix, by its key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Server"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The kept mixes, the newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer"
+                    },
+                    "keep_days": {
+                      "type": "integer"
+                    },
+                    "mixes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "about": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          },
+                          "made": {
+                            "type": "integer"
+                          },
+                          "songs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such mix kept (with key)"
+          },
+          "401": {
+            "description": "The password or API key is needed"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2520,6 +2602,14 @@
               "sound"
             ],
             "description": "Who named it (0.54): the AI service set up on Siansa Beats' page, or its sound. A mix shows its sound's name until the AI's comes"
+          },
+          "about": {
+            "type": "string",
+            "description": "A short line on what's in it (0.55): from the AI with its name, else from its sound"
+          },
+          "key": {
+            "type": "string",
+            "description": "What it's kept by (0.55), which no other mix has: /api/v1/mixes/kept?key= gives it back for keep_days days"
           }
         }
       },
@@ -2641,6 +2731,10 @@
                 }
               }
             }
+          },
+          "keep_days": {
+            "type": "integer",
+            "description": "How many days a mix given out is kept (0.55), set on Siansa Beats' page"
           }
         }
       }

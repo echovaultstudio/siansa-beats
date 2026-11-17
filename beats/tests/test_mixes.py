@@ -231,7 +231,8 @@ class TheMixes(Library):
 
             def name_mixes(self, described):
                 self.asked.append(described)
-                return {d["id"]: f"Name {d['id']}" for d in described if d["id"] != "daily-2"}
+                return {d["id"]: {"name": f"Name {d['id']}", **({"about": "Wiry guitars, restless drums"} if d["id"] == "now-1" else {})}
+                        for d in described if d["id"] != "daily-2"}
 
         self.play("rock", "2026-11-10 06:30")
         self.play("piano", "2026-02-02 21:00", songs=range(20), times=3)
@@ -239,7 +240,8 @@ class TheMixes(Library):
         self.mixes.ai, self.mixes.background = namer, False
         got = self.make()
         mixes = {m["id"]: m for s in got["shelves"] for m in s["mixes"]}
-        self.assertEqual((mixes["now-1"]["name"], mixes["now-1"]["named"]), ("Name now-1", "ai"))
+        self.assertEqual((mixes["now-1"]["name"], mixes["now-1"]["named"], mixes["now-1"]["about"]), ("Name now-1", "ai", "Wiry guitars, restless drums"))
+        self.assertEqual(mixes["daily-1"]["about"], "Steady rock")  # named, but no line given: its sound's
         self.assertEqual((mixes["daily-2"]["named"], mixes["daily-2"]["name"]), ("sound", "Hushed Piano"))  # not named: its own
         self.assertEqual((mixes["rediscover"]["name"], mixes["rediscover"]["named"]), ("Rediscover", "sound"))
         self.assertNotIn("rediscover", [d["id"] for d in namer.asked[0]])
@@ -249,6 +251,42 @@ class TheMixes(Library):
         # Asked again the same day: the names are kept, and only the one without asked for again.
         self.make(at=NOW + 600)
         self.assertEqual([[d["id"] for d in a] for a in namer.asked[1:]], [["daily-2"]])
+
+    def test_each_mix_has_a_line_on_whats_in_it_and_a_key_of_its_own(self):
+        self.play("rock", "2026-11-10 06:30")
+        self.play("piano", "2026-02-02 21:00", songs=range(20), times=3)
+        got = self.make()
+        mixes = {m["id"]: m for s in got["shelves"] for m in s["mixes"]}
+        self.assertEqual(mixes["now-1"]["about"], "Steady rock")
+        self.assertEqual(mixes["daily-2"]["about"], "Calm piano")
+        self.assertEqual((mixes["rediscover"]["about"], mixes["new"]["about"]), ("Old favourites, back again", "Fresh finds near your taste"))
+        self.assertTrue(mixes["now-1"]["why"].startswith("Like Rock Artist"))  # the artists stay, for the mix's own page
+        self.assertEqual(mixes["now-1"]["key"], "2026-11-17-early-weekdays-now-1")
+        self.assertEqual(mixes["daily-1"]["key"], "2026-11-17-daily-1")
+        evening = {m["id"]: m for s in self.make(at=at("2026-11-17 19:00"))["shelves"] for m in s["mixes"]}
+        self.assertEqual(evening["now-1"]["key"], "2026-11-17-evening-weekdays-now-1")  # another part of the day: another mix
+
+    def test_mixes_given_out_are_kept_for_days(self):
+        self.play("rock", "2026-11-10 06:30")
+        got = self.make()
+        self.assertEqual(got["keep_days"], 7)
+        kept = self.mixes.kept("max")
+        first = got["shelves"][0]["mixes"][0]
+        self.assertIn(first["key"], [m["key"] for m in kept])
+        one = self.mixes.kept("max", first["key"])[0]
+        self.assertEqual((one["name"], one["about"], one["songs"]), (first["name"], first["about"], [s["id"] for s in first["songs"]]))
+        writes = self.store.writes
+        self.make(at=NOW + 60)
+        self.assertEqual(self.store.writes, writes)  # the same mixes again: nothing written
+        # Six days on it's still there; past seven it's gone.
+        self.clock[0] = NOW + 6 * 86400
+        self.assertTrue(self.mixes.kept("max", first["key"]))
+        self.clock[0] = NOW + 8 * 86400
+        self.assertEqual(self.mixes.kept("max", first["key"]), [])
+        # Kept longer when the page says so.
+        self.assertEqual(self.mixes.set_keep_days(30), 30)
+        self.assertTrue(self.mixes.kept("max", first["key"]))
+        self.assertEqual((self.mixes.set_keep_days(500), self.mixes.set_keep_days(0)), (90, 1))
 
     def test_made_ahead_for_how_the_app_asked(self):
         """Ten minutes before nine the morning's mixes are made, so the app finds them ready."""
