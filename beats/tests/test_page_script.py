@@ -57,10 +57,12 @@ class PageScriptTest(unittest.TestCase):
         views = set(re.search(r'const VIEWS = \[(.*?)\];', page).group(1).replace('"', "").replace(" ", "").split(","))
         self.assertEqual({b for _, b in menu} - sections, set())
         self.assertEqual(sections, views)
-        self.assertEqual([b for _, b in menu], ["overview", "libraries", "songs", "listening", "loudness", "keys", "genres",
+        self.assertEqual([b for _, b in menu], ["overview", "libraries", "songs", "listening", "mixes", "loudness", "keys", "genres",
                                                 "voice", "similar", "activity", "setup", "log", "blends", "report"])
         # 0.52: Voice and mood has its own page, and each of its lines one for its songs.
         self.assertIn("trait", sections)
+        # 0.53: Mixes, and one mix's songs.
+        self.assertIn("mix", sections)
         for gone in ("audiomuse", "plugin"):
             self.assertNotIn(gone, page.lower(), gone)
         signin = open(os.path.join(os.path.dirname(PAGE), "signin.html"), encoding="utf-8").read()

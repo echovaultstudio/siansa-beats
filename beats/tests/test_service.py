@@ -587,6 +587,29 @@ class ServiceTest(Service):
                 self.call("/api/voice/songs?" + wrong)
             self.assertEqual(caught.exception.code, 400, wrong)
 
+    def test_mixes_for_the_page_and_the_app(self):
+        """0.53: mixes made from a listener's own listening. The stand-in's songs have no sound, so there are none to
+        make yet: the answer says so in its own shape, and what's asked wrong is refused."""
+        self.start()
+        self.call("/api/libraries", "POST", {"ids": ["1"]})
+        self.wait_done()
+        self.assertEqual(self.call("/api/v1/capabilities")["features"]["mixes"], {"available": False, "listeners": 0})
+        page = self.call("/api/mixes?tz=Europe/Helsinki&part=early&days=weekdays")
+        self.assertEqual((page["part"], page["days"], page["said"], page["hours"], page["basis"], page["songs"]),
+                         ("early", "weekdays", "early morning", "05:00–09:00", "library", 0))
+        self.assertEqual([p["key"] for p in page["parts"]], ["early", "morning", "afternoon", "evening", "night"])
+        self.assertEqual((page["listeners"], [s["key"] for s in page["shelves"]], page["shelves"][0]["mixes"]), ([], ["now"], []))
+        self.assertIn(page["daylight"]["light"], ("dark", "twilight", "light"))
+        app = self.call("/api/v1/mixes?user=max&tz=Europe/Helsinki&at=1794890400&lat=60.17&lon=24.94")  # 17 Nov 2026, 06:40
+        self.assertEqual((app["schema_version"], app["user"], app["part"], app["days"], app["daylight"]["light"]),
+                         (1, "max", "early", "weekdays", "dark"))
+        self.assertNotIn("listeners", app)
+        for wrong in ("at=soon", "lat=60", "lat=95&lon=0", "part=teatime", "days=someday"):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/v1/mixes?" + wrong)
+            self.assertEqual(caught.exception.code, 400, wrong)
+        self.assertIn("/api/v1/mixes", self.call("/api/v1/openapi.json")["paths"])
+
     def test_v1_capabilities_and_profiles_for_the_app(self):
         self.start()
         empty = self.call("/api/v1/capabilities")

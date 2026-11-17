@@ -109,6 +109,7 @@ from .worker import Worker
 from . import genres as genres_module
 from . import log
 from . import memory as memory_module
+from . import mixes as mixes_module
 from . import traits as traits_module
 
 _log = log.get("server")
@@ -272,6 +273,10 @@ class App:
 
         self.listens = Listens(self.store, self.vault)
         self._listening_zone = self.store.setting("listening_zone")
+        # Mixes made from each listener's own listening (0.53): by when they listen, what, and the light outside.
+        from .mixes import Mixes
+
+        self.mixes = Mixes(self.store, self.sound, self.listens, self.traits, self.arousal)
         self.listens.warm(self.default_listener(), self._listening_zone)
         self.cleaner = Cleaner(self)  # tidying the database (0.40): looked at first, removed as shown
         self.style_switch = None  # {"model", "model_name", "phase", "since", "songs", "doubted"} while a switch runs
@@ -368,6 +373,17 @@ class App:
             found[kind] = [dict(r, cover=self.art.song_for("cover", r.get("song"), r.get("artist"), r.get("album")))
                            for r in found[kind]]
         return found
+
+    def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None):
+        """The mixes made for ``user`` (:meth:`beats.mixes.Mixes.make`; the listener Listening shows first without
+        one) from ``server``'s songs, on the clock of ``tz`` (the one Listening last used without one). With
+        ``"listeners"``: who they can be made for."""
+        if not user:
+            user = self.default_listener()
+        answer = self.mixes.make(user, tz or self._listening_zone, at, self.only(server or self.servers.default_id),
+                                 lat, lon, part, days, size or mixes_module.SIZE)
+        return {"listeners": self.mixes.listeners(), "parts": [{"key": key, "said": name, "hours": mixes_module.hours(key)}
+                                                               for key, name, _, _ in mixes_module.PARTS], **answer}
 
     def sound_status(self, server=None):
         """How much of ``server``'s music has its sound here."""
@@ -1367,6 +1383,9 @@ class Handler(BaseHTTPRequestHandler):
                 if month is not None and not 1 <= month <= 12:
                     return self._error(HTTPStatus.BAD_REQUEST, "month is 1 to 12")
                 return self._json(app.listening(user, number("year"), month, (query.get("tz") or [None])[0]))
+            if path == "/api/mixes":  # the page's Mixes (0.53): ?user=&tz=&part=&days=
+                return self._json(app.mixes_for((query.get("user") or [None])[0], (query.get("tz") or [None])[0], None, server,
+                                                part=(query.get("part") or [None])[0], days=(query.get("days") or [None])[0]))
             if path == "/api/listens/import":
                 return self._json(dict(app.listens.importing))
             if path == "/api/listens/artist":  # one artist in a listener's history: its own page

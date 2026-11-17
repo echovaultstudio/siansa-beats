@@ -1781,6 +1781,117 @@
           }
         }
       }
+    },
+    "/api/v1/mixes": {
+      "get": {
+        "summary": "Mixes made for a listener from their own listening: by when they listen, what they listen to and the light outside",
+        "description": "The first shelf (now) is for this part of the day on weekdays or at the weekend, made from what the listener plays then; then their all-time kinds of music (daily), and On repeat, Rediscover and New for you (more). The same all day. With too little listening the mixes come from the library.",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "description": "The listener (the music server's user name the app scrobbles as)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tz",
+            "in": "query",
+            "description": "The listener's time zone (IANA: Europe/Helsinki). Also where the sun is worked out for, without lat and lon",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "description": "Seconds since 1970; now without it",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "description": "Where the listener is, for the daylight; with lon",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "description": "Another part of the day than at's",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "early",
+                "morning",
+                "afternoon",
+                "evening",
+                "night"
+              ]
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "weekdays",
+                "weekend"
+              ]
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Songs in a mix",
+            "schema": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 100,
+              "default": 40
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Server"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The shelves of mixes, each song by the named server's id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mixes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Something was missing or wrong: {\"error\": why}"
+          },
+          "401": {
+            "description": "The password or API key is needed"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2321,6 +2432,203 @@
                   },
                   "score": {
                     "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "MixSong": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The named server's id for the song"
+          },
+          "title": {
+            "type": "string"
+          },
+          "artist": {
+            "type": "string"
+          },
+          "album": {
+            "type": "string"
+          },
+          "own": {
+            "type": "boolean",
+            "description": "One of the listener's own songs of this kind; false: a song that sounds like them and wasn't played lately"
+          }
+        }
+      },
+      "Mix": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "now-1…, daily-1…, repeat, rediscover, new: the same all day"
+          },
+          "name": {
+            "type": "string",
+            "description": "From its sound: \"Calm Indie Rock\"; or On repeat, Rediscover, New for you"
+          },
+          "why": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "artists": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "energy": {
+            "type": "number",
+            "nullable": true,
+            "description": "0 (the library's calmest) to 1; null when unknown"
+          },
+          "mood": {
+            "type": "number",
+            "nullable": true,
+            "description": "Valence: 0 (the library's darkest) to 1; null when unknown"
+          },
+          "own": {
+            "type": "integer",
+            "description": "How many of its songs are the listener's own"
+          },
+          "songs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MixSong"
+            }
+          }
+        }
+      },
+      "Mixes": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer"
+          },
+          "user": {
+            "type": "string"
+          },
+          "at": {
+            "type": "integer"
+          },
+          "tz": {
+            "type": "string",
+            "nullable": true
+          },
+          "part": {
+            "type": "string",
+            "enum": [
+              "early",
+              "morning",
+              "afternoon",
+              "evening",
+              "night"
+            ]
+          },
+          "days": {
+            "type": "string",
+            "enum": [
+              "weekdays",
+              "weekend"
+            ]
+          },
+          "said": {
+            "type": "string",
+            "description": "The part of the day in words: \"early morning\""
+          },
+          "hours": {
+            "type": "string",
+            "description": "\"05:00–09:00\""
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "slot",
+              "part",
+              "all",
+              "library"
+            ],
+            "description": "What the mixes for now are made from: this slot's listening, this part of the day on any day, all the listening, or (with too little listening) the library"
+          },
+          "based": {
+            "type": "string",
+            "description": "The same in a sentence, to show"
+          },
+          "listens": {
+            "type": "integer",
+            "description": "The listener's listens of songs whose sound is known"
+          },
+          "songs": {
+            "type": "integer"
+          },
+          "daylight": {
+            "type": "object",
+            "nullable": true,
+            "description": "Where the sun is; null when the place isn't known (no lat and lon, and a time zone without a city)",
+            "properties": {
+              "light": {
+                "type": "string",
+                "enum": [
+                  "dark",
+                  "twilight",
+                  "light"
+                ]
+              },
+              "elevation": {
+                "type": "number"
+              },
+              "sunrise": {
+                "type": "string",
+                "nullable": true
+              },
+              "sunset": {
+                "type": "string",
+                "nullable": true
+              },
+              "said": {
+                "type": "string"
+              }
+            }
+          },
+          "shelves": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "enum": [
+                    "now",
+                    "daily",
+                    "more"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "mixes": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Mix"
                   }
                 }
               }

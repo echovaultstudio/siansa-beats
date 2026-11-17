@@ -96,6 +96,9 @@ def capabilities(app, server=None):
                       "steering": app.words.steers},
             "servers": {"available": True, "kinds": ["navidrome", "emby", "jellyfin"]},
             # The listening history (0.29): listens taken from the app, and sent on to Last.fm for who connected it.
+            # Mixes made from each listener's own listening (0.53): /api/v1/mixes. Made from the songs' sound, so
+            # there are none before any is known; with no listens yet they come from the library.
+            "mixes": {"available": bool(sound["sound"]), "listeners": len(app.mixes.listeners())},
             "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
                            "totals": True},  # /api/v1/listens/totals (0.33)
         },
@@ -168,6 +171,30 @@ def get(handler, path, query, server=None):
         # The sound of that song (or artist) isn't known here yet: nothing similar to give, said as such.
         return handler._json({"schema_version": SCHEMA_VERSION, "similar": [], "source": "beats",
                               "note": "its sound isn't known here yet"}) or True
+    if path == "/api/v1/mixes":  # mixes made for a listener from their own listening (0.53)
+        from . import mixes as mixes_module
+
+        def number(name, kind=float):
+            return kind(arg(name)) if arg(name) not in (None, "") else None
+        try:
+            at, size, lat, lon = number("at", int), number("size", int), number("lat"), number("lon")
+        except ValueError:
+            return handler._error(HTTPStatus.BAD_REQUEST, "at (seconds since 1970), size, lat and lon are numbers") or True
+        if (lat is None) != (lon is None) or (lat is not None and not (-90 <= lat <= 90 and -180 <= lon <= 180)):
+            return handler._error(HTTPStatus.BAD_REQUEST, "lat (-90 to 90) and lon (-180 to 180) go together") or True
+        part, days = arg("part") or None, arg("days") or None
+        if (part and part not in mixes_module.SUITS) or (days and days not in mixes_module.DAYS):
+            return handler._error(HTTPStatus.BAD_REQUEST, "part: " + ", ".join(mixes_module.SUITS) + "; days: weekdays or weekend") or True
+        made = app.mixes_for(arg("user"), arg("tz") or None, at, server, lat, lon, part, days, size)
+        # Each song by the id of the server the app plays from; a song that server hasn't is left out.
+        named = server or app.servers.default_id
+        ids = app.store.item_ids([s["id"] for shelf in made["shelves"] for m in shelf["mixes"] for s in m["songs"]], named)
+        for shelf in made["shelves"]:
+            for m in shelf["mixes"]:
+                m["songs"] = [{**s, "id": ids[s["id"]]} for s in m["songs"] if s["id"] in ids]
+                m["own"] = sum(1 for s in m["songs"] if s["own"])
+        made.pop("listeners"), made.pop("parts")
+        return handler._json({"schema_version": SCHEMA_VERSION, **made}) or True
     if path == "/api/v1/listens/top":  # the most listened songs, artists or albums of a listener in a stretch of time
         kind = arg("kind", "songs")
         if kind not in ("songs", "artists", "albums"):

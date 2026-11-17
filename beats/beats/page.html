@@ -500,6 +500,23 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
   section[data-view="songs"] tbody td:empty { display: none; }
   section[data-view="songs"] tbody td.empty { grid-column: 1 / -1; }
 }
+/* ---- 0.53: Mixes. Shelves of mixes made from a listener's own listening: Listening's header and strips, the
+   artist page's cover tiles (a mix opens its songs), and its list of listens for a mix's songs. ---- */
+.mx-shelf > .sub { margin-top: -4px; }
+.mx-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+a.ar-album { color: inherit; text-decoration: none; }
+a.ar-album:hover > b { color: var(--amber-text); }
+.mx-tiles .ar-album > span.why { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mx-meter { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--faint); }
+.mx-meter .meter { flex: 1; height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; display: flex; }
+.mx-shelves { display: grid; gap: 16px; }
+.mx-tags .chip { margin: 0; }
+.mx-songs li { min-height: 44px; }
+.mx-songs a { color: inherit; text-decoration: none; display: contents; }
+.mx-songs a:hover b { color: var(--amber-text); }
+.mx-songs .own { font-size: 0.75rem; color: var(--faint); white-space: nowrap; }
+.mx-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 700px) { .mx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
 /* ---- 0.52: Voice and mood. Its lines open their songs: a bar each as Genres draws them, but as tall as a thumb;
    the voices are one bar; a line's songs are the Songs rows with how sure on the right. The page's own colours. ---- */
 .lines { display: grid; }
@@ -568,6 +585,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
     <div class="group">
       <div class="group-name">Your listening</div>
       <a href="#listening" data-view="listening">Listening</a>
+      <a href="#mixes" data-view="mixes">Mixes</a>
     </div>
     <div class="group">
       <div class="group-name">Used by the Siansa app</div>
@@ -783,6 +801,44 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
         <h3>Genres by songs</h3>
         <div class="tools"><input type="search" class="grow" id="genre-find" placeholder="Find a genre" aria-label="Find a genre"></div>
         <div id="genre-top" class="hbars" data-cap="15"></div>
+      </div>
+    </section>
+
+    <!-- Mixes (0.53): made for a listener from their own listening (beats/mixes.py): by when they listen, what
+         they listen to and the light outside. The Siansa app reads the same from /api/v1/mixes. -->
+    <section data-view="mixes">
+      <div class="tm-hero">
+        <div class="tm-kicker">Made for you</div>
+        <h2 id="mx-title">Mixes</h2>
+        <p class="sub" id="mx-note" role="status">Loading…</p>
+        <p class="sub" id="mx-based"></p>
+        <div class="tm-who" id="mx-who" hidden>
+          <label for="mx-user" class="sub">Listener</label>
+          <select id="mx-user" title="Whose mixes are shown"></select>
+        </div>
+        <div class="tm-strip" id="mx-parts" role="group" aria-label="Time of day"></div>
+        <div class="tm-strip" id="mx-days" role="group" aria-label="Days" hidden>
+          <button type="button" data-days="weekdays" aria-pressed="false">Weekdays</button>
+          <button type="button" data-days="weekend" aria-pressed="false">Weekend</button>
+        </div>
+      </div>
+      <div class="card" id="mx-none" hidden><p class="sub" id="mx-none-text"></p></div>
+      <div id="mx-shelves" class="mx-shelves"></div>
+      <div class="card">
+        <details class="how"><summary>How these are made</summary>
+          <p class="sub">Siansa Beats looks at when you play what. The week is cut in ten parts: early morning, morning, afternoon, evening and night, on weekdays and at the weekend. The songs you play in a part fall into a few kinds that sound alike, and each kind is a mix: some of your own songs, and around them songs that sound like them and that you haven't played for a while. A recent listen counts for more, and so does one from this time of year in earlier years.</p>
+          <p class="sub">The sun is worked out from the date and your time zone's city: no weather service is asked. In the dark the calmer mixes come first. A mix is named by its sound, never by the weather, and stays the same all day.</p>
+          <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. Skips aren't counted: the app sends finished listens only.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- One mix: its songs (#mixes=<id>). -->
+    <section data-view="mix">
+      <div class="page-head"><button type="button" id="mx-back">‹ Mixes</button><h2 id="mx-name"></h2><p class="sub" id="mx-why" role="status"></p>
+        <div class="mx-tags" id="mx-tags"></div></div>
+      <div class="card">
+        <ul class="tm-listens mx-songs" id="mx-songs" data-cap="12"></ul>
       </div>
     </section>
 
@@ -2006,7 +2062,7 @@ window.addEventListener("scroll", () => { toTop.hidden = window.scrollY < window
 // ---- pages ----
 // One page at a time, chosen in the side menu (tabs on a phone) and kept in the address (#songs, #song=<id>), so Back
 // and a bookmark work.
-const VIEWS = ["overview", "libraries", "songs", "listening", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
+const VIEWS = ["overview", "libraries", "songs", "listening", "mixes", "mix", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
 let currentView = null;
 function showView(view, keepHash) {
   if (!VIEWS.includes(view)) view = "overview";
@@ -2029,6 +2085,12 @@ function showView(view, keepHash) {
     document.title = `${LINE_NAMES[trait.line] || "Voice and mood"} · Siansa Beats`;
   }
   if (view === "listening") refreshListening();
+  if (view === "mixes") refreshMixes();
+  if (view === "mix") {  // part of Mixes: its menu entry stays marked
+    document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
+    $("page-name").textContent = "Mixes · " + (mx.open || "Mix");
+    document.title = `${mx.open || "Mix"} · Siansa Beats`;
+  }
   if (view === "artist") {  // part of Listening: its menu entry stays marked
     document.querySelector('.nav [data-view="listening"]')?.setAttribute("aria-current", "page");
     $("page-name").textContent = "Listening · " + (ar.name || "Artist");
@@ -2037,6 +2099,8 @@ function showView(view, keepHash) {
 function route() {
   const a = location.hash.match(/^#artist=(.+)$/);
   if (a) { showView("artist", true); openArtist(decodeURIComponent(a[1])); return; }
+  const x = location.hash.match(/^#mixes=([\w-]+)$/);
+  if (x) { openMix(x[1]); return; }
   const v = location.hash.match(/^#voice=(\w+)$/);
   if (v && LINE_NAMES[v[1]]) { trait.line = v[1]; showView("trait", true); openTrait(v[1]); return; }
   const m = location.hash.match(/^#song=(.+)$/);
@@ -2044,6 +2108,78 @@ function route() {
   showView(location.hash.slice(1) || "overview", true);
 }
 window.addEventListener("hashchange", () => { route(); window.scrollTo({top: 0}); });
+
+// ---- mixes (0.53): made for a listener from their own listening ----
+// part and days: another part of the week than now's, to look at (null: now).
+const mx = {user: null, part: null, days: null, data: null, open: "", asked: 0};
+function mixesUrl() {
+  const q = new URLSearchParams({tz: TM_ZONE});
+  if (mx.user !== null) q.set("user", mx.user);
+  if (mx.part) { q.set("part", mx.part); q.set("days", mx.days || "weekdays"); }
+  return "api/mixes?" + q;
+}
+async function refreshMixes() {
+  const asked = ++mx.asked;
+  let d;
+  try { d = await api(mixesUrl()); } catch (e) {
+    if (asked === mx.asked) $("mx-note").textContent = "Siansa Beats isn't answering; try again shortly.";
+    return null;
+  }
+  if (asked !== mx.asked) return null;
+  mx.data = d;
+  drawMixes(d);
+  return d;
+}
+function drawMixes(d) {
+  $("mx-title").textContent = `Your ${d.said}`;
+  if (currentView === "mixes") $("page-name").textContent = `Mixes · ${d.said[0].toUpperCase()}${d.said.slice(1)}`;
+  const now = d.shelves.find((s) => s.key === "now");
+  $("mx-note").textContent = now ? now.note : "";
+  $("mx-based").textContent = d.based;
+  const users = d.listeners || [];
+  $("mx-who").hidden = users.length < 2;
+  $("mx-user").innerHTML = users.map((u) => `<option value="${esc(u)}"${u === d.user ? " selected" : ""}>${esc(u || "No name")}</option>`).join("");
+  $("mx-parts").innerHTML = `<button type="button" data-part="" aria-pressed="${!mx.part}">Now</button>` +
+    d.parts.map((p) => `<button type="button" data-part="${p.key}" aria-pressed="${mx.part === p.key}" title="${p.hours}">${esc(p.said[0].toUpperCase() + p.said.slice(1))}</button>`).join("");
+  $("mx-days").hidden = !mx.part;
+  $("mx-days").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.days === d.days)));
+  const any = d.shelves.some((s) => s.mixes.length);
+  $("mx-none").hidden = any;
+  $("mx-none-text").textContent = d.songs ? "Not enough music sounds alike yet to make a mix." : "No song's sound is known yet. Mixes come once Sound has analysed your music.";
+  $("mx-shelves").innerHTML = d.shelves.filter((s) => s.mixes.length).map((s) => `<div class="card mx-shelf"><h3>${esc(s.key !== "now" ? s.title : mx.part ? `For the ${d.said}` : "For now")}</h3>` +
+    (s.key !== "now" && s.note ? `<p class="sub">${esc(s.note)}</p>` : "") +
+    `<div class="mx-tiles">${s.mixes.map(mixTile).join("")}</div></div>`).join("");
+}
+function mixTile(m) {
+  const first = m.songs[0] || {};
+  const energy = m.energy === null ? "" : `<span class="mx-meter" title="Energy, against your library">Energy<span class="meter"><span class="done" style="width:${Math.round(m.energy * 100)}%"></span></span></span>`;
+  return `<a class="ar-album" href="#mixes=${esc(m.id)}">${art("cover", first.id, m.name, 300, "", first.artist)}<b>${esc(m.name)}</b>` +
+    `<span class="why">${esc(m.why || `${m.songs.length} songs`)}</span>${energy}</a>`;
+}
+async function openMix(id) {
+  const d = mx.data || await refreshMixes();
+  const m = d && d.shelves.flatMap((s) => s.mixes).find((one) => one.id === id);
+  if (!m) { location.hash = "#mixes"; return; }
+  mx.open = m.name;
+  showView("mix", true);
+  $("mx-name").textContent = m.name;
+  const yours = m.own && m.own < m.songs.length ? `, ${num(m.own)} of them yours` : "";
+  $("mx-why").textContent = `${m.why ? m.why + " " : ""}${num(m.songs.length)} songs${yours}.`;
+  $("mx-tags").innerHTML = [...(m.genres || []).slice(0, 2), ...(m.tags || [])].map((t) => `<span class="chip">${esc(t)}</span>`).join("");
+  $("mx-songs").innerHTML = m.songs.map((s) => `<li><a href="#song=${encodeURIComponent(s.id)}">${art("cover", s.id, s.title, 96, "s", s.artist)}` +
+    `<div class="t"><b>${esc(s.title)}</b><span>${esc(s.artist)}</span></div><span class="own">${s.own && m.own < m.songs.length ? "yours" : ""}</span></a></li>`).join("");
+}
+$("mx-parts").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-part]");
+  if (!b) return;
+  mx.part = b.dataset.part || null;
+  if (mx.part && !mx.days) mx.days = mx.data ? mx.data.days : "weekdays";
+  if (!mx.part) mx.days = null;
+  refreshMixes();
+});
+$("mx-days").addEventListener("click", (e) => { const b = e.target.closest("button[data-days]"); if (b) { mx.days = b.dataset.days; refreshMixes(); } });
+$("mx-user").addEventListener("change", () => { mx.user = $("mx-user").value; refreshMixes(); });
+$("mx-back").addEventListener("click", () => { location.hash = "#mixes"; });
 
 // ---- listening: the time machine ----
 // A listener's history a month or a year at a time (or all of it). The days and hours are this browser's clock's.
