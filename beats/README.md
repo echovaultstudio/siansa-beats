@@ -111,6 +111,12 @@ leave out, whether the part of the day, weekends, the dark and this time of year
 On repeat's and Rediscover's spans, and AI names (`beats/mix_settings.py`, `GET`/`POST /api/v1/mixes/settings`). Left
 as they come, the mixes are made as before.
 
+**The app's plans, by the AI here (0.57).** The Siansa app asks the AI set up on Setup for its own playlists too: the
+title, sound search, line and sound words to steer by of its vibes, Today's mix, Flow's words and the mood radios
+(`POST /api/v1/plan` with the app's `brief`; `features.plans` in the capabilities says whether it can). The app then
+needs no AI service of its own, and switches its own off. Only what the app writes in the brief is sent: the moment,
+the time slot or the listener's words, recent plays and the sound words the search knows, never a name.
+
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
 acoustic and electronic with its songs against the whole library; and MIREX's five groups by plain names, each song

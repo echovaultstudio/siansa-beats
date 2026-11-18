@@ -1110,12 +1110,13 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           </form>
         </details>
       </div>
-      <!-- The AI service that names the mixes (0.54): the Siansa app's providers. The key is kept encrypted, never shown. -->
+      <!-- The AI service that names the mixes (0.54) and plans the app's playlists (0.57): the Siansa app's providers. The key is kept encrypted, never shown. -->
       <div class="card" id="ai-card" data-fold>
-        <h3>AI for mix names</h3>
+        <h3>AI</h3>
         <p class="sub">Mixes get a name from an AI service, like a streaming service's editors would give them. Only a mix's genres, energy, mood and three of its artists are sent: never your listening. Without it, a mix is named by its sound ("Calm Indie Rock").</p>
+        <p class="sub">The Siansa app asks it too: the names and sound searches of its vibes, Today's mix, Flow's words and the mood radios. With it on here, the app needs no AI service of its own.</p>
         <form id="ai-form" autocomplete="off">
-          <label class="toggle"><input type="checkbox" id="ai-on"> Name mixes with AI</label>
+          <label class="toggle"><input type="checkbox" id="ai-on"> Use AI</label>
           <div class="form">
             <label>Service<select id="ai-provider"></select></label>
             <label>Model <input type="text" id="ai-model" autocapitalize="none" spellcheck="false"></label>

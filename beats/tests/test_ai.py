@@ -119,3 +119,46 @@ class TheService(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Plans(unittest.TestCase):
+    """0.57: the app's plans (a vibe, Today's mix, Flow's words, a mood radio) made here, with the app's prompt."""
+
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.store = Store(os.path.join(self.folder.name, "beats.db"))
+        self.fake = FakeAi(reply='Sure: {"title": " Coffee before the storm ", "query": "warm acoustic guitar, soft vocals, slow", '
+                                 '"description": "Easy start.", "steer": [{"term": "piano", "direction": "MORE"}, '
+                                 '{"term": "drums", "direction": "sideways"}, "loud", {"term": "a", "direction": "less"}, '
+                                 '{"term": "b", "direction": "less"}, {"term": "c", "direction": "less"}]}')
+        self.ai = A.Ai(self.store, Vault(self.folder.name), opener=self.fake)
+
+    def test_not_set_up(self):
+        with self.assertRaises(A.AiError):
+            self.ai.plan("Time slot: Morning")
+        self.assertEqual(self.fake.sent, [])
+
+    def test_a_plan_from_the_apps_brief(self):
+        self.ai.save(on=True, provider="OPENAI", key="sk-secret")
+        plan = self.ai.plan("Time slot: Morning\nGuidance: calm")
+        self.assertEqual(plan, {"title": "Coffee before the storm", "query": "warm acoustic guitar, soft vocals, slow",
+                                "description": "Easy start.",
+                                "steer": [{"term": "piano", "direction": "more"}, {"term": "a", "direction": "less"},
+                                          {"term": "b", "direction": "less"}]})
+        _, _, body = self.fake.sent[0]
+        self.assertEqual(body["messages"][0]["content"], A.PLAN_SYSTEM)
+        self.assertEqual(body["messages"][1]["content"], "Time slot: Morning\nGuidance: calm")
+        with self.assertRaises(A.AiError):
+            self.ai.plan("   ")
+
+    def test_an_incomplete_or_failed_answer(self):
+        self.ai.save(on=True, provider="OPENAI", key="sk-secret")
+        for reply in ('{"title": "Hi", "query": "x"}', '{"query": "warm synths"}', "no json", "[1]"):
+            self.fake.reply = reply
+            with self.assertRaises(A.AiError, msg=reply):
+                self.ai.plan("Time slot: Morning")
+        self.fake.reply = '{"error": {"message": "quota"}}'
+        with self.assertRaises(A.AiError):
+            self.ai.plan("Time slot: Morning")
+        self.assertIn("quota", self.ai.last_error)

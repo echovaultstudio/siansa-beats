@@ -587,6 +587,15 @@ class ServiceTest(Service):
                 self.call("/api/voice/songs?" + wrong)
             self.assertEqual(caught.exception.code, 400, wrong)
 
+    def test_plans_for_the_app(self):
+        """0.57: the app asks for its playlists' plans here; without an AI set up it's told so, and plans isn't offered."""
+        self.start()
+        self.assertEqual(self.call("/api/v1/capabilities")["features"]["plans"], {"available": False})
+        for body, code in (({}, 400), ({"brief": "  "}, 400), ({"brief": "Time slot: Morning"}, 503)):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/v1/plan", "POST", body)
+            self.assertEqual(caught.exception.code, code, body)
+
     def test_mixes_for_the_page_and_the_app(self):
         """0.53: mixes made from a listener's own listening. The stand-in's songs have no sound, so there are none to
         make yet: the answer says so in its own shape, and what's asked wrong is refused."""

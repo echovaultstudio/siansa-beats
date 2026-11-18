@@ -6,7 +6,10 @@ Groq, Ollama, or any other with an OpenAI-style API. Each is asked the same way,
 ``<address>/chat/completions`` with the key as a bearer token, as the app does. Set on the page (Setup): the key is
 kept encrypted (:mod:`beats.vault`), never shown again, never logged.
 
-What it's for: a mix's name. Without it (or when it fails) a mix keeps the name its sound gives
+What it's for: a mix's name, and (0.57, the owner, 18 Nov: "make the update in beats to name the playlists and send them
+to the phone when required from the phone") the app's plans: a playlist's title, its search for the sound, a line for
+the listener and the sound words to steer by, for a vibe, Today's mix, Flow's words and the mood radios
+(:meth:`Ai.plan`, ``POST /api/v1/plan``). The app then needs no AI service of its own. Without it (or when it fails) a mix keeps the name its sound gives
 (:func:`beats.mixes.Mixes._name`), so nothing waits on it. Only a mix's description is sent: its genres, its energy
 and mood in words, three of its artists and its tags. Never a listener's name or history.
 """
@@ -174,6 +177,29 @@ class Ai:
         except AiError as e:
             return {"ok": False, "said": str(e)}
 
+    def plan(self, brief):
+        """A playlist's plan from the app's ``brief`` (the moment, the guidance, recent plays, the sound words the search
+        knows: written by the app, never a listener's name): ``{"title", "query", "description", "steer"}``. Raises
+        :class:`AiError` when it isn't set up, fails, or answers without a title and a search."""
+        brief = str(brief or "").strip()
+        if not brief:
+            raise AiError("Nothing to plan from")
+        if not self.ready:
+            raise AiError("No AI service is set up on Siansa Beats")
+        try:
+            text = self.complete(PLAN_SYSTEM, brief[:MOST_BRIEF])
+        except AiError as e:
+            self.last_error = str(e)
+            _log.warning("A plan for the app wasn't made: %s", e)
+            raise
+        self.last_error = None
+        plan = clean_plan(text)
+        if plan is None:
+            _log.warning("The AI's plan for the app was incomplete")
+            raise AiError("The AI's answer was incomplete")
+        _log.info("Planned \"%s\" for the app", plan["title"])
+        return plan
+
     def name_mixes(self, described):
         """Names for mixes, and a short line on what's in each (0.55, the owner: "briefly describe its contents, very
         short and snappy"), from ``described`` (``[{"id", "genres", "energy", "mood", "artists", "tags"}]``):
@@ -199,6 +225,52 @@ class Ai:
             return {}
         self.last_error = None
         return clean_names(text, [d["id"] for d in described])
+
+
+# The app's prompt for a plan (its MixGenerator.SYSTEM_PROMPT, moved here in 0.57): the same answers it read before.
+PLAN_SYSTEM = """You plan one playlist for a personal music player. A text-to-audio search model (CLAP) will find tracks
+in the listener's own library from your search text, so describe how the music should SOUND.
+Reply with only a JSON object: {"title": string, "query": string, "description": string, "steer": [...]}.
+- title: 2 to 5 words, specific and a little unexpected: a concrete image, place or moment, like
+  "Neon puddles after midnight" or "Coffee before the storm". Never generic words such as unwind, chill,
+  vibes, beats, mellow, relax, groove, journey or playlist. No emoji.
+- query: 6 to 16 words for the audio search: genres, mood, energy, tempo, instruments, vocals.
+  No artist or song names. Prefer the listed sound concepts where they fit.
+- description: one short friendly sentence for the listener.
+- steer: optional, up to 3 of the listed sound concepts to push the search towards or away from, as
+  {"term": concept, "direction": "more" or "less"}. Only concepts from the list; leave it empty if none fit.
+Follow the time slot's guidance strictly and never use any forbidden word in the title or query.
+Use the listening device as context (a car's Bluetooth suggests driving), and "Right now" when given:
+the weather, whether the listener is moving, the light and the phone's state should shape the sound
+(rain and dark rooms softer, sun and running brighter) and may inspire the title.
+Fit the time slot, but surprise the listener: don't just describe what they played recently, take the
+sound somewhere a little new each day. Never repeat or echo a previous mix title."""
+MOST_BRIEF = 6000  # characters of what the app sends
+MOST_TITLE, MOST_QUERY, MOST_DESCRIPTION = 60, 300, 200
+
+
+def clean_plan(text):
+    """The plan in an AI's answer, tidied (``steer`` only as ``{"term", "direction"}`` with "more" or "less", at most
+    3), or None without a title and a search of at least 3 characters. The app checks the terms against its list."""
+    match = re.search(r"\{.*\}", text or "", re.S)
+    try:
+        found = json.loads(match.group(0)) if match else None
+    except ValueError:
+        return None
+    if not isinstance(found, dict):
+        return None
+
+    def tidy(value, most):
+        return re.sub(r"\s+", " ", value.strip().strip("\"'“”")).strip()[:most] if isinstance(value, str) else ""
+
+    title, query = tidy(found.get("title"), MOST_TITLE), tidy(found.get("query"), MOST_QUERY)
+    if not title or len(query) < 3:
+        return None
+    steer = []
+    for one in found.get("steer") if isinstance(found.get("steer"), list) else []:
+        if isinstance(one, dict) and tidy(one.get("term"), 60) and str(one.get("direction")).lower() in ("more", "less"):
+            steer.append({"term": tidy(one["term"], 60), "direction": str(one["direction"]).lower()})
+    return {"title": title, "query": query, "description": tidy(found.get("description"), MOST_DESCRIPTION), "steer": steer[:3]}
 
 
 def clean_names(text, ids):
