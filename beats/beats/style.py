@@ -39,16 +39,20 @@ class Spec:
     they differ in the patch they hear at once, how many patches of a song, and whether the bands are normalised
     first (MAEST's are: its mean and twice its standard deviation, from its own code)."""
 
-    def __init__(self, id, name, file, labels_file, patch, hop, most, blurb, znorm=None, cost=""):
+    def __init__(self, id, name, file, labels_file, patch, hop, most, blurb, znorm=None, cost="", good="", risk=""):
         self.id, self.name, self.file, self.labels_file = id, name, file, labels_file
         self.patch, self.hop, self.most, self.znorm = patch, hop, most, znorm
         self.blurb, self.cost = blurb, cost
+        # Its benefit and its risk in a line each (0.58, the owner, 18 Nov: chosen at setup "with benefits and risk
+        # briefly explained for both").
+        self.good, self.risk = good, risk
 
     def available(self, models_dir):
         return os.path.exists(os.path.join(models_dir, self.file)) and os.path.exists(os.path.join(models_dir, self.labels_file))
 
     def summary(self, models_dir):
-        return {"id": self.id, "name": self.name, "blurb": self.blurb, "cost": self.cost, "available": self.available(models_dir)}
+        return {"id": self.id, "name": self.name, "blurb": self.blurb, "cost": self.cost, "good": self.good, "risk": self.risk,
+                "available": self.available(models_dir)}
 
 
 MODELS = {
@@ -57,6 +61,8 @@ MODELS = {
         "A small, quick model. Sure of itself on electronic music, where it was mostly trained; it can misread a "
         "quiet, sparse recording (a piano ballad as dance-pop).",
         cost="About a second a song on a CPU.",
+        good="Quick everywhere, even on a CPU only: a large library is done in hours, not days.",
+        risk="Less sure beyond electronic music: a quiet or sparse song can get the wrong genre.",
     ),
     "maest": Spec(
         "maest", "MAEST (2023)", "discogs-maest-30s-pw-1.onnx", "discogs-maest-30s-pw-1.json", 1876, 938, 8,
@@ -64,6 +70,8 @@ MODELS = {
         "same 400 styles, and surer of what it hears; the better choice beyond electronic music.",
         znorm=(2.06755686098554, 2 * 1.268292820667291),
         cost="Slow on a CPU (about 4 seconds per 30 seconds heard, a few windows a song); quick on a GPU.",
+        good="More accurate genres across every kind of music, and surer of them.",
+        risk="Slow without a GPU: a large library can take days, and it needs more memory while it listens.",
     ),
 }
 DEFAULT_MODEL = "effnet"
