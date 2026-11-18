@@ -109,6 +109,8 @@ from .worker import Worker
 from . import genres as genres_module
 from . import log
 from . import memory as memory_module
+from . import mixes as mixes_module
+from . import traits as traits_module
 
 _log = log.get("server")
 
@@ -248,6 +250,10 @@ class App:
         from .drive import Arousal
 
         self.arousal = Arousal(config.models_dir, self.store, config.threads)
+        # Sung or not, whose voice, moods, danceable (0.51, beats.traits): Essentia's models, from the same kept sound.
+        from .traits import Traits
+
+        self.traits = Traits(config.models_dir, self.store, config.threads)
         self.worker = Worker(self.store, self.servers, self.tracker, decode or analyser.decode,
                              config.data_dir, config.model, measure, self.style, sound, self.hearer)
         self.started = time.time()
@@ -267,6 +273,13 @@ class App:
 
         self.listens = Listens(self.store, self.vault)
         self._listening_zone = self.store.setting("listening_zone")
+        # Mixes made from each listener's own listening (0.53): by when they listen, what, and the light outside.
+        from .ai import Ai
+        from .mixes import Mixes
+
+        self.ai = Ai(self.store, self.vault)  # names the mixes (0.54), with the AI service set on the page
+        self.mixes = Mixes(self.store, self.sound, self.listens, self.traits, self.arousal, ai=self.ai)
+        self._mixes_ahead()
         self.listens.warm(self.default_listener(), self._listening_zone)
         self.cleaner = Cleaner(self)  # tidying the database (0.40): looked at first, removed as shown
         self.style_switch = None  # {"model", "model_name", "phase", "since", "songs", "doubted"} while a switch runs
@@ -295,6 +308,8 @@ class App:
                 memory.trim()
             self.worker.let_models_go_if_idle()
             if self.arousal.catch_up():  # songs heard since the last minute
+                memory.trim()
+            if self.traits.catch_up():
                 memory.trim()
         except Exception as e:  # never the timer's end
             _log.debug("Minding the memory failed: %s", e)
@@ -362,6 +377,56 @@ class App:
                            for r in found[kind]]
         return found
 
+    def _mixes_ahead(self):
+        """Every minute: the mixes of now and of a few minutes on are made (and named) for the listeners the app asks
+        for, so when the part of the day changes the app finds the next ones ready (0.54)."""
+        def loop():
+            time.sleep(30)  # after the start's own work
+            while True:
+                try:
+                    servers = [self.only(s["id"]) for s in self.server_list()] or [None]
+                    made = self.mixes.ahead(default_tz=self._listening_zone, servers=list(dict.fromkeys(servers)))
+                    if made:
+                        _log.info("Made %d listener's mixes ahead", made)
+                except Exception:  # noqa: BLE001 - tried again next minute
+                    _log.exception("The mixes weren't made ahead")
+                time.sleep(60)
+        threading.Thread(target=loop, name="mixes-ahead", daemon=True).start()
+
+    def mix_settings_of(self, user=None):
+        """What goes into ``user``'s mixes (0.56): ``{"user", "settings": {name: value}, "described": [{"name", "kind",
+        "default", "low", "high", "label"}], "keep_days"}``."""
+        from . import mix_settings
+        who = self.listens.who(user or self.default_listener())
+        return {"user": who, "settings": self.mixes.settings(who), "described": mix_settings.described(),
+                "keep_days": self.mixes.keep_days()}
+
+    def set_mix_settings(self, user, given):
+        """Changes ``user``'s choices by ``given`` (a ``ValueError`` names one that can't be read); ``keep_days`` in it
+        sets how long every listener's mixes are kept."""
+        if not isinstance(given, dict):
+            raise ValueError('settings needed: {"name": value}')
+        given = dict(given)
+        if "keep_days" in given:
+            try:
+                self.mixes.set_keep_days(given.pop("keep_days"))
+            except (TypeError, ValueError):
+                raise ValueError("keep_days is a number: 1 to 90") from None
+        who = self.listens.who(user or self.default_listener())
+        self.mixes.set_settings(who, given)
+        return self.mix_settings_of(who)
+
+    def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None):
+        """The mixes made for ``user`` (:meth:`beats.mixes.Mixes.make`; the listener Listening shows first without
+        one) from ``server``'s songs, on the clock of ``tz`` (the one Listening last used without one). With
+        ``"listeners"``: who they can be made for."""
+        if not user:
+            user = self.default_listener()
+        answer = self.mixes.make(user, tz or self._listening_zone, at, self.only(server or self.servers.default_id),
+                                 lat, lon, part, days, size or mixes_module.SIZE)
+        return {"listeners": self.mixes.listeners(), "parts": [{"key": key, "said": name, "hours": mixes_module.hours(key)}
+                                                               for key, name, _, _ in mixes_module.PARTS], **answer}
+
     def sound_status(self, server=None):
         """How much of ``server``'s music has its sound here."""
         # Kept ready (0.35.1): counting 45,000 sounds reads each one's row, vectors and all, and the page asks every
@@ -376,6 +441,15 @@ class App:
                 "hears": self.hearer.available, "sources": sources,
                 "again": self.store.sound_waiting(),  # 0.46: marked to be heard again, still in use
                 "hearing": dict(self.worker.hearing) if self.worker.hearing else None}
+
+    def voice(self, server=None):
+        """The Voice and mood page's numbers (0.52, :meth:`beats.traits.Traits.report`), kept ready as the sound's are."""
+        server = server or self.servers.default_id
+        return self.kept("voice", server, lambda only: self.traits.report(only), 60, lambda: self.store.writes).get()
+
+    def voice_songs(self, line, order="most", limit=50, offset=0, server=None):
+        """The songs of one of that page's lines (:meth:`beats.traits.Traits.songs`)."""
+        return self.traits.songs(line, order, limit, offset, self.only(server or self.servers.default_id))
 
     # ---- connections and access, set on the page (0.24.0) ----
 
@@ -544,11 +618,34 @@ class App:
         row["tempo_curve"] = grid.tempo_curve(row["beats"])
         row["grid"] = self.steady_grid(full)
         row["end_seconds"] = grid.END_SECONDS
+        row["sections"] = self.sections(song_id, full, row["grid"], row.get("duration"))
         row["marks"] = self.store.marks(song_id)
+        row["traits"] = self.traits.of([song_id]).get(song_id)  # voice, moods, danceable (0.51); None without
+        row["valence"] = self.arousal.valence_of([song_id]).get(song_id)
         names = {s["id"]: s["name"] for s in self.servers.all()}
         row["servers"] = [{"id": server, "name": names.get(server, server), "item_id": item_id}
                           for server, item_id in self.store.where(song_id)]
         return row
+
+    def sections(self, song_id, full, steady, duration):
+        """The breakdowns and drops of the song (0.49.0), for its page: ``{"found": [{"ms", "kind", "db"}], "sent":
+        bool}``. ``found`` are the ones the app has (kept with the analysis); ``db``, how much the bass falls or rises
+        there, is worked out now from the song's sound (:func:`beats.ends.describe`), None where that doesn't find
+        the same one. Without kept ones (not sent to the app yet: ``sent`` false), the ones worked out now. None
+        without a grid or sound levels."""
+        if not full or not full.get("levels"):
+            return None
+        fresh = (grid.app_ends(steady, full["beats"], duration or 0.0, full["levels"]) or {}) if steady else {}
+        kept = self.store.ends([song_id], self.config.model).get(song_id)
+        source = kept if kept is not None else fresh
+        found = []
+        for kind, key in (("breakdown", "breakdowns"), ("drop", "drops")):
+            measured = list(zip(fresh.get(key + "_ms") or [], fresh.get(key + "_db") or []))
+            for ms in source.get(key + "_ms") or []:
+                db = next((d for m, d in measured if abs(m - ms) <= 50), None)
+                found.append({"ms": ms, "kind": kind, "db": db})
+        found.sort(key=lambda x: x["ms"])
+        return {"found": found, "sent": kept is not None}
 
     def steady_grid(self, full):
         """The even grid of a result with beats, or ``None``: as :func:`beats.grid.analyse` made it."""
@@ -563,6 +660,18 @@ class App:
         tune them on real music. Song names and genres, no addresses."""
         out = [s for s in (self.song_data(row["id"], row) for row in self.songs(find, show, 0, server)) if s]
         return {"version": __version__, "model": self.config.model, "songs": out}
+
+    def export_chunks(self, find=None, show="all", server=None):
+        """:meth:`export` as it's made: the same JSON, a song at a time, for :meth:`Handler._stream`."""
+        yield json.dumps({"version": __version__, "model": self.config.model})[:-1].encode() + b', "songs": ['
+        first = True
+        for row in self.songs(find, show, 0, server):
+            song = self.song_data(row["id"], row)
+            if not song:
+                continue
+            yield (b"" if first else b", ") + json.dumps(song).encode()
+            first = False
+        yield b"]}"
 
     def song_data(self, song_id, row=None):
         """One song as the data export has it (its beats, downbeats, sound levels, results and marks), or None when
@@ -692,6 +801,7 @@ class App:
         measured = timed("loudness", lambda: self.kept("measure-counts", server, lambda o: self.store.measure_counts(loudness.VERSION, o), 30,
                                                        lambda: self.store.writes).get())
         sound = timed("sound", lambda: self.sound_status(server))
+        voice = timed("voice", lambda: self.voice(server))
         servers = timed("servers", self.server_list)
         events = timed("events", self.store.events)
         self.status_parts = parts
@@ -723,6 +833,8 @@ class App:
             "regridding": dict(worker.regridding) if worker.regridding else None,
             "reading": dict(worker.reading) if worker.reading else None,
             "sound": sound,
+            # Voice and mood (0.52): how many of the songs with a sound are scored, for the Overview's card.
+            "traits": {k: voice[k] for k in ("available", "total", "scored")},
             "libraries": {"chosen": self.store.setting(folders_key(server)) or [],
                           "read_at": self.store.setting("library_read_at")},
             # The server these numbers are of, and all of them (for the page's switch).
@@ -782,7 +894,14 @@ class App:
         from . import style as style_module
 
         spec = getattr(self.style, "spec", None)
-        return {"chosen": spec.id if spec else None,
+        counts = self.store.style_counts()
+        doubted = self.store.doubted_styles()
+        # Chosen at setup, or in use already (an install from before 0.58 that heard songs): Get started's step is done.
+        picked = self.store.setting("style_model") is not None or counts["done"] > 0 or doubted > 0
+        return {"chosen": spec.id if spec else None, "picked": picked,
+                # How far it is (0.58): heard with the model in use, still with the old model's genres (a switch under
+                # way), and of how many; what the warnings on a change say.
+                "heard": counts["done"], "old": doubted, "total": counts["total"], "switching": self.style_switch,
                 "models": [m.summary(self.config.models_dir) for m in style_module.MODELS.values()]}
 
     def start_analysis(self, ids, server=None, skips=None):
@@ -818,11 +937,13 @@ class App:
         spec = style_module.MODELS.get(model_id)
         if spec is None:
             raise ValueError(f"No style model called {model_id!r}")
-        if not spec.available(self.config.models_dir):
-            raise ValueError(f"{spec.name} isn't in this image")
         current = getattr(self.style, "spec", None)
         if current is not None and current.id == spec.id:
+            # Chosen at setup as it is (0.58): kept, so Get started knows it was chosen; nothing is heard again.
+            self.store.set_setting("style_model", spec.id)
             return 0
+        if not spec.available(self.config.models_dir):
+            raise ValueError(f"{spec.name} isn't in this image")
         self.style.unload()
         self.style = self.style_factory(spec)
         self.worker.style = self.style
@@ -1133,6 +1254,52 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def _stream(self, chunks, kind, headers=None):
+        """An answer sent as it's made, in chunks (HTTP/1.1 chunked), so the first bytes go at once however long the
+        whole takes: a proxy in front (nginx's 60 s) never waits for it, and nothing big is held in memory. Not gzipped:
+        a phone's download manager saves what it's sent. A failure part-way is logged; the file then ends short."""
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", kind)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")  # nginx: pass it on as it comes
+        for k, v in (headers or {}).items():
+            self.send_header(k, str(v).replace("\r", " ").replace("\n", " "))
+        if self.command == "HEAD":
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+        sent = 0
+        try:
+            buffer = []
+            size = 0
+            last = 0.0  # the first piece goes at once; then every 256 KB, or every 2 s while it's slow to come
+            for chunk in chunks:
+                buffer.append(chunk)
+                size += len(chunk)
+                if size >= 256 * 1024 or time.monotonic() - last >= 2.0:
+                    self._chunk(b"".join(buffer))
+                    sent += size
+                    buffer, size, last = [], 0, time.monotonic()
+            if buffer:
+                self._chunk(b"".join(buffer))
+                sent += size
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
+            _log.info("Sent %s as it was made: %.1f MB", self.path.split("?", 1)[0], sent / 1e6)
+        except (BrokenPipeError, ConnectionResetError):
+            _log.info("%s: the download stopped after %.1f MB (closed at the other end)", self.path.split("?", 1)[0], sent / 1e6)
+            self.close_connection = True
+        except Exception as e:  # noqa: BLE001 - the answer has begun: it can only end short, and say why in the log
+            _log.error("%s failed after %.1f MB: %s", self.path.split("?", 1)[0], sent / 1e6, e)
+            self.close_connection = True
+        return None
+
+    def _chunk(self, data):
+        self.wfile.write(b"%x\r\n" % len(data) + data + b"\r\n")
+        self.wfile.flush()
+
     def _json(self, value, status=HTTPStatus.OK):
         self._send(status, value)
 
@@ -1267,6 +1434,13 @@ class Handler(BaseHTTPRequestHandler):
                 if month is not None and not 1 <= month <= 12:
                     return self._error(HTTPStatus.BAD_REQUEST, "month is 1 to 12")
                 return self._json(app.listening(user, number("year"), month, (query.get("tz") or [None])[0]))
+            if path == "/api/ai":  # the AI service's settings, without its key
+                return self._json(app.ai.settings())
+            if path == "/api/mixes/settings":  # what goes into a listener's mixes (0.56): ?user=
+                return self._json(app.mix_settings_of((query.get("user") or [None])[0]))
+            if path == "/api/mixes":  # the page's Mixes (0.53): ?user=&tz=&part=&days=
+                return self._json(app.mixes_for((query.get("user") or [None])[0], (query.get("tz") or [None])[0], None, server,
+                                                part=(query.get("part") or [None])[0], days=(query.get("days") or [None])[0]))
             if path == "/api/listens/import":
                 return self._json(dict(app.listens.importing))
             if path == "/api/listens/artist":  # one artist in a listener's history: its own page
@@ -1303,6 +1477,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.genre_songs(name, limit, server))
             if path == "/api/loudness":
                 return self._json(app.loudness_report(server))
+            if path == "/api/voice":  # the Voice and mood page (0.52)
+                return self._json(app.voice(server))
+            if path == "/api/voice/songs":  # the songs of one of its lines: ?line=&order=&limit=&offset=
+                line, order = (query.get("line") or [""])[0], (query.get("order") or ["most"])[0]
+                if line not in traits_module.LINES or order not in traits_module.ORDERS:
+                    return self._error(HTTPStatus.BAD_REQUEST, "line: one of the page's lines (female, happy, ...); order: most, least or unsure")
+                try:
+                    limit = max(1, min(500, int((query.get("limit") or ["50"])[0])))
+                    offset = max(0, int((query.get("offset") or ["0"])[0]))
+                except ValueError:
+                    return self._error(HTTPStatus.BAD_REQUEST, "limit and offset are numbers")
+                return self._json(app.voice_songs(line, order, limit, offset, server))
             if path == "/api/status":
                 return self._json(app.status(server))
             if path == "/api/log":
@@ -1357,9 +1543,11 @@ class Handler(BaseHTTPRequestHandler):
                                    "grids": [{"track_id": i, **found[here[i]]} for i in ids if here.get(i) in found],
                                    "missing": [i for i in ids if here.get(i) not in found]})
             if path == "/api/export.json":
-                body = json.dumps(app.export(find, show, server)).encode()
-                return self._send(HTTPStatus.OK, body, "application/json",
-                                  {"Content-Disposition": 'attachment; filename="siansa-beats-data.json"'})
+                # Streamed, a song at a time (0.50.2, the owner, 16 Nov: "it should just stream the download until
+                # completion"): every song's beats and levels came to a file too big to make before the first byte, so
+                # a proxy in front gave up waiting (a small error page, saved as "export.html").
+                return self._stream(app.export_chunks(find, show, server), "application/json",
+                                    {"Content-Disposition": 'attachment; filename="siansa-beats-data.json"'})
             if path == "/api/export.csv":
                 return self._send(HTTPStatus.OK, app.csv(find, show, server), "text/csv; charset=utf-8",
                                   {"Content-Disposition": 'attachment; filename="siansa-beats.csv"'})
@@ -1407,6 +1595,24 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
                 return self._json({"doubted": doubted, **app.style_models()})
+            if path == "/api/ai":  # the AI service that names the mixes (0.54): {on, provider, address, model, key}
+                from .ai import AiError
+                try:
+                    return self._json(app.ai.save(body.get("on"), body.get("provider"), body.get("address"), body.get("model"), body.get("key")))
+                except AiError as e:
+                    return self._error(HTTPStatus.BAD_REQUEST, str(e))
+            if path == "/api/mixes/settings":  # {"user", "settings": {…}}: changes what goes into their mixes (0.56)
+                try:
+                    return self._json(app.set_mix_settings(body.get("user"), body.get("settings")))
+                except ValueError as e:
+                    return self._error(HTTPStatus.BAD_REQUEST, str(e))
+            if path == "/api/mixes/keep":  # {"days"}: how long the mixes given out are kept (0.55)
+                try:
+                    return self._json({"keep_days": app.mixes.set_keep_days(body.get("days"))})
+                except (TypeError, ValueError):
+                    return self._error(HTTPStatus.BAD_REQUEST, "days is a number: 1 to 90")
+            if path == "/api/ai/test":  # a short call with what's typed, before it's saved
+                return self._json(app.ai.test(**{k: body.get(k) for k in ("provider", "address", "model", "key")}))
             if path == "/api/listens/lastfm":  # on to Last.fm, with the listener's own API account
                 from .listens import LastFmError
                 user = str(body.get("user") or "")
@@ -1740,6 +1946,16 @@ def main():
                 app.store.event(f"Worked out how energetic {scored} songs are, from the sound kept for each (no song was read again)")
         except Exception:
             _log.exception("Working out how energetic the songs are went wrong")
+        try:  # sung or not, whose voice, moods, danceable (0.51): the whole library, once, from the sound already kept
+            scored = app.traits.catch_up()
+            if scored:
+                c = app.traits.count()
+                app.store.event(f"Worked out the voice, moods and danceability of {scored} songs from the sound kept for each "
+                                f"(no song was read again): {c['sung']} sung ({c['female']} by a woman, {c['male']} by a man), "
+                                f"{c['danceable']} danceable, {c['happy']} happy, {c['sad']} sad, {c['relaxed']} relaxed, "
+                                f"{c['party']} party, {c['aggressive']} aggressive, {c['acoustic']} acoustic")
+        except Exception:
+            _log.exception("Working out the songs' voices and moods went wrong")
         try:  # genres are the sound's alone from 0.28: the ones voted with the tags go
             gone = app.store.drop_votes()
             if gone:

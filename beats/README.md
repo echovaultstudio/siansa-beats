@@ -62,6 +62,68 @@ what he heard far better than loudness, which once on one scale barely tells son
 gives it as `arousal`. Energies kept from before 0.35 on an older scale (about 0.05 to 0.4) are given on today's
 (`energy_source`: `converted`).
 
+**What a song is like (0.51).** Every song with a sound also gets Essentia's trained traits (MTG, UPF; CC BY-NC-SA
+4.0), from eleven small models that read the same kept vector, so the whole library is scored once in seconds with no
+song read again, and new songs as they come. Each is a share from 0 to 1: `voice` (0 instrumental, 1 sung), `female`
+(of the voice: 0 a man's, 1 a woman's; only worth reading where `voice` is high), `acoustic`, `aggressive`,
+`electronic`, `happy`, `party`, `relaxed`, `sad`, `danceable`, and MIREX's five mood groups (`mirex_passionate`,
+`mirex_cheerful`, `mirex_bittersweet`, `mirex_humorous`, `mirex_intense`, adding up to 1). Beside the energy's
+`arousal` there's now its `valence` too: how positive a song feels, about 1 (dark) to 9 (bright). Their makers
+measured the models right for 84 to 98 songs in 100 on their own collections (MIREX's five groups: 67); a song's page
+shows what they said, to check on songs you know. `/api/v1/sound/songs` gives them as `traits` and `valence`;
+`/api/v1/capabilities` counts them under `traits`. AudioMuse-AI's feelings stay as `other_features`.
+
+**Mixes made from your listening (0.53).** The app's mixes for the time of day were a fixed list by the clock
+("sunshine mixes in Finland at 6:40 am, it's winter and dark outside"). Siansa Beats now makes them itself
+(`beats/mixes.py`), from what it keeps: when each listen was (the week in ten parts: early morning, morning, afternoon,
+evening and night, on weekdays and at the weekend), what the songs sound like (the songs played in a part fall into a
+few kinds that sound alike; each kind is a mix of some of them and of songs like them that weren't played for 45
+days), and where the sun is (from the date and the time zone's city, or a latitude and longitude from the app: no
+weather service). A recent listen counts for more, and one from this time of year in earlier years for a little more.
+In the dark the calmer kinds come first; the less is known of a part of the week, the more the hour and the light
+count. A mix is named by its sound ("Calm Indie Rock"), never by the weather, and is the same all day. Beside them:
+the listener's all-time kinds ("Made for you"), On repeat, Rediscover and New for you. With too little listening a
+part borrows from that time on other days, then from all the listening, then from the library. Skips aren't counted:
+the app sends finished listens only. The page has **Mixes** in its menu (any part of the week can be looked at), and
+the app reads the same from `GET /api/v1/mixes?user=&tz=&at=&lat=&lon=&part=&days=&size=` (`features.mixes` in the
+capabilities). The app's own mixes stay as they are.
+
+**Mix names by AI, and mixes made ahead (0.54).** On Setup, **AI for mix names** takes the same AI services as the
+Siansa app (OpenRouter, OpenAI, Anthropic, Google Gemini, Mistral, Groq, Ollama, or any other with an OpenAI-style
+API; `beats/ai.py`): the mixes of a kind of music are then named by it, like a streaming service's editors would
+("Velvet Undertow"), from their genres, energy, mood and three artists only, never the listening. Names that promise
+weather or a time of day are thrown away, and the names are kept for the day; until they come a mix shows its sound's
+name (`named` on each mix says which). The key is kept encrypted and never shown. And every minute, the mixes of now and
+of ten minutes on are made for each listener the app asks for, the way it asked (time zone, place, server): when the
+part of the day or the light changes, the app finds the next ones ready. Mixes are kept until the part of the day, the
+light or the date changes, or the library or the listening grows by much, not made again at every listen.
+
+**What's in a mix, and how long it's kept (0.55).** Each mix has a short line on its sound (`about`: "Wiry guitars and
+restless drums"), from the AI with its name, else from its sound ("Calm ambient, mostly instrumental"); the artists it's
+like stay in `why`, for the mix's own page. Every mix given out is kept, by a `key` no other mix has, for 7 days, or as
+long as **Keep mixes for** on the Mixes page says (1 to 90 days), so a mix played from the app's recent plays still plays
+days later: `GET /api/v1/mixes/kept?user=&key=` gives it back.
+
+**What goes into the mixes (0.56).** Every choice the mixes made by themselves can be changed, per listener, on the
+Mixes page (**What goes into your mixes**) or from the Siansa app: which shelves and mixes are made and how many, songs
+in a mix, how many of them you know, songs by one artist, how long a song you played stays out, genres and artists to
+leave out, whether the part of the day, weekends, the dark and this time of year count, how far back listening counts,
+On repeat's and Rediscover's spans, and AI names (`beats/mix_settings.py`, `GET`/`POST /api/v1/mixes/settings`). Left
+as they come, the mixes are made as before.
+
+**The app's plans, by the AI here (0.57).** The Siansa app asks the AI set up on Setup for its own playlists too: the
+title, sound search, line and sound words to steer by of its vibes, Today's mix, Flow's words and the mood radios
+(`POST /api/v1/plan` with the app's `brief`; `features.plans` in the capabilities says whether it can). The app then
+needs no AI service of its own, and switches its own off. Only what the app writes in the brief is sent: the moment,
+the time slot or the listener's words, recent plays and the sound words the search knows, never a name.
+
+**Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
+the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
+acoustic and electronic with its songs against the whole library; and MIREX's five groups by plain names, each song
+in the group it fits best. A line opens its songs, the most sure first, 50 at a time; "Least sure" and "Not sure"
+(shares from 40 to 60 %, on both sides of the line) show the ones most likely wrong, to check by ear. A song's page
+links to the lists it is in.
+
 **Memory (0.34).** The models are loaded by the first song and let go again after 10 minutes without a song to
 analyse (the Activity list says so, with the memory held before and after); the next song loads them again in a few
 seconds. What a song needed is handed back to the system when it's done. The log says how much memory is held at the
@@ -379,8 +441,13 @@ genre pages and genre radios:
   about a second a song on a CPU, and the one in use unless another is chosen. **MAEST** (2023; 0.39) is a larger
   transformer hearing 30 seconds at a time, markedly more accurate on the same styles and surer of what it hears,
   the better choice beyond electronic music; slow on a CPU (about 4 seconds per 30 seconds heard, a few windows a
-  song), quick on a GPU. The page's Setup › Genres by sound picks one, with a line on each; changing it keeps the
-  choice, and every song is heard again with the new model (its old styles stay in use until then). Both give the
+  song), quick on a GPU. The page's Setup › Genre model picks one, each with what it's good at and what to watch out
+  for; a new install asks for it in Get started before its first analysis (0.58). Changing it keeps the choice, and
+  every song is heard again with the new model: each song's old styles stay in use until it's heard again, then
+  they're replaced (the two are never kept side by side), and going back means hearing every song again. Meanwhile
+  genres are partly old and partly new; beats, blends, loudness, keys, moods, similar music and the search by words
+  don't use the genre model. The page says all this before a change, and warns when one is made halfway through the
+  first listen or another switch. Both give the
   same 400 styles, so the genre pages read the same. The model runs on the GPU when there is one (through the
   PyTorch Beat This! uses), else on the CPU (ONNX Runtime, `STYLE_THREADS`, 2 by default); `BEATS_DEVICE=cpu`
   keeps both on the CPU. On a GPU with tensor cores (an RTX, any card of compute capability 7 or more) it hears in
@@ -466,6 +533,16 @@ On the server, after setting it up:
   stays out (`intro_bass_bars`, `outro_bass_bars`), how loud it is next to the song (`intro_energy`,
   `outro_energy`, dB), and the song where the bass drops out and comes back (`breakdowns_ms`, `drops_ms`), for the
   app to choose how to blend.
+- **Breakdowns and drops** (0.49.0): a song's page lists where Beats found the bass dropping out (a breakdown) and
+  coming back (a drop), as the app gets them, each with how much the bass falls or rises (10 dB or more is clear,
+  under that faint; it takes 6 dB to count), tap one to hear it. They show on the beat strip and the tempo chart
+  too. With your own **Section starts here** marks, a line says how many of Beats' ones your marks agree with
+  (within a bar), to see where the rule works and where it doesn't before the app mixes on them.
+- **Downloads** (0.50.2): **Download data** is sent as it's made, a song at a time, so the download starts at once
+  and runs to the end however big it is (every song's beats came to a file a proxy in front gave up waiting for). Your
+  browser downloads it as usual.
+- **The breakdown and drop trial is over** (0.51.1): the marks tapped in Siansa Dev and the Marked filter are gone,
+  and so are those marks from the database. Marks set on a song's page (Section starts here) stay.
 - **Bad blends**: a song change marked as bad in Siansa Dev lands in a list on the page, with how the app blended it
   (technique, bars, tempos, confidence at each end, why it was planned that way), and both songs a tap away. When the
   app heard each song's kicks during the blend, it shows how far they fell from the song's beat grid (more than 20 ms
@@ -591,7 +668,7 @@ before). A paused service starts again.
 
 `GET /api/health`, `/api/status`, `/api/libraries`, `/api/songs`, `/api/songs/<id>` (with every beat),
 `/api/beats/<id>`, `/api/audio/<id>`, `/api/grids?ids=`, `/api/export.csv`, `/api/export.json`;
-`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
+`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/mixes?user=&tz=&part=&days=` (the Mixes page, 0.53), `/api/voice` (the Voice and mood page's numbers, 0.52), `/api/voice/songs?line=&order=&limit=&offset=` (the songs of one of its lines; order: `most`, `least` or `unsure`), `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
 `beats/server.py`.
 
 ## Building the image

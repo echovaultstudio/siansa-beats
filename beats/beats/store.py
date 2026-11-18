@@ -138,6 +138,12 @@ class Store:
         self.db.execute("PRAGMA synchronous=NORMAL")  # safe with WAL, and each change no longer waits for the disk twice
         with self._write():
             self.db.executescript(SCHEMA)
+            if self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='mark_kinds'").fetchone():
+                # 0.51.1: the trial of breakdowns and drops tapped in Siansa Dev is over (siansa-dev #63). Its marks go
+                # with it; marks set on the page (Section starts here) stay.
+                self.db.execute("DELETE FROM marks WHERE id IN (SELECT mark_id FROM mark_kinds)")
+                self.db.execute("DROP TABLE mark_kinds")
+                self.db.commit()
             if "tempo" in {r[1] for r in self.db.execute("PRAGMA table_info(sound)")}:
                 # 0.25's first builds kept AudioMuse-AI's tempo: it goes, and is never asked for again.
                 try:
@@ -555,6 +561,10 @@ class Store:
         if n:
             self.genre_changes += 1
         return n
+
+    def doubted_styles(self):
+        """How many songs still have the styles of the model before (a switch under way, 0.58): in use until heard again."""
+        return self._rows("SELECT COUNT(DISTINCT song_id) AS n FROM genres WHERE source='sound-doubted'")[0]["n"]
 
     def heard_of(self, song_ids, minimum, rank):
         """``{song id: [(label, weight)]}``: the genres each of ``song_ids`` is in by its sound, its best first."""

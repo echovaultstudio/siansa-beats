@@ -172,6 +172,8 @@ class Checks:
             missing.append("the text model")
         if hasattr(app.arousal, "available") and not app.arousal.available:
             missing.append("the energy model")
+        if hasattr(getattr(app, "traits", None), "available") and not app.traits.available:
+            missing.append("the voice and mood models")
         # Fingerprints: hashed once a version, compared each time after.
         key = f"model_fingerprints:{__version__}"
         now = fingerprints(models_dir)

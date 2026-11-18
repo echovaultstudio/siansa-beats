@@ -10,7 +10,7 @@
   --page: #000000; --raised: #0B0F13; --raised-2: #121820; --text: #EEF2F5; --muted: #AFC2D3; --faint: #7F93A4;
   --line: rgba(175, 194, 211, 0.16); --line-strong: rgba(175, 194, 211, 0.32);
   --amber: #FFB547; --on-amber: #1A1200; --amber-text: #FFC56E; --frost: #9DB4C8;
-  --ok: #7FD1A0; --warn: #FFB547; --bad: #FF8A80; --mark: #E879F9;
+  --ok: #7FD1A0; --warn: #FFB547; --bad: #FF8A80; --mark: #E879F9; --cut: #6EC6FF; --drop: #FF9E6E;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
   --nav-w: 232px; --header-h: 58px;
@@ -20,7 +20,8 @@
   :root {
     --page: #F3F6F8; --raised: #FFFFFF; --raised-2: #EDF1F4; --text: #0C1216; --muted: #46576A; --faint: #5C6E80;
     --line: rgba(12, 18, 22, 0.10); --line-strong: rgba(12, 18, 22, 0.22); --amber-text: #8F5200; --frost: #4E6B85;
-    --ok: #1F7A45; --warn: #8F5200; --bad: #B3261E; --mark: #A21CAF; color-scheme: light;
+    --ok: #1F7A45; --warn: #8F5200; --bad: #B3261E; --mark: #A21CAF; --cut: #0B62A0; --drop: #A8431A;
+    color-scheme: light;
   }
 }
 * { box-sizing: border-box; }
@@ -318,6 +319,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .marks .chip { display: inline-flex; gap: 8px; align-items: center; border-color: var(--mark); }
 .marks .chip button { border: 0; background: none; padding: 0 2px; color: inherit; cursor: pointer; }
 .marks .hint { color: var(--muted); font-size: 0.9em; }
+.marks .chip.breakdown { border-color: var(--cut); } .marks .chip.drop { border-color: var(--drop); }
 input[type=text], input[type=search], input[type=url], input[type=password], select { font: inherit; font-size: 0.875rem; border-radius: 999px; padding: 8px 12px;
   border: 1px solid var(--line-strong); background: var(--raised-2); color: var(--text); min-width: 0; }
 :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
@@ -365,6 +367,10 @@ canvas { width: 100%; display: block; border-radius: 12px; background: var(--rai
 .fact .k { font-size: 0.75rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
 .fact .v { font-size: 1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
 label.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 0.875rem; color: var(--muted); }
+.mx-set h4 { margin: 16px 0 8px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.mx-set .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 0.875rem; }
+.mx-set .row input[type=number] { width: 5.5em; }
+.mx-set .row input[type=text] { flex: 1; min-width: 0; max-width: 60%; }
 .banner { border: 1px solid var(--bad); color: var(--bad); border-radius: 12px; padding: 12px 16px; display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
 .banner[hidden], .btn[hidden] { display: none; }
 [hidden] { display: none !important; }  /* a button's or a card's own display would show it all the same */
@@ -412,6 +418,9 @@ code { font-family: var(--mono); font-size: 0.8125rem; background: var(--raised-
 .choice b { display: block; font-size: 0.9375rem; }
 .choice .sub { margin: 4px 0 0; }
 .choice .cost { color: var(--muted); font-size: 0.75rem; margin-top: 4px; }
+.choice .sub b { display: inline; font-size: inherit; }
+.style-change { margin: 8px 0 0; padding-left: 20px; }
+.style-change li { margin-top: 4px; }
 .choice[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
 .form input, .form select { width: 100%; border-radius: 12px; padding: 8px 12px; }
 @media (max-width: 600px) { .form { grid-template-columns: minmax(0, 1fr); } }
@@ -498,6 +507,54 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
   section[data-view="songs"] tbody td:empty { display: none; }
   section[data-view="songs"] tbody td.empty { grid-column: 1 / -1; }
 }
+/* ---- 0.53: Mixes. Shelves of mixes made from a listener's own listening: Listening's header and strips, the
+   artist page's cover tiles (a mix opens its songs), and its list of listens for a mix's songs. ---- */
+.mx-shelf > .sub { margin-top: -4px; }
+.mx-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+a.ar-album { color: inherit; text-decoration: none; }
+a.ar-album:hover > b { color: var(--amber-text); }
+.mx-tiles .ar-album > span.why { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mx-meter { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--faint); }
+.mx-meter .meter { flex: 1; height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; display: flex; }
+.mx-shelves { display: grid; gap: 16px; }
+.mx-tags .chip { margin: 0; }
+.mx-songs li { min-height: 44px; }
+.mx-songs a { color: inherit; text-decoration: none; display: contents; }
+.mx-songs a:hover b { color: var(--amber-text); }
+.mx-songs .own { font-size: 0.75rem; color: var(--faint); white-space: nowrap; }
+.mx-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 700px) { .mx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
+/* ---- 0.52: Voice and mood. Its lines open their songs: a bar each as Genres draws them, but as tall as a thumb;
+   the voices are one bar; a line's songs are the Songs rows with how sure on the right. The page's own colours. ---- */
+.lines { display: grid; }
+.lines .hbar { grid-template-columns: minmax(90px, 30%) minmax(0, 1fr) auto 10px; min-height: 44px; color: inherit; text-decoration: none; }
+.lines a:hover .name { color: var(--amber-text); }
+.lines .none .name, .lines .go { color: var(--faint); }
+.split { height: 10px; border-radius: 999px; background: var(--raised-2); overflow: hidden; display: flex; margin-bottom: 4px; }
+.split span { display: block; height: 100%; }
+.split .female, .dot.female { background: var(--amber); }
+.split .male, .dot.male { background: var(--frost); }
+.split .instrumental, .dot.instrumental { background: color-mix(in srgb, var(--frost) 45%, transparent); }
+.dot.rest { background: var(--raised-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.line { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto 4ch 10px; gap: 12px; align-items: center; min-height: 44px;
+  font-size: 0.875rem; color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); }
+.line:last-child { border-bottom: 0; }
+.line .n { font-weight: 600; font-variant-numeric: tabular-nums; }
+.line .share { color: var(--faint); font-size: 0.8125rem; text-align: right; font-variant-numeric: tabular-nums; }
+.line.rest { color: var(--faint); } .line.rest .n { font-weight: 400; }
+.page-head > button { margin-bottom: 12px; }
+.fact .to { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; font-size: 0.8125rem; font-weight: 400; }
+section[data-view="trait"] table { min-width: 0; }
+section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { text-align: right; }
+@media (max-width: 700px) {
+  section[data-view="trait"] .table { overflow: visible; }
+  section[data-view="trait"] table, section[data-view="trait"] tbody { display: block; width: 100%; }
+  section[data-view="trait"] thead { display: none; }
+  section[data-view="trait"] tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  section[data-view="trait"] tbody td { display: block; padding: 0; border: 0; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  section[data-view="trait"] tbody td:nth-child(2) { display: none; }
+  section[data-view="trait"] tbody td.empty { grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -535,6 +592,7 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
     <div class="group">
       <div class="group-name">Your listening</div>
       <a href="#listening" data-view="listening">Listening</a>
+      <a href="#mixes" data-view="mixes">Mixes</a>
     </div>
     <div class="group">
       <div class="group-name">Used by the Siansa app</div>
@@ -542,6 +600,7 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
       <a href="#loudness" data-view="loudness">Loudness</a>
       <a href="#keys" data-view="keys">Keys</a>
       <a href="#genres" data-view="genres">Genres</a>
+      <a href="#voice" data-view="voice">Voice and mood</a>
       <a href="#similar" data-view="similar">Similar music</a>
     </div>
     <div class="group">
@@ -576,7 +635,7 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
       </div>
       <div class="card" id="start-card" hidden>
         <h3>Get started</h3>
-        <p class="sub">Three steps, all on this page. Nothing is ever changed on your music server.</p>
+        <p class="sub">Four steps, all on this page. Nothing is ever changed on your music server.</p>
         <ol class="steps" id="start-steps"></ol>
       </div>
       <div class="kinds" id="tiles"></div>
@@ -647,8 +706,9 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
           <label class="toggle">Click volume <input type="range" id="click-volume" min="0" max="1" step="0.05" value="0.5"></label>
         </div>
         <div class="marks" id="d-marks" aria-live="polite"></div>
+        <div class="marks" id="d-sections" aria-live="polite"></div>
         <canvas id="beatview" height="120" aria-label="Beats around the playhead"></canvas>
-        <div class="legend"><span><i style="background:var(--frost)"></i>beat</span><span><i style="background:var(--amber)"></i>downbeat (bar number)</span><span><i style="background:var(--ok)"></i>phrase start</span><span><i style="background:var(--mark)"></i>your section marks</span><span id="other-legend"><i style="background:var(--faint);height:6px"></i>the model's beats</span><span><i style="background:var(--text)"></i>now</span><span>8 seconds around what's playing; tap to jump</span></div>
+        <div class="legend"><span><i style="background:var(--frost)"></i>beat</span><span><i style="background:var(--amber)"></i>downbeat (bar number)</span><span><i style="background:var(--ok)"></i>phrase start</span><span><i style="background:var(--mark)"></i>your section marks</span><span><i style="background:var(--cut)"></i>breakdown (Beats)</span><span><i style="background:var(--drop)"></i>drop (Beats)</span><span id="other-legend"><i style="background:var(--faint);height:6px"></i>the model's beats</span><span><i style="background:var(--text)"></i>now</span><span>8 seconds around what's playing; tap to jump</span></div>
         <canvas id="curve" height="170" aria-label="Tempo along the song"></canvas>
         <div class="legend"><span><i style="background:var(--amber)"></i>Beat This! tempo</span><span><i style="background:var(--ok)"></i>BPM tag</span><span><i style="background:var(--line-strong)"></i>the ends (first and last 30 s)</span></div>
         <div id="d-notes"></div>
@@ -748,6 +808,114 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
         <h3>Genres by songs</h3>
         <div class="tools"><input type="search" class="grow" id="genre-find" placeholder="Find a genre" aria-label="Find a genre"></div>
         <div id="genre-top" class="hbars" data-cap="15"></div>
+      </div>
+    </section>
+
+    <!-- Mixes (0.53): made for a listener from their own listening (beats/mixes.py): by when they listen, what
+         they listen to and the light outside. The Siansa app reads the same from /api/v1/mixes. -->
+    <section data-view="mixes">
+      <div class="tm-hero">
+        <div class="tm-kicker">Made for you</div>
+        <h2 id="mx-title">Mixes</h2>
+        <p class="sub" id="mx-note" role="status">Loading…</p>
+        <p class="sub" id="mx-based"></p>
+        <div class="tm-who" id="mx-who" hidden>
+          <label for="mx-user" class="sub">Listener</label>
+          <select id="mx-user" title="Whose mixes are shown"></select>
+        </div>
+        <div class="tm-strip" id="mx-parts" role="group" aria-label="Time of day"></div>
+        <div class="tm-strip" id="mx-days" role="group" aria-label="Days" hidden>
+          <button type="button" data-days="weekdays" aria-pressed="false">Weekdays</button>
+          <button type="button" data-days="weekend" aria-pressed="false">Weekend</button>
+        </div>
+      </div>
+      <div class="card" id="mx-none" hidden><p class="sub" id="mx-none-text"></p></div>
+      <div id="mx-shelves" class="mx-shelves"></div>
+      <div class="card">
+        <details class="how"><summary>How these are made</summary>
+          <p class="sub">Siansa Beats looks at when you play what. The week is cut in ten parts: early morning, morning, afternoon, evening and night, on weekdays and at the weekend. The songs you play in a part fall into a few kinds that sound alike, and each kind is a mix: some of your own songs, and around them songs that sound like them and that you haven't played for a while. A recent listen counts for more, and so does one from this time of year in earlier years.</p>
+          <p class="sub">The sun is worked out from the date and your time zone's city: no weather service is asked. In the dark the calmer mixes come first. A mix is named by its sound, never by the weather, and stays the same all day.</p>
+          <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. Skips aren't counted: the app sends finished listens only.</p>
+          <p class="sub">The next part of the day's mixes are made ten minutes before it starts, so the app finds them ready. With an AI service set up in Setup, each mix of a kind of music gets a name and a short line from it.</p>
+        </details>
+      </div>
+      <!-- What goes into the mixes (0.56): every choice the mixes used to make by themselves, for the listener shown.
+           The app's Settings › Connections › Siansa Beats › Mixes changes the same (/api/v1/mixes/settings). -->
+      <div class="card" id="mx-settings">
+        <h3>What goes into your mixes</h3>
+        <p class="sub">For the listener above. The Siansa app changes the same. Changes make the mixes again.</p>
+        <div id="mx-set-groups" class="mx-set"></div>
+        <div class="controls" style="margin-top:12px">
+          <label class="sub" for="mx-keep">Keep mixes for</label>
+          <select id="mx-keep" title="How long a mix stays playable after it was made, from the app's recent plays">
+            <option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="90">90 days</option>
+          </select>
+          <span class="sub" id="mx-keep-note" role="status"></span>
+        </div>
+        <div class="controls" style="margin-top:12px">
+          <button type="button" class="btn" id="mx-set-reset">As they come</button>
+          <span class="sub" id="mx-set-note" role="status"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- One mix: its songs (#mixes=<id>). -->
+    <section data-view="mix">
+      <div class="page-head"><button type="button" id="mx-back">‹ Mixes</button><h2 id="mx-name"></h2><p class="sub" id="mx-why" role="status"></p>
+        <div class="mx-tags" id="mx-tags"></div></div>
+      <div class="card">
+        <ul class="tm-listens mx-songs" id="mx-songs" data-cap="12"></ul>
+      </div>
+    </section>
+
+    <!-- Voice and mood (0.52): who sings each song and its moods, by Essentia's trained models (beats/traits.py) -->
+    <section data-view="voice">
+      <div class="page-head"><h2>Voice and mood</h2><p class="sub">Who sings each song and how it feels, read from its sound. Tap a line for its songs.</p></div>
+      <div class="card" id="v-off" hidden><p class="sub">This image has no voice and mood models, so there's nothing to show here.</p></div>
+      <div class="tiles" id="v-tiles"></div>
+      <div class="grid2" id="v-cards">
+        <div class="card">
+          <h3>Voice</h3>
+          <div class="split" id="v-split" aria-hidden="true"></div>
+          <div class="lines" id="v-voice"></div>
+          <details class="how"><summary>How it works</summary><p class="sub">Essentia's trained models read what Siansa Beats already keeps of each song's sound. No song is heard again. A song has a mood when its share is half or more. In the makers' own tests: voice right 98 times in 100, whose voice 85, moods 84 to 97, mood groups 67. Not checked on your music.</p></details>
+        </div>
+        <div class="card">
+          <h3>Moods</h3>
+          <p class="sub" id="v-moods-note">A song can have several moods, or none.</p>
+          <div class="lines" id="v-moods"></div>
+        </div>
+        <div class="card">
+          <h3>Sound</h3>
+          <div class="lines" id="v-sound"></div>
+        </div>
+        <div class="card" data-fold id="v-groups-card">
+          <h3>Mood groups</h3>
+          <p class="sub">One group per song: the one it fits best. The least sure reading here: right about 2 times in 3.</p>
+          <div class="lines" id="v-groups"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- One line of Voice and mood: its songs (#voice=<line>), the most sure first, the least sure, or the close calls. -->
+    <section data-view="trait">
+      <div class="page-head"><button type="button" id="t-back">‹ Voice and mood</button><h2 id="t-name"></h2><p class="sub" id="t-sub" role="status"></p></div>
+      <div class="card">
+        <div class="tools">
+          <div class="seg" role="group" aria-label="Order" id="t-order">
+            <button data-order="most" aria-pressed="true">Most sure</button>
+            <button data-order="least" aria-pressed="false" title="The songs just over the line: the likeliest to be wrong">Least sure</button>
+            <button data-order="unsure" aria-pressed="false" title="The close calls, 40 to 60%, on both sides of the line">Not sure</button>
+          </div>
+        </div>
+        <p class="sub" id="t-note"></p>
+        <div class="table">
+          <table>
+            <thead><tr><th>Song</th><th>Genre</th><th>How sure</th></tr></thead>
+            <tbody id="t-rows"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <button type="button" class="cap-more" id="t-more" hidden>Show more</button>
       </div>
     </section>
 
@@ -945,6 +1113,27 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
           </form>
         </details>
       </div>
+      <!-- The AI service that names the mixes (0.54) and plans the app's playlists (0.57): the Siansa app's providers. The key is kept encrypted, never shown. -->
+      <div class="card" id="ai-card" data-fold>
+        <h3>AI</h3>
+        <p class="sub">Mixes get a name from an AI service, like a streaming service's editors would give them. Only a mix's genres, energy, mood and three of its artists are sent: never your listening. Without it, a mix is named by its sound ("Calm Indie Rock").</p>
+        <p class="sub">The Siansa app asks it too: the names and sound searches of its vibes, Today's mix, Flow's words and the mood radios. With it on here, the app needs no AI service of its own.</p>
+        <form id="ai-form" autocomplete="off">
+          <label class="toggle"><input type="checkbox" id="ai-on"> Use AI</label>
+          <div class="form">
+            <label>Service<select id="ai-provider"></select></label>
+            <label>Model <input type="text" id="ai-model" autocapitalize="none" spellcheck="false"></label>
+            <label class="wide" id="ai-address-row" hidden>Address <input type="text" id="ai-address" placeholder="192.168.1.10:11434" autocapitalize="none" spellcheck="false"></label>
+            <label class="wide" id="ai-key-row">API key <input type="password" id="ai-key" autocomplete="new-password"></label>
+          </div>
+          <p class="sub" id="ai-hint"></p>
+          <div class="controls">
+            <button type="submit" class="primary" id="ai-save">Save</button>
+            <button type="button" id="ai-test">Test</button>
+            <span class="sub" id="ai-note" role="status"></span>
+          </div>
+        </form>
+      </div>
       <div class="card" id="access-card" data-fold>
           <h3>Access</h3>
           <dl class="kv" id="setup-connections"></dl>
@@ -970,9 +1159,16 @@ details.how { margin-top: 12px; } details.how summary { font-size: 0.8125rem; co
         <p class="sub">The models are other people's work, each under its own licence: their authors are credited in the README.</p></div>
       <div class="card" data-fold id="style-card">
         <h3>Genre model</h3>
-        <p class="sub">Which model hears each song's genres. Both name the same 400 styles. Changing it hears every song again; the old genres stay in use until then.</p>
-        <div class="choices" id="style-choices" role="radiogroup" aria-label="Style model"></div>
+        <p class="sub">Which model hears each song's genres. Both name the same 400 styles.</p>
+        <p class="sub" id="style-first" hidden><b>Choose one before your first analysis.</b> You can change it later, but every song is then heard again.</p>
+        <div class="choices" id="style-choices" role="radiogroup" aria-label="Genre model"></div>
         <p class="sub" id="style-note" role="status"></p>
+        <h4>If you change it later</h4>
+        <ul class="sub style-change">
+          <li><b>What's kept:</b> each song keeps its genres from the model before, still in use, until the new one hears it. Then they're replaced: the two are never kept side by side.</li>
+          <li><b>While it listens:</b> genres are partly old and partly new. Genre pages, the genres in the Siansa app and the mixes made by kind of music change song by song. Beats, DJ blends, loudness, keys, moods, similar music and the search by words don't use the genre model and keep working as they are.</li>
+          <li><b>After:</b> the old model's genres are gone. Going back means hearing every song again.</li>
+        </ul>
       </div>
       <div class="card" data-fold>
         <h3>Connect the Siansa app</h3>
@@ -1341,13 +1537,31 @@ async function openSong(id, newSong, fromHistory) {
     ["Beats / downbeats", r.beat_count != null ? `${r.beat_count} / ${r.downbeat_count}` : "–"],
     ["Time", r.model_seconds ? `model ${fmt(r.model_seconds)} s · decode ${fmt(r.decode_seconds)} s · download ${fmt(r.download_seconds)} s` : "–"],
   ];
+  // Essentia's trained traits (0.51): what the models said, to check on songs you know.
+  const tr = detail.traits;
+  const sure = (x) => x >= 0.5 ? `Yes (${pct(x)})` : `No (${pct(1 - x)})`;
+  const MIREX = {mirex_passionate: "Passionate, rousing", mirex_cheerful: "Cheerful, fun", mirex_bittersweet: "Wistful, bittersweet",
+    mirex_humorous: "Quirky, playful", mirex_intense: "Intense, fiery"};
+  const topMirex = !tr ? null : Object.keys(MIREX).sort((a, b) => tr[b] - tr[a])[0];
+  // 0.52: a third item is the way to every song the same (the lists of Voice and mood).
+  const heldMoods = !tr ? [] : ["happy", "sad", "relaxed", "party", "aggressive"].filter((m) => tr[m] >= 0.5);
+  const voiceFacts = !tr ? [] : [
+    ["Voice", tr.voice >= 0.5 ? `Sung (${pct(tr.voice)} sure)` : `Instrumental (${pct(1 - tr.voice)} sure)`, tr.voice >= 0.5 ? null : [["instrumental", "All instrumental"]]],
+    ["Whose voice", tr.voice < 0.5 ? "–" : tr.female >= 0.5 ? `A woman's (${pct(tr.female)} sure)` : `A man's (${pct(1 - tr.female)} sure)`,
+      tr.voice < 0.5 ? null : tr.female >= 0.5 ? [["female", "All sung by a woman"]] : [["male", "All sung by a man"]]],
+    ["Moods", heldMoods.map((m) => `${m} ${pct(tr[m])}`).join(", ") || "none strongly", heldMoods.map((m) => [m, `${LINE_NAMES[m]} songs`])],
+    ["Mood group (MIREX)", `${MIREX[topMirex]} (${pct(tr[topMirex])})`],
+    ["Danceable", sure(tr.danceable)], ["Electronic", sure(tr.electronic)], ["Acoustic", sure(tr.acoustic)],
+    ["How positive (valence)", detail.valence != null ? `${fmt(detail.valence, 1)} of 9` : "–"],
+  ];
   const genreFacts = [
     ["Its genres", heardGenres(detail.genres).map((g) => `${styleOf(g.label)} ${g.weight.toFixed(2)}`).join(", ") || "–"],
     ["All its sound said", byGenreSource(detail.genres, "sound").map((g) => `${styleOf(g.label)} ${g.weight.toFixed(2)}`).join(", ") || "–"],
     ["Its tags", byGenreSource(detail.genres, "tag").map((g) => g.label).join(", ") || "–"],
   ];
-  const factCards = (list) => list.map(([k, v]) => `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
-  $("d-facts").innerHTML = factCards(facts);
+  const factCards = (list) => list.map(([k, v, to]) => `<div class="fact"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${
+    to && to.length ? `<div class="to">${to.map(([line, text]) => `<a href="#voice=${line}">${esc(text)} ›</a>`).join("")}</div>` : ""}</div>`).join("");
+  $("d-facts").innerHTML = factCards(facts.concat(voiceFacts));
   $("d-sound").innerHTML = factCards(soundFacts(detail.measure));
   $("d-genres").innerHTML = factCards(genreFacts);
   $("d-servers").innerHTML = factCards((detail.servers || []).map((x) => [x.name, x.item_id]));
@@ -1394,6 +1608,10 @@ function drawBeatView() {
   g.fillStyle = css("--mark");  // the owner's marks, under the beats
   for (const m of detail.marks || []) if (m.seconds >= t0 && m.seconds <= t0 + span) { g.fillRect(x(m.seconds) - 3, 0, 6, h); }
   g.font = "11px " + css("--mono");
+  for (const s of sectionsFound()) {  // the breakdowns and drops Beats found, with their name along the top
+    const t = s.ms / 1000; if (t < t0 || t > t0 + span) continue;
+    g.fillStyle = css(s.kind === "drop" ? "--drop" : "--cut"); g.fillRect(x(t) - 2, 18, 4, h - 28); g.fillText(s.kind, x(t) + 5, 30);
+  }
   g.fillStyle = css("--faint");  // the other set, small along the bottom, to see where they part
   for (const b of other) if (b >= t0 && b <= t0 + span) g.fillRect(x(b) - 1, h - 8, 2, 6);
   for (const b of beats) {
@@ -1430,6 +1648,7 @@ function drawCurve() {
   for (const t of (detail.grid && detail.grid.phrases) || []) g.fillRect(x(t) - 1, 10, 2, 8);
   g.fillStyle = css("--mark");  // the owner's marks, along the bottom
   for (const m of detail.marks || []) g.fillRect(x(m.seconds) - 2, h - 28, 4, 10);
+  for (const s of sectionsFound()) { g.fillStyle = css(s.kind === "drop" ? "--drop" : "--cut"); g.fillRect(x(s.ms / 1000) - 2, h - 40, 4, 10); }
   if (pts.length) { g.strokeStyle = css("--amber"); g.lineWidth = 2; g.beginPath(); pts.forEach(([t, v], i) => i ? g.lineTo(x(t), y(v)) : g.moveTo(x(t), y(v))); g.stroke(); }
   const now = $("player").currentTime || 0; g.fillStyle = css("--text"); g.fillRect(x(now) - 1, 10, 2, h - 30);
   g.fillStyle = css("--faint"); g.fillText("0", 40, h - 4); g.fillText(fmt(dur / 60) + " min", w - 60, h - 4);
@@ -1487,7 +1706,39 @@ function drawMarks() {
     return `<span class="chip"><button data-jump="${m.seconds}" title="Play from just before it">${clock(m.seconds)}${where}</button>` +
       `<button data-unmark="${m.id}" aria-label="Take this mark away">✕</button></span>`;
   }).join("") : `<span class="hint">Tap <b>Section starts here</b> (or press M) on every drop, breakdown and big change you hear.</span>`;
+  drawSections();
 }
+// ---- the breakdowns and drops Beats found (0.49.0), against the owner's marks ----
+function sectionsFound() { return (detail && detail.sections && detail.sections.found) || []; }
+// A breakdown or drop and a mark agree within a bar of each other (a tap comes a little late, and may be a bar off).
+function sectionsAgree(found, marks, barS) {
+  const near = (a, list) => list.some((b) => Math.abs(a - b) <= barS);
+  const at = found.map((s) => s.ms / 1000), tapped = marks.map((m) => m.seconds);
+  return {agree: at.filter((t) => near(t, tapped)).length, missed: tapped.filter((t) => !near(t, at)).length};
+}
+function drawSections() {
+  const box = $("d-sections");
+  if (!detail || !detail.sections) { box.innerHTML = detail ? '<span class="hint">Breakdowns and drops: none worked out for this song (no beat grid or sound levels yet).</span>' : ""; return; }
+  const found = sectionsFound(), marks = detail.marks || [];
+  const chips = found.map((s) => {
+    const sure = s.db == null ? "" : ` · bass ${s.kind === "drop" ? "+" : "−"}${fmt(s.db, 0)} dB${s.db >= 10 ? " · clear" : " · faint"}`;
+    return `<span class="chip ${s.kind}"><button data-jump="${s.ms / 1000}" title="Play from just before it">${s.kind === "drop" ? "Drop" : "Breakdown"} ${clock(s.ms / 1000)}${sure}</button></span>`;
+  }).join("");
+  const bpm = detail.grid && detail.grid.bpm, barS = bpm ? 4 * 60 / bpm : 2;
+  let line;
+  if (!found.length) line = "Beats found no breakdown or drop in this song.";
+  else if (!marks.length) line = "Tap <b>Section starts here</b> on the breakdowns and drops you hear, to see whether Beats agrees.";
+  else {
+    const r = sectionsAgree(found, marks, barS);
+    line = `Your marks agree with ${r.agree} of the ${found.length} Beats found, within a bar.` + (r.missed ? ` ${r.missed === 1 ? "1 of your marks has" : r.missed + " of your marks have"} nothing of Beats' near it (a breakdown or drop it missed, or another kind of change).` : "");
+  }
+  const sent = detail.sections.sent ? "" : " Not sent to the app yet: worked out now from the song.";
+  box.innerHTML = `<span class="hint">Found by Beats, where the bass drops out (breakdown) or comes back (drop):</span>${chips}<span class="hint">${line}${sent}</span>`;
+}
+$("d-sections").addEventListener("click", (e) => {
+  const jump = e.target.closest("[data-jump]");
+  if (jump) { const p = $("player"); p.currentTime = Math.max(0, Number(jump.dataset.jump) - 4); p.play(); }
+});
 async function addMark() {
   if (!detail || !selected) return;
   const at = Math.max(0, ($("player").currentTime || 0) - 0.15);  // a tap comes about 150 ms after the sound
@@ -1685,7 +1936,7 @@ function chooseServer(id) {
   server = id || null;
   try { if (server) localStorage.setItem("beats-server", server); else localStorage.removeItem("beats-server"); } catch (e) { /* private window */ }
   // Everything on show is this server's now.
-  songs = []; libraries = []; picked = null; readNote = ""; lastCounts = ""; songsAsked = 0; genresShownAt = 0; serversDrawn = "";
+  songs = []; libraries = []; picked = null; readNote = ""; lastCounts = ""; songsAsked = 0; genresShownAt = 0; voiceAt = 0; serversDrawn = "";
   $("genre-top").innerHTML = ""; $("libs").innerHTML = '<span class="sub">Asking the server…</span>';
   drawRows(); exportLinks();
   statusLoop(); refreshLibraries(); refreshSongs(); refreshGenres(true);
@@ -1865,7 +2116,7 @@ window.addEventListener("scroll", () => { toTop.hidden = window.scrollY < window
 // ---- pages ----
 // One page at a time, chosen in the side menu (tabs on a phone) and kept in the address (#songs, #song=<id>), so Back
 // and a bookmark work.
-const VIEWS = ["overview", "libraries", "songs", "listening", "artist", "loudness", "keys", "genres", "similar", "blends", "activity", "log", "setup", "report"];
+const VIEWS = ["overview", "libraries", "songs", "listening", "mixes", "mix", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
 let currentView = null;
 function showView(view, keepHash) {
   if (!VIEWS.includes(view)) view = "overview";
@@ -1881,7 +2132,20 @@ function showView(view, keepHash) {
   if (view === "log") refreshLog(true);
   if (view === "loudness" || view === "keys") refreshLoudness();
   if (view === "similar") drawSimilarStatus();
+  if (view === "voice") refreshVoice(true);
+  if (view === "trait") {  // part of Voice and mood: its menu entry stays marked
+    document.querySelector('.nav [data-view="voice"]')?.setAttribute("aria-current", "page");
+    $("page-name").textContent = "Voice and mood · " + (LINE_NAMES[trait.line] || "Songs");
+    document.title = `${LINE_NAMES[trait.line] || "Voice and mood"} · Siansa Beats`;
+  }
   if (view === "listening") refreshListening();
+  if (view === "mixes") refreshMixes();
+  if (view === "setup") refreshAi();
+  if (view === "mix") {  // part of Mixes: its menu entry stays marked
+    document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
+    $("page-name").textContent = "Mixes · " + (mx.open || "Mix");
+    document.title = `${mx.open || "Mix"} · Siansa Beats`;
+  }
   if (view === "artist") {  // part of Listening: its menu entry stays marked
     document.querySelector('.nav [data-view="listening"]')?.setAttribute("aria-current", "page");
     $("page-name").textContent = "Listening · " + (ar.name || "Artist");
@@ -1890,11 +2154,189 @@ function showView(view, keepHash) {
 function route() {
   const a = location.hash.match(/^#artist=(.+)$/);
   if (a) { showView("artist", true); openArtist(decodeURIComponent(a[1])); return; }
+  const x = location.hash.match(/^#mixes=([\w-]+)$/);
+  if (x) { openMix(x[1]); return; }
+  const v = location.hash.match(/^#voice=(\w+)$/);
+  if (v && LINE_NAMES[v[1]]) { trait.line = v[1]; showView("trait", true); openTrait(v[1]); return; }
   const m = location.hash.match(/^#song=(.+)$/);
   if (m) { showView("songs", true); if (selected !== decodeURIComponent(m[1])) { history.replaceState({song: decodeURIComponent(m[1])}, "", location.hash); openSong(decodeURIComponent(m[1]), true, true); } return; }
   showView(location.hash.slice(1) || "overview", true);
 }
 window.addEventListener("hashchange", () => { route(); window.scrollTo({top: 0}); });
+
+// ---- mixes (0.53): made for a listener from their own listening ----
+// part and days: another part of the week than now's, to look at (null: now).
+const mx = {user: null, part: null, days: null, data: null, open: "", asked: 0};
+function mixesUrl() {
+  const q = new URLSearchParams({tz: TM_ZONE});
+  if (mx.user !== null) q.set("user", mx.user);
+  if (mx.part) { q.set("part", mx.part); q.set("days", mx.days || "weekdays"); }
+  return "api/mixes?" + q;
+}
+async function refreshMixes() {
+  const asked = ++mx.asked;
+  let d;
+  try { d = await api(mixesUrl()); } catch (e) {
+    if (asked === mx.asked) $("mx-note").textContent = "Siansa Beats isn't answering; try again shortly.";
+    return null;
+  }
+  if (asked !== mx.asked) return null;
+  const listener = mx.data ? mx.data.user : undefined;
+  mx.data = d;
+  drawMixes(d);
+  if (!mxSettings || listener !== d.user) loadMixSettings();  // the settings of the listener shown
+  return d;
+}
+function drawMixes(d) {
+  $("mx-title").textContent = `Your ${d.said}`;
+  if (currentView === "mixes") $("page-name").textContent = `Mixes · ${d.said[0].toUpperCase()}${d.said.slice(1)}`;
+  const now = d.shelves.find((s) => s.key === "now");
+  $("mx-note").textContent = now ? now.note : "";
+  $("mx-based").textContent = d.based;
+  const keep = $("mx-keep");
+  if (![...keep.options].some((o) => +o.value === d.keep_days)) keep.add(new Option(`${d.keep_days} days`, d.keep_days));
+  keep.value = String(d.keep_days);
+  const users = d.listeners || [];
+  $("mx-who").hidden = users.length < 2;
+  $("mx-user").innerHTML = users.map((u) => `<option value="${esc(u)}"${u === d.user ? " selected" : ""}>${esc(u || "No name")}</option>`).join("");
+  $("mx-parts").innerHTML = `<button type="button" data-part="" aria-pressed="${!mx.part}">Now</button>` +
+    d.parts.map((p) => `<button type="button" data-part="${p.key}" aria-pressed="${mx.part === p.key}" title="${p.hours}">${esc(p.said[0].toUpperCase() + p.said.slice(1))}</button>`).join("");
+  $("mx-days").hidden = !mx.part;
+  $("mx-days").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.days === d.days)));
+  const any = d.shelves.some((s) => s.mixes.length);
+  $("mx-none").hidden = any;
+  $("mx-none-text").textContent = d.songs ? "Not enough music sounds alike yet to make a mix." : "No song's sound is known yet. Mixes come once Sound has analysed your music.";
+  $("mx-shelves").innerHTML = d.shelves.filter((s) => s.mixes.length).map((s) => `<div class="card mx-shelf"><h3>${esc(s.key !== "now" ? s.title : mx.part ? `For the ${d.said}` : "For now")}</h3>` +
+    (s.key !== "now" && s.note ? `<p class="sub">${esc(s.note)}</p>` : "") +
+    `<div class="mx-tiles">${s.mixes.map(mixTile).join("")}</div></div>`).join("");
+}
+function mixTile(m) {
+  const first = m.songs[0] || {};
+  const energy = m.energy === null ? "" : `<span class="mx-meter" title="Energy, against your library">Energy<span class="meter"><span class="done" style="width:${Math.round(m.energy * 100)}%"></span></span></span>`;
+  return `<a class="ar-album" href="#mixes=${esc(m.id)}">${art("cover", first.id, m.name, 300, "", first.artist)}<b>${esc(m.name)}</b>` +
+    `<span class="why">${esc(m.about || m.why || `${m.songs.length} songs`)}</span>${energy}</a>`;
+}
+async function openMix(id) {
+  const d = mx.data || await refreshMixes();
+  const m = d && d.shelves.flatMap((s) => s.mixes).find((one) => one.id === id);
+  if (!m) { location.hash = "#mixes"; return; }
+  mx.open = m.name;
+  showView("mix", true);
+  $("mx-name").textContent = m.name;
+  const yours = m.own && m.own < m.songs.length ? `, ${num(m.own)} of them yours` : "";
+  $("mx-why").textContent = `${[m.about, m.why].filter(Boolean).join(" · ")} ${num(m.songs.length)} songs${yours}.`.trim();
+  $("mx-tags").innerHTML = [...(m.genres || []).slice(0, 2), ...(m.tags || [])].map((t) => `<span class="chip">${esc(t)}</span>`).join("");
+  $("mx-songs").innerHTML = m.songs.map((s) => `<li><a href="#song=${encodeURIComponent(s.id)}">${art("cover", s.id, s.title, 96, "s", s.artist)}` +
+    `<div class="t"><b>${esc(s.title)}</b><span>${esc(s.artist)}</span></div><span class="own">${s.own && m.own < m.songs.length ? "yours" : ""}</span></a></li>`).join("");
+}
+$("mx-parts").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-part]");
+  if (!b) return;
+  mx.part = b.dataset.part || null;
+  if (mx.part && !mx.days) mx.days = mx.data ? mx.data.days : "weekdays";
+  if (!mx.part) mx.days = null;
+  refreshMixes();
+});
+$("mx-days").addEventListener("click", (e) => { const b = e.target.closest("button[data-days]"); if (b) { mx.days = b.dataset.days; refreshMixes(); } });
+$("mx-user").addEventListener("change", () => { mx.user = $("mx-user").value; refreshMixes(); });
+$("mx-back").addEventListener("click", () => { location.hash = "#mixes"; });
+// What goes into the mixes (0.56): drawn from what Siansa Beats says each setting is, so a new one shows by itself.
+var MX_GROUPS = [
+  ["Which mixes", ["now", "now_count", "daily", "daily_count", "repeat", "rediscover", "new"]],
+  ["What's in each", ["size", "familiar", "per_artist", "fresh_days", "leave_genres", "leave_artists"]],
+  ["What they're made from", ["time_of_day", "weekend_apart", "daylight", "season", "half_life", "repeat_days", "forgotten_days"]],
+  ["Names", ["ai_names"]],
+];
+var mxSettings = null;  // var: read by refreshMixes, which may run before this line
+async function loadMixSettings() {
+  const user = mx.data ? mx.data.user : "";
+  try { mxSettings = await api(`api/mixes/settings?user=${encodeURIComponent(user || "")}`); }
+  catch (e) { $("mx-set-note").textContent = e.message; return; }
+  drawMixSettings();
+}
+function drawMixSettings() {
+  const d = mxSettings, by = Object.fromEntries(d.described.map((x) => [x.name, x]));
+  const listed = new Set(MX_GROUPS.flatMap(([, names]) => names));
+  const groups = MX_GROUPS.concat([["More", d.described.map((x) => x.name).filter((n) => !listed.has(n))]]);
+  $("mx-set-groups").innerHTML = groups.filter(([, names]) => names.some((n) => by[n])).map(([title, names]) =>
+    `<h4>${esc(title)}</h4>` + names.filter((n) => by[n]).map((n) => {
+      const x = by[n], v = d.settings[n], id = `mxs-${n}`;
+      if (x.kind === "on") return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="checkbox" id="${id}" data-set="${n}" ${v ? "checked" : ""}></label>`;
+      if (x.kind === "number") return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="number" id="${id}" data-set="${n}" min="${x.low}" max="${x.high}" value="${v}"></label>`;
+      return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="text" id="${id}" data-set="${n}" value="${esc(v.join(", "))}" placeholder="Names, separated by commas"></label>`;
+    }).join("")).join("");
+}
+$("mx-set-groups").addEventListener("change", async (e) => {
+  const el = e.target.closest("[data-set]");
+  if (!el || !mxSettings) return;
+  const n = el.dataset.set, x = mxSettings.described.find((d) => d.name === n);
+  const value = x.kind === "on" ? el.checked : x.kind === "number" ? +el.value : el.value.split(",").map((w) => w.trim()).filter(Boolean);
+  await saveMixSettings({[n]: value});
+});
+$("mx-set-reset").addEventListener("click", async () => {
+  if (!mxSettings) return;
+  await saveMixSettings(Object.fromEntries(mxSettings.described.map((x) => [x.name, x.default])));
+});
+async function saveMixSettings(changes) {
+  $("mx-set-note").textContent = "Saving…";
+  try {
+    mxSettings = await api("api/mixes/settings", {method: "POST", body: JSON.stringify({user: mxSettings.user, settings: changes})});
+    drawMixSettings();
+    $("mx-set-note").textContent = "Saved: the mixes are made again";
+    refreshMixes();
+  } catch (err) { $("mx-set-note").textContent = err.message; }
+}
+$("mx-keep").addEventListener("change", async () => {
+  $("mx-keep-note").textContent = "Saving…";
+  try { const got = await api("api/mixes/keep", {method: "POST", body: JSON.stringify({days: +$("mx-keep").value})}); $("mx-keep-note").textContent = `Kept ${got.keep_days} days`; }
+  catch (e) { $("mx-keep-note").textContent = e.message; }
+});
+
+// ---- the AI service that names the mixes (0.54) ----
+const ai = {data: null};
+async function refreshAi() {
+  try { ai.data = await api("api/ai"); } catch (e) { return; }
+  drawAi(true);
+}
+function drawAi(fill) {
+  const d = ai.data;
+  if (!d) return;
+  if (fill) {
+    $("ai-provider").innerHTML = d.providers.map((p) => `<option value="${p.key}"${p.key === d.provider ? " selected" : ""}>${esc(p.label)}</option>`).join("");
+    $("ai-on").checked = d.on;
+    $("ai-model").value = d.model;
+    $("ai-address").value = d.address;
+    $("ai-key").value = "";
+  }
+  const p = d.providers.find((x) => x.key === $("ai-provider").value) || d.providers[0];
+  $("ai-address-row").hidden = !p.own_address;
+  $("ai-key-row").hidden = !p.needs_key && !p.own_address;
+  $("ai-key").placeholder = d.has_key && $("ai-provider").value === d.provider ? "Saved: type a new one to change it" : p.needs_key ? "Needed" : "Only if it asks for one";
+  $("ai-model").placeholder = p.model;
+  $("ai-hint").textContent = p.hint;
+  if (fill) $("ai-note").textContent = d.error ? "Last try: " + d.error : d.ready ? "In use" : d.on ? "Not ready: something's missing" : "";
+}
+function aiTyped() {
+  const typed = {provider: $("ai-provider").value, model: $("ai-model").value.trim(), address: $("ai-address").value.trim()};
+  if ($("ai-key").value.trim()) typed.key = $("ai-key").value.trim();
+  return typed;
+}
+$("ai-provider").addEventListener("change", () => {
+  const p = ai.data && ai.data.providers.find((x) => x.key === $("ai-provider").value);
+  if (p) $("ai-model").value = $("ai-provider").value === ai.data.provider ? ai.data.model : p.model;
+  drawAi(false);
+});
+$("ai-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("ai-note").textContent = "Saving…";
+  try { ai.data = await api("api/ai", {method: "POST", body: JSON.stringify({on: $("ai-on").checked, ...aiTyped()})}); drawAi(true); }
+  catch (err) { $("ai-note").textContent = err.message; }
+});
+$("ai-test").addEventListener("click", async () => {
+  $("ai-note").textContent = "Asking…";
+  try { const got = await api("api/ai/test", {method: "POST", body: JSON.stringify(aiTyped())}); $("ai-note").textContent = got.ok ? `Works: it said "${got.said}"` : got.said; }
+  catch (err) { $("ai-note").textContent = err.message; }
+});
 
 // ---- listening: the time machine ----
 // A listener's history a month or a year at a time (or all of it). The days and hours are this browser's clock's.
@@ -2336,7 +2778,7 @@ function tile(href, k, v, of, s, meter) {
 function kindsOf(s) {
   const c = s.counts || {}, total = (c.songs || 0) - (c.skipped || 0), done = c.done || 0, failed = c.failed || 0;
   const waiting = (c.queued || 0) + BUSY.reduce((n, k) => n + (c[k] || 0), 0);
-  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0;
+  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0, tr = s.traits || {};
   const where = s.device_name && s.device_name !== "CPU" ? ` on the GPU` : "";
   return [
     {id: "beats", href: "#songs", name: "Beats", what: "Tempo, every beat and the phrases: what DJ blends are laid on.",
@@ -2356,6 +2798,12 @@ function kindsOf(s) {
       // Of the songs a library wants the sound for (0.47.1): a library left out of Sound isn't counted.
       done: so.heard ?? so.sound ?? 0, total: so.wanted ?? so.songs ?? null, failed: soFailed, busy: 0, now: so.hearing ? "hearing a song now" : "",
       left: Math.max(0, (so.wanted ?? so.songs ?? 0) - (so.heard ?? so.sound ?? 0) - soFailed) + (so.again || 0), off: so.hears === false},
+    // 0.52: of the songs with a sound, how many Essentia's models have scored. They're scored at start-up and as songs
+    // are heard, from the sound kept: nothing to wait for but the next minute.
+    {id: "voice", href: "#voice", name: "Voice and mood", what: "Who sings each song, a woman or a man, and its moods.",
+      by: tr.available ? "<b>Essentia's trained models</b>" : "<b>None</b>: this image has no voice and mood models",
+      done: tr.scored || 0, total: tr.available ? tr.total || 0 : null, failed: 0, busy: 0,
+      now: (tr.total || 0) > (tr.scored || 0) ? "scoring songs now" : "", left: Math.max(0, (tr.total || 0) - (tr.scored || 0)), off: !tr.available},
   ];
 }
 const AGAIN_ASK = {
@@ -2369,10 +2817,13 @@ const AGAIN_ASK = {
 function drawStart(s) {
   const server = !!(s.servers && s.servers.length), libs = ((s.libraries || {}).chosen || []).length > 0;
   const songs = ((s.counts || {}).songs || 0) > 0;
-  $("start-card").hidden = server && libs && songs;
+  // The genre model, chosen at setup (0.58): asked before the first analysis; an install that heard songs has one.
+  const picked = styleModels ? !!styleModels.picked : true;
+  $("start-card").hidden = server && libs && songs && picked;
   const step = (done, title, text) => `<li data-done="${done}"><div><b>${title}</b><p class="sub">${text}</p></div></li>`;
   $("start-steps").innerHTML = [
     step(server, "Add your music server", server ? "Done." : 'Under <a href="#setup">Setup › Music servers</a>: its address, user name and password, as you sign in to Siansa. Navidrome, Emby and Jellyfin work.'),
+    step(picked, "Choose the genre model", picked ? "Done." : 'Under <a href="#setup">Setup › Genre model</a>: Discogs-EffNet is quick on any machine; MAEST is more accurate but slow without a GPU. Each says what it\'s good at and what to watch out for.'),
     step(libs && songs, "Choose what to analyse", libs && songs ? "Done." : 'Under <a href="#libraries">Libraries</a>: switch on the libraries you want and press <b style="display:inline">Start analysis</b>. Try one small library first; a song takes a few seconds on a GPU and much longer on a CPU.'),
     step(false, "Connect the Siansa app", 'In the app: Settings › Connections › Siansa Beats, with the address and key shown under <a href="#setup">Setup › Connect the Siansa app</a>. A password for this page is set there too, under Access.'),
   ].join("");
@@ -2380,7 +2831,7 @@ function drawStart(s) {
 function drawTiles(s) {
   $("tiles").innerHTML = kindsOf(s).map((k) => {
     const w = (n) => k.total ? `${Math.max(0, Math.min(100, 100 * n / k.total))}%` : "0";
-    const state = k.off ? "not in this image" : s.paused && k.left ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
+    const state = k.off ? "not in this image" : s.paused && k.left && k.id !== "voice" ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
     return `<div class="kind"><div class="top"><a href="${k.href}">${esc(k.name)}</a><span class="n">${k.total == null ? "–" : `${num(k.done)} <small>of ${num(k.total)}</small>`}</span></div>
       <div class="for">${esc(k.what)}</div>
       <div class="meter" aria-hidden="true"><span class="done" style="width:${w(k.done)}"></span><span class="failed" style="width:${w(k.failed)}"></span><span class="busy" style="width:${w(k.busy)}"></span></div>
@@ -2432,14 +2883,41 @@ async function drawStyleModels() {
     const on = m.id === styleModels.chosen;
     return `<label class="choice" role="radio" aria-checked="${on}" aria-disabled="${!m.available}">
       <input type="radio" name="style-model" value="${esc(m.id)}" ${on ? "checked" : ""} ${m.available ? "" : "disabled"}>
-      <span><b>${esc(m.name)}</b><span class="sub">${esc(m.blurb)}</span><span class="cost">${esc(m.cost)}${m.available ? "" : " Not in this image."}</span></span>
+      <span><b>${esc(m.name)}</b><span class="sub">${esc(m.blurb)}</span>${m.good ? `<span class="sub"><b>Good:</b> ${esc(m.good)}</span>` : ""}${m.risk ? `<span class="sub"><b>Watch out:</b> ${esc(m.risk)}</span>` : ""}<span class="cost">${esc(m.cost)}${m.available ? "" : " Not in this image."}</span></span>
     </label>`;
   }).join("");
+  $("style-first").hidden = !!styleModels.picked;
+  if (status) drawStart(status);
   $("style-choices").querySelectorAll("input").forEach((input) => input.addEventListener("change", () => chooseStyleModel(input.value)));
 }
+/**
+ * What a change of genre model means, asked before it's made (0.58, the owner, 18 Nov: whether old values are kept, what
+ * no longer works while it listens and after, and a warning when switching halfway through). Null: nothing to ask (no
+ * song heard yet: the first choice at setup).
+ */
+function styleSwitchWarning(to) {
+  const m = styleModels || {};
+  const heard = m.heard || 0, doubted = m.old || 0, total = m.total || 0;
+  if (heard + doubted === 0) return null;
+  const halfway = (m.switching || doubted > 0)
+    ? `A switch is still under way: ${num(heard)} of ${num(heard + doubted)} songs have been heard with the model in use. Switching again now hears all of them once more, the ${num(heard)} already done included, so it takes longer. Nothing is taken away until each song is heard again.`
+    : (total > heard && heard > 0)
+      ? `The first listen isn't finished: ${num(heard)} of ${num(total)} songs have genres. Switching now hears those ${num(heard)} again too; the rest are heard once, with the new model.`
+      : null;
+  return [
+    halfway ? `⚠ ${halfway}` : null,
+    `Switch to ${to.name}? ${num(heard + doubted)} songs are heard again with it. ${to.cost}`,
+    "",
+    "What's kept: each song keeps its genres, still in use, until it's heard again. Then they're replaced: the two are never kept side by side.",
+    "While it listens: genres are partly old and partly new; genre pages, the app's genres and the mixes by kind of music change song by song. Beats, DJ blends, loudness, keys, moods, similar music and the search by words keep working as they are.",
+    "After: the old genres are gone. Going back means hearing every song again.",
+  ].filter((line) => line !== null).join("\n");
+}
 async function chooseStyleModel(id) {
-  const name = (styleModels?.models || []).find((m) => m.id === id)?.name || id;
-  if (!confirm(`Hear every song's styles again with ${name}? The genre pages keep their songs until each is heard again.`)) { drawStyleModels(); return; }
+  const model = (styleModels?.models || []).find((m) => m.id === id) || {name: id, cost: ""};
+  const name = model.name;
+  const ask = styleSwitchWarning(model);
+  if (ask && !confirm(ask)) { drawStyleModels(); return; }
   $("style-note").textContent = "Switching…";
   try {
     const r = await api("api/style/model", {method: "POST", body: JSON.stringify({model: id})});
@@ -2549,6 +3027,102 @@ $("about-fetch").addEventListener("click", async () => {
   try { await api("api/genres/about/fetch", {method: "POST"}); } catch (e) { banner(e.message); }
   setTimeout(() => refreshGenres(true), 1500);
 });
+
+// ---- voice and mood (0.52) ----
+// Each line of the page as it's said: who sings, the moods, the sound, and MIREX's five mood groups by plain names.
+const LINE_NAMES = {female: "Sung by a woman", male: "Sung by a man", instrumental: "Instrumental",
+  happy: "Happy", sad: "Sad", relaxed: "Relaxed", party: "Party", aggressive: "Aggressive",
+  danceable: "Danceable", acoustic: "Acoustic", electronic: "Electronic",
+  mirex_cheerful: "Cheerful, fun", mirex_bittersweet: "Wistful, bittersweet", mirex_passionate: "Passionate, rousing",
+  mirex_intense: "Intense, fiery", mirex_humorous: "Quirky, playful"};
+let voiceAt = 0;
+async function refreshVoice(force) {
+  // Asked when the page is on show, and at most every 30 s.
+  if (!force && (document.hidden || currentView !== "voice" || Date.now() - voiceAt < 30000)) return;
+  voiceAt = Date.now();
+  let v;
+  try { v = await api("api/voice"); } catch (e) { return; }
+  drawVoice(v);
+}
+function drawVoice(v) {
+  $("v-off").hidden = v.available;
+  $("v-tiles").hidden = $("v-cards").hidden = !v.available;
+  if (!v.available) return;
+  const total = v.total || 0, scored = v.scored || 0, left = Math.max(0, total - scored);
+  $("v-tiles").innerHTML = [
+    tile("#voice", "Scored", num(scored), total, left ? `${num(left)} to go` : total ? "all songs" : "no songs yet", [["done", scored]]),
+    tile("#voice", "Sung", num(v.sung), null, scored ? `${Math.round(100 * v.sung / scored)}% of the songs scored` : "nothing scored yet", null),
+  ].join("");
+  const of = (group) => v.lines.filter((l) => l.group === group);
+  const share = (n) => total ? 100 * n / total : 0;
+  // The voices: one bar of the whole library, the part not scored yet left empty, and a line each.
+  $("v-split").innerHTML = of("voice").map((l) => `<span class="${l.key}" style="width:${share(l.songs)}%"></span>`).join("");
+  $("v-voice").innerHTML = of("voice").map((l) => {
+    const inner = `<span class="dot ${l.key}"></span><span class="name">${LINE_NAMES[l.key]}</span><span class="n">${num(l.songs)}</span><span class="share">${Math.round(share(l.songs))}%</span>`;
+    return l.songs ? `<a class="line" href="#voice=${l.key}">${inner}<span class="go" aria-hidden="true">›</span></a>` : `<div class="line none">${inner}<span></span></div>`;
+  }).join("") + (left ? `<div class="line rest"><span class="dot rest"></span><span class="name">Not scored yet</span><span class="n">${num(left)}</span><span class="share">${Math.round(share(left))}%</span><span></span></div>` : "");
+  // Moods, sound and mood groups: a bar each against the whole library, as Genres draws its bars.
+  const bars = (group) => of(group).map((l) => {
+    const inner = `<span class="name">${LINE_NAMES[l.key]}</span><span class="track"><span style="width:${share(l.songs)}%"></span></span><span class="n">${num(l.songs)}</span>`;
+    return l.songs ? `<a class="hbar" href="#voice=${l.key}">${inner}<span class="go" aria-hidden="true">›</span></a>` : `<div class="hbar none">${inner}<span></span></div>`;
+  }).join("");
+  $("v-moods").innerHTML = bars("moods");
+  $("v-sound").innerHTML = bars("sound");
+  $("v-groups").innerHTML = bars("groups");
+  $("v-moods-note").textContent = left ? `Of the ${num(scored)} songs scored so far.` : "A song can have several moods, or none.";
+}
+setInterval(refreshVoice, 10000);
+
+// One line's songs: the first 50, then 50 more at a time (the owner, 16 Nov), in the order chosen.
+const TRAIT_STEP = 50;
+const trait = {line: null, order: "most", rows: [], songs: 0, asked: 0};
+const TRAIT_NOTES = {
+  most: () => "The surest first.",
+  least: (g) => g === "groups" ? "The weakest fits first: the likeliest to be wrong." : "Just over the line first: the likeliest to be wrong.",
+  unsure: (g, n) => `${num(n)} close ${n === 1 ? "call" : "calls"}, 40 to 60%, on both sides of the line.`,
+};
+async function openTrait(line, more) {
+  if (!more) {
+    trait.rows = []; trait.songs = 0;
+    if (trait.line !== line || !trait.shown) trait.order = "most";
+    trait.line = line; trait.shown = true;
+    $("t-name").textContent = LINE_NAMES[line];
+    $("t-sub").textContent = "Loading…"; $("t-note").textContent = "";
+    $("t-rows").innerHTML = '<tr><td colspan="3" class="empty">Loading…</td></tr>';
+    $("t-more").hidden = true;
+    $("t-order").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.order === trait.order)));
+  }
+  const asked = ++trait.asked, order = trait.order;
+  let got;
+  try { got = await api(`api/voice/songs?line=${line}&order=${order}&limit=${TRAIT_STEP}&offset=${trait.rows.length}`); } catch (e) {
+    if (asked === trait.asked) $("t-sub").textContent = "Siansa Beats isn't answering; try again shortly.";
+    return;
+  }
+  if (asked !== trait.asked) return;  // another line or order was asked for meanwhile
+  trait.rows = trait.rows.concat(got.rows); trait.songs = got.songs;
+  const what = got.group === "voice" && line !== "instrumental" ? "Whose voice is" : got.group === "groups" ? "Mood groups are" : "This is";
+  $("t-sub").textContent = `${order === "unsure" ? "" : `${num(got.songs)} ${got.songs === 1 ? "song" : "songs"}. `}${what} right about ${got.right} times in 100 in the makers' own tests. Tap a song to hear it.`;
+  $("t-note").textContent = TRAIT_NOTES[order](got.group, got.songs);
+  $("t-rows").innerHTML = trait.rows.map((r) => `<tr data-id="${esc(r.id)}">
+      <td><div class="big">${esc(r.title)}</div><div class="sub">${esc(r.artist)}</div></td>
+      <td>${genreChips(r.genres)}</td>
+      <td class="num"><span class="big">${pct(r.sure)}</span>${r.holds ? "" : '<div class="sub">not counted</div>'}</td>
+    </tr>`).join("") || `<tr><td colspan="3" class="empty">${order === "unsure" ? "No close calls." : "No songs."}</td></tr>`;
+  const rest = trait.songs - trait.rows.length;
+  $("t-more").hidden = rest <= 0;
+  $("t-more").textContent = `Show ${num(Math.min(TRAIT_STEP, rest))} more of ${num(rest)}`;
+}
+$("t-order").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-order]");
+  if (!b || b.dataset.order === trait.order) return;
+  trait.order = b.dataset.order;
+  $("t-order").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  trait.rows = []; $("t-more").hidden = true;
+  openTrait(trait.line, true);
+});
+$("t-more").addEventListener("click", () => openTrait(trait.line, true));
+$("t-back").addEventListener("click", () => { location.hash = "#voice"; });
+$("t-rows").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) location.hash = "#song=" + encodeURIComponent(tr.dataset.id); });
 
 // ---- similar music ----
 function drawSimilarStatus() {

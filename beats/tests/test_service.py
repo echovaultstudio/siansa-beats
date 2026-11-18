@@ -186,6 +186,26 @@ class LogTest(unittest.TestCase):
 
 
 class StoreTest(unittest.TestCase):
+    def test_the_trials_marks_go_and_the_pages_stay(self):
+        """0.51.1: a database from 0.50 has the breakdowns and drops tapped in Siansa Dev (mark_kinds); they go, with
+        their table, and marks set on the page stay."""
+        import sqlite3
+
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+        path = os.path.join(folder, "beats.db")
+        Store(path)
+        db = sqlite3.connect(path)
+        db.executescript("CREATE TABLE mark_kinds (mark_id INTEGER PRIMARY KEY, kind TEXT);"
+                         "INSERT INTO marks (id, song_id, seconds, created_at) VALUES (1, 'a', 10, 0), (2, 'a', 20, 0), (3, 'b', 5, 0);"
+                         "INSERT INTO mark_kinds VALUES (1, 'drop'), (3, 'breakdown');")
+        db.commit()
+        db.close()
+        store = Store(path)
+        self.assertEqual([m["seconds"] for m in store.marks("a")], [20.0])
+        self.assertEqual(store.marks("b"), [])
+        self.assertIsNone(store.db.execute("SELECT 1 FROM sqlite_master WHERE name='mark_kinds'").fetchone())
+
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.path = os.path.join(self.tmp, "beats.db")
@@ -372,6 +392,11 @@ class ServiceTest(Service):
         self.assertEqual(len(detail["downbeats"]), len(detail["beats"][::4]))
         self.assertTrue(detail["tempo_curve"])
         self.assertEqual(detail["end_seconds"], grid.END_SECONDS)
+        # The breakdowns and drops for the song page (0.49.0): the ones the app has, each with its kind and size.
+        # (None here: the stand-in model saves no sound levels to find them in.)
+        self.assertIn("sections", detail)
+        for found in (detail["sections"] or {}).get("found", []):
+            self.assertIn(found["kind"], ("breakdown", "drop"))
         beats = self.call("/api/beats/t140")
         self.assertEqual((beats["beats_per_bar"], beats["track_id"]), (4, "t140"))
         self.assertTrue(beats["steady"])
@@ -480,6 +505,26 @@ class ServiceTest(Service):
         self.assertIn("bpm", song["result"])
         self.assertNotIn(TOKEN, json.dumps(data))
 
+    def test_the_data_is_streamed_as_it_is_made(self):
+        """0.50.2 (the owner, 16 Nov: Download data failed through a proxy; "it should just stream the download until
+        completion"): the export goes out in chunks as it's made, not gzipped, as one whole JSON file; HEAD sends none."""
+        self.start()
+        self.call("/api/libraries", "POST", {"ids": ["1"]})
+        self.wait_done()
+        r, body = self.call("/api/export.json", raw=True, headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(r.headers.get("Transfer-Encoding"), "chunked")
+        self.assertIsNone(r.headers.get("Content-Encoding"))
+        self.assertIn("siansa-beats-data.json", r.headers.get("Content-Disposition"))
+        self.assertEqual(r.headers.get("X-Accel-Buffering"), "no")
+        data = json.loads(body)
+        self.assertEqual(data["version"], __version__)
+        self.assertEqual(len(data["songs"]), 3)
+        self.assertEqual([s["id"] for s in json.loads(self.call("/api/export.json?find=nothing-at-all", raw=True)[1])["songs"]], [])
+        head, empty = self.call("/api/export.json", method="HEAD", raw=True)
+        self.assertEqual(empty, b"")
+        # The same connection still answers after a streamed one.
+        self.assertEqual(self.call("/api/status")["counts"]["done"], 3)
+
     def test_section_marks_are_kept_shown_and_exported(self):
         self.start()
         self.call("/api/libraries", "POST", {"ids": ["1"]})
@@ -524,6 +569,100 @@ class ServiceTest(Service):
             self.call("/api/grids?ids=" + ",".join(str(n) for n in range(2001)))
         self.assertEqual(caught.exception.code, 400)
 
+    def test_the_voice_and_mood_page_asks(self):
+        """0.52: the page's numbers and the songs of a line; on a build without Essentia's models, nothing is scored
+        and the page says so."""
+        self.start()
+        self.call("/api/libraries", "POST", {"ids": ["1"]})
+        self.wait_done()
+        voice = self.call("/api/voice")
+        self.assertEqual((voice["available"], voice["scored"], voice["sung"]), (False, 0, 0))
+        self.assertEqual([line["key"] for line in voice["lines"]][:3], ["female", "male", "instrumental"])
+        self.assertEqual(len(voice["lines"]), 16)
+        self.assertEqual(self.call("/api/status")["traits"], {"available": False, "total": voice["total"], "scored": 0})
+        got = self.call("/api/voice/songs?line=female&order=unsure&limit=50&offset=0")
+        self.assertEqual((got["line"], got["order"], got["songs"], got["rows"]), ("female", "unsure", 0, []))
+        for wrong in ("line=nothing", "line=female&order=sideways", "line=female&limit=many", "order=most"):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/voice/songs?" + wrong)
+            self.assertEqual(caught.exception.code, 400, wrong)
+
+    def test_plans_for_the_app(self):
+        """0.57: the app asks for its playlists' plans here; without an AI set up it's told so, and plans isn't offered."""
+        self.start()
+        self.assertEqual(self.call("/api/v1/capabilities")["features"]["plans"], {"available": False})
+        for body, code in (({}, 400), ({"brief": "  "}, 400), ({"brief": "Time slot: Morning"}, 503)):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/v1/plan", "POST", body)
+            self.assertEqual(caught.exception.code, code, body)
+
+    def test_mixes_for_the_page_and_the_app(self):
+        """0.53: mixes made from a listener's own listening. The stand-in's songs have no sound, so there are none to
+        make yet: the answer says so in its own shape, and what's asked wrong is refused."""
+        self.start()
+        self.call("/api/libraries", "POST", {"ids": ["1"]})
+        self.wait_done()
+        self.assertEqual(self.call("/api/v1/capabilities")["features"]["mixes"],
+                         {"available": False, "listeners": 0, "ai_names": False, "ahead": True, "keep_days": 7, "about": True, "settings": True})
+        page = self.call("/api/mixes?tz=Europe/Helsinki&part=early&days=weekdays")
+        self.assertEqual((page["part"], page["days"], page["said"], page["hours"], page["basis"], page["songs"]),
+                         ("early", "weekdays", "early morning", "05:00–09:00", "library", 0))
+        self.assertEqual([p["key"] for p in page["parts"]], ["early", "morning", "afternoon", "evening", "night"])
+        self.assertEqual((page["listeners"], [s["key"] for s in page["shelves"]], page["shelves"][0]["mixes"]), ([], ["now"], []))
+        self.assertIn(page["daylight"]["light"], ("dark", "twilight", "light"))
+        app = self.call("/api/v1/mixes?user=max&tz=Europe/Helsinki&at=1794890400&lat=60.17&lon=24.94")  # 17 Nov 2026, 06:40
+        self.assertEqual((app["schema_version"], app["user"], app["part"], app["days"], app["daylight"]["light"]),
+                         (1, "max", "early", "weekdays", "dark"))
+        self.assertNotIn("listeners", app)
+        self.assertEqual(app["keep_days"], 7)
+        # 0.55: the mixes given out lately, kept for days; and how long, set on the page.
+        self.assertEqual(self.call("/api/v1/mixes/kept?user=max"), {"schema_version": 1, "keep_days": 7, "mixes": []})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/v1/mixes/kept?user=max&key=2026-11-17-daily-1")
+        self.assertEqual(caught.exception.code, 404)
+        self.assertEqual(self.call("/api/mixes/keep", "POST", {"days": 14}), {"keep_days": 14})
+        # 0.56: what goes into a listener's mixes, from the app and the page.
+        got = self.call("/api/v1/mixes/settings?user=max")
+        self.assertEqual((got["settings"]["size"], got["settings"]["daily"]), (40, True))
+        self.assertIn({"name": "leave_genres", "kind": "words", "default": [], "low": None, "high": None, "label": "Genres to leave out"}, got["described"])
+        got = self.call("/api/v1/mixes/settings", "POST", {"user": "max", "settings": {"size": 25, "leave_artists": ["A"], "keep_days": 30}})
+        self.assertEqual((got["settings"]["size"], got["settings"]["leave_artists"], got["keep_days"]), (25, ["A"], 30))
+        self.assertEqual(self.call("/api/mixes/settings?user=max")["settings"]["size"], 25)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/v1/mixes/settings", "POST", {"user": "max", "settings": {"size": "big"}})
+        self.assertEqual(caught.exception.code, 400)
+        self.call("/api/mixes/keep", "POST", {"days": 14})
+        self.assertEqual(self.call("/api/mixes?tz=Europe/Helsinki")["keep_days"], 14)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/mixes/keep", "POST", {"days": "a week"})
+        self.assertEqual(caught.exception.code, 400)
+        for wrong in ("at=soon", "lat=60", "lat=95&lon=0", "part=teatime", "days=someday"):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/v1/mixes?" + wrong)
+            self.assertEqual(caught.exception.code, 400, wrong)
+        self.assertIn("/api/v1/mixes", self.call("/api/v1/openapi.json")["paths"])
+        self.assertEqual(self.app.mixes.asked, {})  # asked for a moment of their own: not remembered
+        self.call("/api/v1/mixes?user=max&tz=Europe/Helsinki")
+        self.assertEqual(self.app.mixes.asked["max"][0], "Europe/Helsinki")  # asked for now: theirs are made ahead (0.54)
+
+    def test_the_ai_service_for_mix_names(self):
+        """0.54: set on the page, its key never sent back; a test with what's typed; refused when wrong."""
+        self.start()
+        first = self.call("/api/ai")
+        self.assertEqual((first["on"], first["has_key"], first["ready"], len(first["providers"])), (False, False, False, 8))
+        saved = self.call("/api/ai", "POST", {"on": True, "provider": "OLLAMA", "address": "127.0.0.1:9", "model": "llama3.2"})
+        self.assertEqual((saved["ready"], saved["provider"]), (True, "OLLAMA"))
+        saved = self.call("/api/ai", "POST", {"provider": "OPENAI", "key": "sk-never-shown"})
+        self.assertTrue(saved["has_key"])
+        self.assertNotIn("sk-never-shown", json.dumps(self.call("/api/ai")))
+        self.assertTrue(self.call("/api/v1/capabilities")["features"]["mixes"]["ai_names"])
+        tested = self.call("/api/ai/test", "POST", {"provider": "OLLAMA", "address": "127.0.0.1:9"})
+        self.assertFalse(tested["ok"])
+        self.assertIn("Ollama can't be reached", tested["said"])
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.call("/api/ai", "POST", {"provider": "NOPE"})
+        self.assertEqual(caught.exception.code, 400)
+
     def test_v1_capabilities_and_profiles_for_the_app(self):
         self.start()
         empty = self.call("/api/v1/capabilities")
@@ -533,6 +672,10 @@ class ServiceTest(Service):
         self.call("/api/libraries", "POST", {"ids": ["1"]})
         self.wait_done()
         caps = self.call("/api/v1/capabilities")
+        # 0.51: Essentia's traits; none on a build without the models.
+        self.assertFalse(caps["features"]["traits"]["available"])
+        self.assertEqual((caps["features"]["traits"]["songs"], caps["features"]["traits"]["sung"]), (0, 0))
+        self.assertIn("mirex_cheerful", caps["features"]["traits"]["names"])
         self.assertEqual(caps["songs"]["analysed"], 3)
         self.assertEqual(caps["features"]["beat_grids"]["songs"], 3)
         self.assertEqual(caps["features"]["loudness"]["songs"], 2)  # t96w couldn't be measured
@@ -884,6 +1027,9 @@ class ServiceTest(Service):
         self.wait_done()
         listed = self.call("/api/style/models")
         self.assertEqual(listed["chosen"], "effnet")
+        # 0.58: each with its benefit and risk; picked once songs are heard; how far it is, for the warnings.
+        self.assertTrue(all(m["good"] and m["risk"] for m in listed["models"]))
+        self.assertEqual((listed["picked"], listed["heard"], listed["old"], listed["switching"]), (True, 3, 0, None))
         self.assertEqual([m["id"] for m in listed["models"]], ["effnet", "maest"])
         self.assertEqual([m["available"] for m in listed["models"]], [False, False])  # no files in a test
         with self.assertRaises(urllib.error.HTTPError) as e:
@@ -919,6 +1065,18 @@ class ServiceTest(Service):
         self.assertEqual(self.app.store.setting("style_model"), "maest")
         # The same model again changes nothing.
         self.assertEqual(self.call("/api/style/model", "POST", {"model": "maest"})["doubted"], 0)
+
+    def test_the_genre_model_is_chosen_at_setup(self):
+        """0.58: a new install asks for the genre model before its first analysis; choosing the one in use keeps the
+        choice and hears nothing again."""
+        self.start()
+        first = self.call("/api/style/models")
+        self.assertEqual((first["picked"], first["heard"], first["old"]), (False, 0, 0))
+        chosen = first["chosen"]
+        if chosen:
+            r = self.call("/api/style/model", "POST", {"model": chosen})
+            self.assertEqual((r["doubted"], r["picked"]), (0, True))
+            self.assertEqual(self.app.store.setting("style_model"), chosen)
 
     def test_without_the_style_model_the_app_falls_back_to_tags(self):
         self.start()

@@ -57,8 +57,12 @@ class PageScriptTest(unittest.TestCase):
         views = set(re.search(r'const VIEWS = \[(.*?)\];', page).group(1).replace('"', "").replace(" ", "").split(","))
         self.assertEqual({b for _, b in menu} - sections, set())
         self.assertEqual(sections, views)
-        self.assertEqual([b for _, b in menu], ["overview", "libraries", "songs", "listening", "loudness", "keys", "genres",
-                                                "similar", "activity", "setup", "log", "blends", "report"])
+        self.assertEqual([b for _, b in menu], ["overview", "libraries", "songs", "listening", "mixes", "loudness", "keys", "genres",
+                                                "voice", "similar", "activity", "setup", "log", "blends", "report"])
+        # 0.52: Voice and mood has its own page, and each of its lines one for its songs.
+        self.assertIn("trait", sections)
+        # 0.53: Mixes, and one mix's songs.
+        self.assertIn("mix", sections)
         for gone in ("audiomuse", "plugin"):
             self.assertNotIn(gone, page.lower(), gone)
         signin = open(os.path.join(os.path.dirname(PAGE), "signin.html"), encoding="utf-8").read()
@@ -68,3 +72,14 @@ class PageScriptTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PageDownloadsTest(unittest.TestCase):
+    def test_downloads_are_plain_links(self):
+        """0.50.2 (the owner, 16 Nov: "it should just stream the download until completion"): every Download button is
+        a plain link the browser downloads as it comes, as Beats streams it; the page doesn't fetch it whole first."""
+        page = open(PAGE, encoding="utf-8").read()
+        links = re.findall(r'<a [^>]*href="([^"]+)"[^>]*\bdownload\b', page)
+        self.assertGreaterEqual(len(links), 5)
+        self.assertNotIn('closest("a[download]")', page)
+        self.assertNotIn("createObjectURL", page)

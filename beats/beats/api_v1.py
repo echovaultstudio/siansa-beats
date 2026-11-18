@@ -18,6 +18,9 @@ that would break that is v2, next to v1. The full description is ``openapi.json`
     GET  /api/v1/listens/totals?user=&from=&to=&tz=         that stretch in numbers: listens, seconds, artists, hours
     GET  /api/v1/similar/albums?track_id=          albums that sound like that song's album (asked of AudioMuse-AI)
     GET  /api/v1/similar/artists?track_id=|artist= artists that sound like that one (asked of AudioMuse-AI)
+    GET  /api/v1/mixes/settings?user=  what goes into a listener's mixes, each setting described (0.56)
+    POST /api/v1/mixes/settings        {"user", "settings": {name: value}}: changes the ones named
+    POST /api/v1/plan                  {"brief"}: a playlist's title, sound search, line and steering, by the AI set up here (0.57)
     POST /api/v1/bad-blends            {"from_id", "to_id", "technique", "details"}: a song change marked as bad
     GET  /api/v1/openapi.json          this API described
 
@@ -37,8 +40,10 @@ from http import HTTPStatus
 
 from . import genres as genres_module
 from . import listens as listens_module
+from . import traits as traits_module
 from . import __version__
 from . import loudness
+from .ai import AiError
 
 API = 1
 SCHEMA_VERSION = 1  # of the profiles' layout: the plugin's, which the app reads (PluginProfiles.SCHEMA_VERSION)
@@ -86,11 +91,23 @@ def capabilities(app, server=None):
             "sound": {"available": bool(sound["sound"]), "songs": sound["sound"], "of": sound["songs"],
                       "answers": answered, "prefix": AUDIOMUSE,
                       "paths": {old: SOUND + new for new, old in SOUND_PATHS.items() if old in answered}},
+            # Essentia's trained traits of each song (0.51): voice, whose voice, moods, danceable, MIREX moods, each 0
+            # to 1, in the sound's answers as "traits", with "valence" beside "arousal". How many songs each holds for.
+            # AudioMuse-AI's feelings stay in "other_features", as before.
+            "traits": {"available": app.traits.available, "names": list(traits_module.TRAITS), **app.traits.count()},
             # The search by words (0.26): the songs that have the vector it needs, and whether the text model is here.
             "words": {"available": bool(sound["words"]) and app.words.available, "songs": sound["words"],
                       "steering": app.words.steers},
             "servers": {"available": True, "kinds": ["navidrome", "emby", "jellyfin"]},
             # The listening history (0.29): listens taken from the app, and sent on to Last.fm for who connected it.
+            # Mixes made from each listener's own listening (0.53): /api/v1/mixes. Made from the songs' sound, so
+            # there are none before any is known; with no listens yet they come from the library.
+            # 0.54: named by an AI when one is set up on the page ("named" on each mix), and made ahead.
+            "mixes": {"available": bool(sound["sound"]), "listeners": len(app.mixes.listeners()), "ai_names": app.ai.ready,
+                      "ahead": True, "keep_days": app.mixes.keep_days(), "about": True, "settings": True},  # 0.55: about, key, /mixes/kept
+            # Plans for the app's own playlists (0.57): its vibes, Today's mix, Flow's words and the mood radios, by the
+            # AI set up here (POST /api/v1/plan). While it's available the app uses no AI of its own.
+            "plans": {"available": app.ai.ready},
             "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
                            "totals": True},  # /api/v1/listens/totals (0.33)
         },
@@ -163,6 +180,43 @@ def get(handler, path, query, server=None):
         # The sound of that song (or artist) isn't known here yet: nothing similar to give, said as such.
         return handler._json({"schema_version": SCHEMA_VERSION, "similar": [], "source": "beats",
                               "note": "its sound isn't known here yet"}) or True
+    if path == "/api/v1/mixes/kept":  # the mixes given out lately, kept for days (0.55): ?user=&key=
+        named = server or app.servers.default_id
+        found = app.mixes.kept(arg("user") or app.default_listener(), arg("key") or None)
+        ids = app.store.item_ids([s for m in found for s in m["songs"]], named)
+        mixes = [{**m, "songs": [ids[s] for s in m["songs"] if s in ids]} for m in found]
+        if arg("key") and not mixes:
+            return handler._error(HTTPStatus.NOT_FOUND, "No such mix kept: it may be older than the days mixes are kept for") or True
+        return handler._json({"schema_version": SCHEMA_VERSION, "keep_days": app.mixes.keep_days(), "mixes": mixes}) or True
+    if path == "/api/v1/mixes/settings":  # what goes into a listener's mixes (0.56): ?user=
+        return handler._json({"schema_version": SCHEMA_VERSION, **app.mix_settings_of(arg("user"))}) or True
+    if path == "/api/v1/mixes":  # mixes made for a listener from their own listening (0.53)
+        from . import mixes as mixes_module
+
+        def number(name, kind=float):
+            return kind(arg(name)) if arg(name) not in (None, "") else None
+        try:
+            at, size, lat, lon = number("at", int), number("size", int), number("lat"), number("lon")
+        except ValueError:
+            return handler._error(HTTPStatus.BAD_REQUEST, "at (seconds since 1970), size, lat and lon are numbers") or True
+        if (lat is None) != (lon is None) or (lat is not None and not (-90 <= lat <= 90 and -180 <= lon <= 180)):
+            return handler._error(HTTPStatus.BAD_REQUEST, "lat (-90 to 90) and lon (-180 to 180) go together") or True
+        part, days = arg("part") or None, arg("days") or None
+        if (part and part not in mixes_module.SUITS) or (days and days not in mixes_module.DAYS):
+            return handler._error(HTTPStatus.BAD_REQUEST, "part: " + ", ".join(mixes_module.SUITS) + "; days: weekdays or weekend") or True
+        if not part and not days and at is None:  # asked for now: this listener's are made ahead the same way (0.54)
+            app.mixes.remember(arg("user") or app.default_listener(), arg("tz") or None, lat, lon,
+                               app.only(server or app.servers.default_id), size or mixes_module.SIZE)
+        made = app.mixes_for(arg("user"), arg("tz") or None, at, server, lat, lon, part, days, size)
+        # Each song by the id of the server the app plays from; a song that server hasn't is left out.
+        named = server or app.servers.default_id
+        ids = app.store.item_ids([s["id"] for shelf in made["shelves"] for m in shelf["mixes"] for s in m["songs"]], named)
+        for shelf in made["shelves"]:
+            for m in shelf["mixes"]:
+                m["songs"] = [{**s, "id": ids[s["id"]]} for s in m["songs"] if s["id"] in ids]
+                m["own"] = sum(1 for s in m["songs"] if s["own"])
+        made.pop("listeners"), made.pop("parts")
+        return handler._json({"schema_version": SCHEMA_VERSION, **made}) or True
     if path == "/api/v1/listens/top":  # the most listened songs, artists or albums of a listener in a stretch of time
         kind = arg("kind", "songs")
         if kind not in ("songs", "artists", "albums"):
@@ -246,6 +300,11 @@ def post(handler, path, body, server=None):
             return handler._error(HTTPStatus.BAD_REQUEST, f"at most {listens_module.MOST_AT_ONCE} listens at a time") or True
         answer = handler.app.listens.add(body.get("user"), rows, "siansa", server or handler.app.servers.default_id)
         return handler._json(answer) or True
+    if path == "/api/v1/mixes/settings":  # {"user", "settings": {name: value}}: only the ones named change (0.56)
+        try:
+            return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.set_mix_settings(body.get("user"), body.get("settings"))}) or True
+        except ValueError as e:
+            return handler._error(HTTPStatus.BAD_REQUEST, str(e)) or True
     if path == "/api/v1/loves":  # a heart from the app: on to Last.fm for a listener who sends listens on
         if not str(body.get("artist") or "").strip() or not str(body.get("title") or "").strip():
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True
@@ -258,6 +317,16 @@ def post(handler, path, body, server=None):
         if not handler.app.listens.set_playing(body.get("user"), body, here):
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True
         return handler._json({"playing": True}) or True
+    if path == "/api/v1/plan":  # {"brief"}: a plan for one of the app's playlists, by the AI set up here (0.57)
+        brief = body.get("brief")
+        if not isinstance(brief, str) or not brief.strip():
+            return handler._error(HTTPStatus.BAD_REQUEST, 'brief needed: what the playlist is for, as text') or True
+        if not handler.app.ai.ready:
+            return handler._error(HTTPStatus.SERVICE_UNAVAILABLE, "No AI service is set up on Siansa Beats") or True
+        try:
+            return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.ai.plan(brief)}) or True
+        except AiError as e:
+            return handler._error(HTTPStatus.BAD_GATEWAY, str(e)) or True
     if path == "/api/v1/bad-blends":
         answer, problem = add_bad_blend(handler.app, body, server)
         if problem:
@@ -336,6 +405,8 @@ def features(app, ids, server):
     tempos = app.store.tempos(here.values(), app.config.model)
     measured = app.store.measures(here.values())
     arousal = app.arousal.of(here.values())
+    traits = app.traits.of(here.values())
+    valence = app.arousal.valence_of(here.values())
     # Energies taken over from an older AudioMuse-AI are on its old scale: given on today's (beats.drive.converted).
     from . import drive
 
@@ -361,6 +432,13 @@ def features(app, ids, server):
                        # How energetic the song is to a listener (0.35, beats.drive): about 1 (calm) to 9. The one to
                        # order and match songs by; null on an image without the model.
                        "arousal": arousal.get(r["song_id"]),
+                       # How positive it feels (0.51): the same model's other answer, about 1 (dark) to 9 (bright).
+                       "valence": valence.get(r["song_id"]),
+                       # Essentia's trained models (0.51, beats.traits), each 0 to 1: voice (0 instrumental, 1 sung),
+                       # female (of the voice: 0 a man's, 1 a woman's; read it only where voice is high), acoustic,
+                       # aggressive, electronic, happy, party, relaxed, sad, danceable, and MIREX's five moods
+                       # (mirex_*, adding up to 1). Null on an image without the models, or a song with no sound yet.
+                       "traits": traits.get(r["song_id"]),
                        "other_features": r["other"], "fp": r["fp"]})
     return {"tracks": tracks, "total_tracks": len(tracks), "has_more": False, "next_page": None,
             "provider_type": (app.servers.get(server or app.servers.default_id) or {}).get("kind")}

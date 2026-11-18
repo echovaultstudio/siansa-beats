@@ -28,6 +28,7 @@ _log = log.get("drive")
 MODEL = "emomusic-msd-musicnn-2"
 FILE = MODEL + ".onnx"
 AROUSAL = 1  # the model answers (valence, arousal)
+VALENCE = 0  # how positive the song feels (0.51, the owner: kept too, for vibes), about 1 (dark) to 9 (bright)
 BATCH = 2000
 
 
@@ -38,6 +39,9 @@ class Arousal:
         self._lock = threading.Lock()
         with store.lock:
             store.db.execute("CREATE TABLE IF NOT EXISTS arousal (song_id TEXT PRIMARY KEY, value REAL, sound_at REAL)")
+            # Valence (0.51): the same model's other answer, kept beside; songs scored before it get it at the next catch-up.
+            if "valence" not in {r[1] for r in store.db.execute("PRAGMA table_info(arousal)")}:
+                store.db.execute("ALTER TABLE arousal ADD COLUMN valence REAL")
             store.db.commit()
 
     @property
@@ -55,6 +59,10 @@ class Arousal:
 
     def score(self, vectors):
         """The arousal of each MusiCNN vector (rows of 200 float32), about 1..9."""
+        return self.both(vectors)[:, AROUSAL]
+
+    def both(self, vectors):
+        """(valence, arousal) of each MusiCNN vector, each about 1..9: an array of shape (n, 2)."""
         with self._lock:
             if self._session is None:
                 import onnxruntime
@@ -63,7 +71,7 @@ class Arousal:
                                                              providers=["CPUExecutionProvider"])
             session = self._session
             rows = np.asarray(vectors, dtype=np.float32).reshape(-1, 200)
-            return session.run(None, {session.get_inputs()[0].name: rows})[0][:, AROUSAL]
+            return session.run(None, {session.get_inputs()[0].name: rows})[0]
 
     def catch_up(self, most=None):
         """Scores every song whose sound is new or changed since it was scored; the number scored. Nothing without
@@ -74,14 +82,14 @@ class Arousal:
         while most is None or done < most:
             rows = self.store._rows(
                 "SELECT o.song_id, o.musicnn, o.at FROM sound o LEFT JOIN arousal a ON a.song_id = o.song_id "
-                "WHERE o.musicnn IS NOT NULL AND length(o.musicnn) = 800 AND (a.song_id IS NULL OR a.sound_at IS NOT o.at) "
+                "WHERE o.musicnn IS NOT NULL AND length(o.musicnn) = 800 AND (a.song_id IS NULL OR a.sound_at IS NOT o.at OR a.valence IS NULL) "
                 "LIMIT ?", (BATCH,))
             if not rows:
                 break
-            values = self.score(np.stack([np.frombuffer(r["musicnn"], dtype=np.float32) for r in rows]))
+            values = self.both(np.stack([np.frombuffer(r["musicnn"], dtype=np.float32) for r in rows]))
             with self.store.lock:
-                self.store.db.executemany("INSERT OR REPLACE INTO arousal (song_id, value, sound_at) VALUES (?, ?, ?)",
-                                          [(r["song_id"], float(v), r["at"]) for r, v in zip(rows, values)])
+                self.store.db.executemany("INSERT OR REPLACE INTO arousal (song_id, value, valence, sound_at) VALUES (?, ?, ?, ?)",
+                                          [(r["song_id"], float(v[AROUSAL]), float(v[VALENCE]), r["at"]) for r, v in zip(rows, values)])
                 self.store.db.commit()
             done += len(rows)
         if done:
@@ -96,6 +104,15 @@ class Arousal:
             chunk = ids[start:start + 500]
             for r in self.store._rows(f"SELECT song_id, value FROM arousal WHERE song_id IN ({', '.join('?' for _ in chunk)})", chunk):
                 out[r["song_id"]] = r["value"]
+        return out
+
+    def valence_of(self, song_ids):
+        """``{song id: valence}`` of the songs among ``song_ids`` that have one (0.51), about 1 (dark) to 9 (bright)."""
+        out, ids = {}, list(dict.fromkeys(song_ids))
+        for start in range(0, len(ids), 500):
+            chunk = ids[start:start + 500]
+            for r in self.store._rows(f"SELECT song_id, valence FROM arousal WHERE valence IS NOT NULL AND song_id IN ({', '.join('?' for _ in chunk)})", chunk):  # noqa: S608
+                out[r["song_id"]] = r["valence"]
         return out
 
     def count(self):
