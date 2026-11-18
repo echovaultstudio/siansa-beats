@@ -20,6 +20,7 @@ that would break that is v2, next to v1. The full description is ``openapi.json`
     GET  /api/v1/similar/artists?track_id=|artist= artists that sound like that one (asked of AudioMuse-AI)
     GET  /api/v1/mixes/settings?user=  what goes into a listener's mixes, each setting described (0.56)
     POST /api/v1/mixes/settings        {"user", "settings": {name: value}}: changes the ones named
+    POST /api/v1/plan                  {"brief"}: a playlist's title, sound search, line and steering, by the AI set up here (0.57)
     POST /api/v1/bad-blends            {"from_id", "to_id", "technique", "details"}: a song change marked as bad
     GET  /api/v1/openapi.json          this API described
 
@@ -42,6 +43,7 @@ from . import listens as listens_module
 from . import traits as traits_module
 from . import __version__
 from . import loudness
+from .ai import AiError
 
 API = 1
 SCHEMA_VERSION = 1  # of the profiles' layout: the plugin's, which the app reads (PluginProfiles.SCHEMA_VERSION)
@@ -103,6 +105,9 @@ def capabilities(app, server=None):
             # 0.54: named by an AI when one is set up on the page ("named" on each mix), and made ahead.
             "mixes": {"available": bool(sound["sound"]), "listeners": len(app.mixes.listeners()), "ai_names": app.ai.ready,
                       "ahead": True, "keep_days": app.mixes.keep_days(), "about": True, "settings": True},  # 0.55: about, key, /mixes/kept
+            # Plans for the app's own playlists (0.57): its vibes, Today's mix, Flow's words and the mood radios, by the
+            # AI set up here (POST /api/v1/plan). While it's available the app uses no AI of its own.
+            "plans": {"available": app.ai.ready},
             "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
                            "totals": True},  # /api/v1/listens/totals (0.33)
         },
@@ -312,6 +317,16 @@ def post(handler, path, body, server=None):
         if not handler.app.listens.set_playing(body.get("user"), body, here):
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True
         return handler._json({"playing": True}) or True
+    if path == "/api/v1/plan":  # {"brief"}: a plan for one of the app's playlists, by the AI set up here (0.57)
+        brief = body.get("brief")
+        if not isinstance(brief, str) or not brief.strip():
+            return handler._error(HTTPStatus.BAD_REQUEST, 'brief needed: what the playlist is for, as text') or True
+        if not handler.app.ai.ready:
+            return handler._error(HTTPStatus.SERVICE_UNAVAILABLE, "No AI service is set up on Siansa Beats") or True
+        try:
+            return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.ai.plan(brief)}) or True
+        except AiError as e:
+            return handler._error(HTTPStatus.BAD_GATEWAY, str(e)) or True
     if path == "/api/v1/bad-blends":
         answer, problem = add_bad_blend(handler.app, body, server)
         if problem:

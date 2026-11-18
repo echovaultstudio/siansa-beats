@@ -2145,6 +2145,83 @@
           }
         }
       }
+    },
+    "/api/v1/plan": {
+      "post": {
+        "summary": "A plan for one of the app's playlists (0.57): its title, the search for its sound, a line for the listener and the sound words to steer by, by the AI set up on Siansa Beats",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "brief"
+                ],
+                "properties": {
+                  "brief": {
+                    "type": "string",
+                    "description": "What the playlist is for: the time slot or the listener's words, the moment, recent plays, the sound words the search knows. At most 6000 characters are used."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "type": "integer"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "steer": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "term": {
+                            "type": "string"
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "more",
+                              "less"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No brief"
+          },
+          "502": {
+            "description": "The AI service failed or answered without a title and a search"
+          },
+          "503": {
+            "description": "No AI service is set up on Siansa Beats"
+          }
+        }
+      }
     }
   },
   "components": {
