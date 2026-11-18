@@ -1027,6 +1027,9 @@ class ServiceTest(Service):
         self.wait_done()
         listed = self.call("/api/style/models")
         self.assertEqual(listed["chosen"], "effnet")
+        # 0.58: each with its benefit and risk; picked once songs are heard; how far it is, for the warnings.
+        self.assertTrue(all(m["good"] and m["risk"] for m in listed["models"]))
+        self.assertEqual((listed["picked"], listed["heard"], listed["old"], listed["switching"]), (True, 3, 0, None))
         self.assertEqual([m["id"] for m in listed["models"]], ["effnet", "maest"])
         self.assertEqual([m["available"] for m in listed["models"]], [False, False])  # no files in a test
         with self.assertRaises(urllib.error.HTTPError) as e:
@@ -1062,6 +1065,18 @@ class ServiceTest(Service):
         self.assertEqual(self.app.store.setting("style_model"), "maest")
         # The same model again changes nothing.
         self.assertEqual(self.call("/api/style/model", "POST", {"model": "maest"})["doubted"], 0)
+
+    def test_the_genre_model_is_chosen_at_setup(self):
+        """0.58: a new install asks for the genre model before its first analysis; choosing the one in use keeps the
+        choice and hears nothing again."""
+        self.start()
+        first = self.call("/api/style/models")
+        self.assertEqual((first["picked"], first["heard"], first["old"]), (False, 0, 0))
+        chosen = first["chosen"]
+        if chosen:
+            r = self.call("/api/style/model", "POST", {"model": chosen})
+            self.assertEqual((r["doubted"], r["picked"]), (0, True))
+            self.assertEqual(self.app.store.setting("style_model"), chosen)
 
     def test_without_the_style_model_the_app_falls_back_to_tags(self):
         self.start()

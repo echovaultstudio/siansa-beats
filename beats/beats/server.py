@@ -894,7 +894,14 @@ class App:
         from . import style as style_module
 
         spec = getattr(self.style, "spec", None)
-        return {"chosen": spec.id if spec else None,
+        counts = self.store.style_counts()
+        doubted = self.store.doubted_styles()
+        # Chosen at setup, or in use already (an install from before 0.58 that heard songs): Get started's step is done.
+        picked = self.store.setting("style_model") is not None or counts["done"] > 0 or doubted > 0
+        return {"chosen": spec.id if spec else None, "picked": picked,
+                # How far it is (0.58): heard with the model in use, still with the old model's genres (a switch under
+                # way), and of how many; what the warnings on a change say.
+                "heard": counts["done"], "old": doubted, "total": counts["total"], "switching": self.style_switch,
                 "models": [m.summary(self.config.models_dir) for m in style_module.MODELS.values()]}
 
     def start_analysis(self, ids, server=None, skips=None):
@@ -930,11 +937,13 @@ class App:
         spec = style_module.MODELS.get(model_id)
         if spec is None:
             raise ValueError(f"No style model called {model_id!r}")
-        if not spec.available(self.config.models_dir):
-            raise ValueError(f"{spec.name} isn't in this image")
         current = getattr(self.style, "spec", None)
         if current is not None and current.id == spec.id:
+            # Chosen at setup as it is (0.58): kept, so Get started knows it was chosen; nothing is heard again.
+            self.store.set_setting("style_model", spec.id)
             return 0
+        if not spec.available(self.config.models_dir):
+            raise ValueError(f"{spec.name} isn't in this image")
         self.style.unload()
         self.style = self.style_factory(spec)
         self.worker.style = self.style

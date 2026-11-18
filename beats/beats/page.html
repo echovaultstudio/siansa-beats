@@ -418,6 +418,9 @@ code { font-family: var(--mono); font-size: 0.8125rem; background: var(--raised-
 .choice b { display: block; font-size: 0.9375rem; }
 .choice .sub { margin: 4px 0 0; }
 .choice .cost { color: var(--muted); font-size: 0.75rem; margin-top: 4px; }
+.choice .sub b { display: inline; font-size: inherit; }
+.style-change { margin: 8px 0 0; padding-left: 20px; }
+.style-change li { margin-top: 4px; }
 .choice[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
 .form input, .form select { width: 100%; border-radius: 12px; padding: 8px 12px; }
 @media (max-width: 600px) { .form { grid-template-columns: minmax(0, 1fr); } }
@@ -632,7 +635,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
       </div>
       <div class="card" id="start-card" hidden>
         <h3>Get started</h3>
-        <p class="sub">Three steps, all on this page. Nothing is ever changed on your music server.</p>
+        <p class="sub">Four steps, all on this page. Nothing is ever changed on your music server.</p>
         <ol class="steps" id="start-steps"></ol>
       </div>
       <div class="kinds" id="tiles"></div>
@@ -1156,9 +1159,16 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
         <p class="sub">The models are other people's work, each under its own licence: their authors are credited in the README.</p></div>
       <div class="card" data-fold id="style-card">
         <h3>Genre model</h3>
-        <p class="sub">Which model hears each song's genres. Both name the same 400 styles. Changing it hears every song again; the old genres stay in use until then.</p>
-        <div class="choices" id="style-choices" role="radiogroup" aria-label="Style model"></div>
+        <p class="sub">Which model hears each song's genres. Both name the same 400 styles.</p>
+        <p class="sub" id="style-first" hidden><b>Choose one before your first analysis.</b> You can change it later, but every song is then heard again.</p>
+        <div class="choices" id="style-choices" role="radiogroup" aria-label="Genre model"></div>
         <p class="sub" id="style-note" role="status"></p>
+        <h4>If you change it later</h4>
+        <ul class="sub style-change">
+          <li><b>What's kept:</b> each song keeps its genres from the model before, still in use, until the new one hears it. Then they're replaced: the two are never kept side by side.</li>
+          <li><b>While it listens:</b> genres are partly old and partly new. Genre pages, the genres in the Siansa app and the mixes made by kind of music change song by song. Beats, DJ blends, loudness, keys, moods, similar music and the search by words don't use the genre model and keep working as they are.</li>
+          <li><b>After:</b> the old model's genres are gone. Going back means hearing every song again.</li>
+        </ul>
       </div>
       <div class="card" data-fold>
         <h3>Connect the Siansa app</h3>
@@ -2807,10 +2817,13 @@ const AGAIN_ASK = {
 function drawStart(s) {
   const server = !!(s.servers && s.servers.length), libs = ((s.libraries || {}).chosen || []).length > 0;
   const songs = ((s.counts || {}).songs || 0) > 0;
-  $("start-card").hidden = server && libs && songs;
+  // The genre model, chosen at setup (0.58): asked before the first analysis; an install that heard songs has one.
+  const picked = styleModels ? !!styleModels.picked : true;
+  $("start-card").hidden = server && libs && songs && picked;
   const step = (done, title, text) => `<li data-done="${done}"><div><b>${title}</b><p class="sub">${text}</p></div></li>`;
   $("start-steps").innerHTML = [
     step(server, "Add your music server", server ? "Done." : 'Under <a href="#setup">Setup › Music servers</a>: its address, user name and password, as you sign in to Siansa. Navidrome, Emby and Jellyfin work.'),
+    step(picked, "Choose the genre model", picked ? "Done." : 'Under <a href="#setup">Setup › Genre model</a>: Discogs-EffNet is quick on any machine; MAEST is more accurate but slow without a GPU. Each says what it\'s good at and what to watch out for.'),
     step(libs && songs, "Choose what to analyse", libs && songs ? "Done." : 'Under <a href="#libraries">Libraries</a>: switch on the libraries you want and press <b style="display:inline">Start analysis</b>. Try one small library first; a song takes a few seconds on a GPU and much longer on a CPU.'),
     step(false, "Connect the Siansa app", 'In the app: Settings › Connections › Siansa Beats, with the address and key shown under <a href="#setup">Setup › Connect the Siansa app</a>. A password for this page is set there too, under Access.'),
   ].join("");
@@ -2870,14 +2883,41 @@ async function drawStyleModels() {
     const on = m.id === styleModels.chosen;
     return `<label class="choice" role="radio" aria-checked="${on}" aria-disabled="${!m.available}">
       <input type="radio" name="style-model" value="${esc(m.id)}" ${on ? "checked" : ""} ${m.available ? "" : "disabled"}>
-      <span><b>${esc(m.name)}</b><span class="sub">${esc(m.blurb)}</span><span class="cost">${esc(m.cost)}${m.available ? "" : " Not in this image."}</span></span>
+      <span><b>${esc(m.name)}</b><span class="sub">${esc(m.blurb)}</span>${m.good ? `<span class="sub"><b>Good:</b> ${esc(m.good)}</span>` : ""}${m.risk ? `<span class="sub"><b>Watch out:</b> ${esc(m.risk)}</span>` : ""}<span class="cost">${esc(m.cost)}${m.available ? "" : " Not in this image."}</span></span>
     </label>`;
   }).join("");
+  $("style-first").hidden = !!styleModels.picked;
+  if (status) drawStart(status);
   $("style-choices").querySelectorAll("input").forEach((input) => input.addEventListener("change", () => chooseStyleModel(input.value)));
 }
+/**
+ * What a change of genre model means, asked before it's made (0.58, the owner, 18 Nov: whether old values are kept, what
+ * no longer works while it listens and after, and a warning when switching halfway through). Null: nothing to ask (no
+ * song heard yet: the first choice at setup).
+ */
+function styleSwitchWarning(to) {
+  const m = styleModels || {};
+  const heard = m.heard || 0, doubted = m.old || 0, total = m.total || 0;
+  if (heard + doubted === 0) return null;
+  const halfway = (m.switching || doubted > 0)
+    ? `A switch is still under way: ${num(heard)} of ${num(heard + doubted)} songs have been heard with the model in use. Switching again now hears all of them once more, the ${num(heard)} already done included, so it takes longer. Nothing is taken away until each song is heard again.`
+    : (total > heard && heard > 0)
+      ? `The first listen isn't finished: ${num(heard)} of ${num(total)} songs have genres. Switching now hears those ${num(heard)} again too; the rest are heard once, with the new model.`
+      : null;
+  return [
+    halfway ? `⚠ ${halfway}` : null,
+    `Switch to ${to.name}? ${num(heard + doubted)} songs are heard again with it. ${to.cost}`,
+    "",
+    "What's kept: each song keeps its genres, still in use, until it's heard again. Then they're replaced: the two are never kept side by side.",
+    "While it listens: genres are partly old and partly new; genre pages, the app's genres and the mixes by kind of music change song by song. Beats, DJ blends, loudness, keys, moods, similar music and the search by words keep working as they are.",
+    "After: the old genres are gone. Going back means hearing every song again.",
+  ].filter((line) => line !== null).join("\n");
+}
 async function chooseStyleModel(id) {
-  const name = (styleModels?.models || []).find((m) => m.id === id)?.name || id;
-  if (!confirm(`Hear every song's styles again with ${name}? The genre pages keep their songs until each is heard again.`)) { drawStyleModels(); return; }
+  const model = (styleModels?.models || []).find((m) => m.id === id) || {name: id, cost: ""};
+  const name = model.name;
+  const ask = styleSwitchWarning(model);
+  if (ask && !confirm(ask)) { drawStyleModels(); return; }
   $("style-note").textContent = "Switching…";
   try {
     const r = await api("api/style/model", {method: "POST", body: JSON.stringify({model: id})});

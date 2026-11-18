@@ -562,6 +562,10 @@ class Store:
             self.genre_changes += 1
         return n
 
+    def doubted_styles(self):
+        """How many songs still have the styles of the model before (a switch under way, 0.58): in use until heard again."""
+        return self._rows("SELECT COUNT(DISTINCT song_id) AS n FROM genres WHERE source='sound-doubted'")[0]["n"]
+
     def heard_of(self, song_ids, minimum, rank):
         """``{song id: [(label, weight)]}``: the genres each of ``song_ids`` is in by its sound, its best first."""
         out, ids = {}, list(dict.fromkeys(song_ids))

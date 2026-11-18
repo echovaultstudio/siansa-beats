@@ -441,8 +441,13 @@ genre pages and genre radios:
   about a second a song on a CPU, and the one in use unless another is chosen. **MAEST** (2023; 0.39) is a larger
   transformer hearing 30 seconds at a time, markedly more accurate on the same styles and surer of what it hears,
   the better choice beyond electronic music; slow on a CPU (about 4 seconds per 30 seconds heard, a few windows a
-  song), quick on a GPU. The page's Setup › Genres by sound picks one, with a line on each; changing it keeps the
-  choice, and every song is heard again with the new model (its old styles stay in use until then). Both give the
+  song), quick on a GPU. The page's Setup › Genre model picks one, each with what it's good at and what to watch out
+  for; a new install asks for it in Get started before its first analysis (0.58). Changing it keeps the choice, and
+  every song is heard again with the new model: each song's old styles stay in use until it's heard again, then
+  they're replaced (the two are never kept side by side), and going back means hearing every song again. Meanwhile
+  genres are partly old and partly new; beats, blends, loudness, keys, moods, similar music and the search by words
+  don't use the genre model. The page says all this before a change, and warns when one is made halfway through the
+  first listen or another switch. Both give the
   same 400 styles, so the genre pages read the same. The model runs on the GPU when there is one (through the
   PyTorch Beat This! uses), else on the CPU (ONNX Runtime, `STYLE_THREADS`, 2 by default); `BEATS_DEVICE=cpu`
   keeps both on the CPU. On a GPU with tensor cores (an RTX, any card of compute capability 7 or more) it hears in
