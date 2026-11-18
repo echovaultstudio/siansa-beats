@@ -587,6 +587,17 @@ class ServiceTest(Service):
                 self.call("/api/voice/songs?" + wrong)
             self.assertEqual(caught.exception.code, 400, wrong)
 
+    def test_capabilities_keep_the_librarys_numbers(self):
+        """0.58.1: the owner's debug report, capabilities took 3 to 6.5 s counting the library each time. Asked again
+        with nothing changed, it counts nothing again."""
+        self.start()
+        real, asked = self.app.store.counts, []
+        self.app.store.counts = lambda only=None: asked.append(only) or real(only)
+        first = self.call("/api/v1/capabilities")
+        again = self.call("/api/v1/capabilities")
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(first["songs"], again["songs"])
+
     def test_plans_for_the_app(self):
         """0.57: the app asks for its playlists' plans here; without an AI set up it's told so, and plans isn't offered."""
         self.start()

@@ -56,12 +56,18 @@ def capabilities(app, server=None):
     """What this Siansa Beats can answer and how far it is (for ``server``'s songs): the app decides from it what to
     offer (a DJ mix needs beat grids; the genres need the style model)."""
     server = server or app.servers.default_id
-    only = app.only(server)
-    counts = app.store.counts(only)
-    styles = app.styles_status(server)
-    measured = app.store.measure_counts(loudness.VERSION, only)
+    # The library's numbers, kept (0.58.1, the owner's debug report of 18 Nov: this answer took 3 to 6.5 s, 83 times in
+    # nine hours, counting 47,000 songs several times over while songs were analysed): worked out again at most every
+    # 30 s or when the database changed, never holding the answer up more than half a second. What's set up (the AI,
+    # the text model, the mixes' settings) is read as it is.
+    def numbers(only):
+        return {"counts": app.store.counts(only), "styles": app.styles_status(server),
+                "measured": app.store.measure_counts(loudness.VERSION, only), "sound": app.store.sound_counts(only),
+                "genres": len(app.genre_list(server)), "traits": app.traits.count(), "listens": app.listens.count()}
+
+    kept = app.kept("capabilities", server, numbers, 30, lambda: app.store.writes).get()
+    counts, styles, measured, sound = kept["counts"], kept["styles"], kept["measured"], kept["sound"]
     shown = app.servers.get(server) or {}
-    sound = app.store.sound_counts(only)
     answered = (list(SOUND_ANSWERS) if sound["sound"] else []) + (list(WORD_ANSWERS) if sound["words"] and app.words.available else [])
     return {
         "service": "siansa-beats",
@@ -80,7 +86,7 @@ def capabilities(app, server=None):
             "loudness": {"available": True, "songs": measured["measured"], "waiting": measured["waiting"],
                          "version": loudness.VERSION},
             "keys": {"available": True, "songs": measured["measured"]},
-            "genres": {"available": bool(styles.get("available")), "styles": len(app.genre_list(server)),
+            "genres": {"available": bool(styles.get("available")), "styles": kept["genres"],
                        "per_song": True},  # /api/v1/songs/genres (0.32)
             "genre_about": {"available": True, "source": "Wikipedia"},
             "bad_blends": {"available": True},
@@ -94,7 +100,7 @@ def capabilities(app, server=None):
             # Essentia's trained traits of each song (0.51): voice, whose voice, moods, danceable, MIREX moods, each 0
             # to 1, in the sound's answers as "traits", with "valence" beside "arousal". How many songs each holds for.
             # AudioMuse-AI's feelings stay in "other_features", as before.
-            "traits": {"available": app.traits.available, "names": list(traits_module.TRAITS), **app.traits.count()},
+            "traits": {"available": app.traits.available, "names": list(traits_module.TRAITS), **kept["traits"]},
             # The search by words (0.26): the songs that have the vector it needs, and whether the text model is here.
             "words": {"available": bool(sound["words"]) and app.words.available, "songs": sound["words"],
                       "steering": app.words.steers},
@@ -108,7 +114,7 @@ def capabilities(app, server=None):
             # Plans for the app's own playlists (0.57): its vibes, Today's mix, Flow's words and the mood radios, by the
             # AI set up here (POST /api/v1/plan). While it's available the app uses no AI of its own.
             "plans": {"available": app.ai.ready},
-            "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
+            "scrobbling": {"available": True, "listens": kept["listens"], "most_at_once": listens_module.MOST_AT_ONCE,
                            "totals": True},  # /api/v1/listens/totals (0.33)
         },
         "limits": {"profile_ids": MAX_IDS, "genre_songs": None, "genre_ids": MAX_IDS},
