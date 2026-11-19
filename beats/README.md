@@ -133,7 +133,9 @@ leave its songs out (a library of podcasts or DJ sets, say; 0.60.1). The Overvie
 others, with the model and how many songs are done, and says in **Now** which song's vocals are being found (0.60.2).
 **Only vocals** (under Libraries, and in the Setup box) pauses the rest of the analysis and finds the vocals now; the
 rest carries on by itself once every song's vocals are found, or with **Carry on**. **Start over › Vocals again**
-finds every song's vocals again, the vocals known staying in use until each song is done.
+finds every song's vocals again, the vocals known staying in use until each song is done. A song whose beats have no steady
+bars to mark the vocals on is kept as failed ("No steady bars to mark the vocals on"), so it doesn't hold up the rest
+(0.60.3: such songs, newest first, were asked for again every round ahead of all the others).
 
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,

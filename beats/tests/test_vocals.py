@@ -228,6 +228,17 @@ class Finder(unittest.TestCase):
         self.finder.grid = lambda song_id: None
         self.assertEqual(self.finder.one("sung"), "waiting")
 
+    def test_a_song_with_its_beats_but_no_steady_bars_is_not_asked_for_again_and_again(self):
+        """0.60.3, the owner, 19 Nov: 9 of 46,770 and nothing separated: songs without steady bars, newest first, were
+        asked for every round ahead of all the others."""
+        self.finder.grid = lambda song_id: False if song_id == "sung" else self.grid(song_id)
+        self.assertEqual(self.finder.one("sung"), "failed")
+        self.assertEqual(self.downloaded, [])
+        self.assertNotIn("sung", self.store.without_vocals(V.VERSION, need_voice=True))
+        self.assertEqual(self.store.vocals(["sung"])["sung"]["error"], "No steady bars to mark the vocals on")
+        self.finder.turn()  # the next round gets on with the rest
+        self.assertEqual(self.store.vocal_counts(V.VERSION)["none"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

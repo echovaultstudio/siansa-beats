@@ -265,7 +265,7 @@ class Vocals:
     """Finds the vocals of the analysed songs that have none kept, one at a time, while nothing else is being done.
 
     ``separator``: :class:`Separator`; ``download(song_id, path)``: the song's file; ``grid(song_id)``: ``(downbeats,
-    intro lock, outro lock, duration)`` in seconds, or None before its beats are known; ``voice(ids)``: ``{song id:
+    intro lock, outro lock, duration)`` in seconds, None before its beats are known, False when they have no steady bars; ``voice(ids)``: ``{song id:
     the voice model's share}`` (``voice_known()``: whether it's there to ask); ``busy()``: whether the analysis is using the machine now."""
 
     def __init__(self, store, separator, download, grid, voice, busy, data_dir, voice_known=lambda: True):
@@ -357,6 +357,13 @@ class Vocals:
         found = self.grid(song_id)
         if found is None:
             return "waiting"
+        if found is False:
+            # Its beats are found but have no steady bars to mark (0.60.3): kept as failed, or it would be asked for again
+            # every round, ahead of every other song, and the vocals of the rest never found (the owner, 19 Nov: 9 of
+            # 46,770, nothing being separated).
+            _log.info("%s – %s: no steady bars to mark its vocals on", song.get("artist"), song.get("title"))
+            self.store.save_vocals(song_id, "failed", None, VERSION, error="No steady bars to mark the vocals on")
+            return "failed"
         downbeats, intro, outro, duration = found
         if self.only_sung() and self.voice_known():
             share = self.voice([song_id]).get(song_id)

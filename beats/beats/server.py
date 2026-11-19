@@ -301,11 +301,14 @@ class App:
 
     def vocal_grid(self, song_id):
         """``(downbeats, intro lock, outro lock, duration)`` in seconds of a song with its beats found (its steady
-        grid's bars, as the app blends on them), for :mod:`beats.vocals`; None without."""
+        grid's bars, as the app blends on them), for :mod:`beats.vocals`; None before its beats are found, False when
+        they are but have no steady bars (0.60.3)."""
         full = self.store.result(song_id, self.config.model, with_beats=True)
+        if not full:
+            return None
         steady = self.steady_grid(full)
         if not steady or len(steady.get("downbeats") or []) < 2:
-            return None
+            return False
         kept = self.store.ends([song_id], self.config.model).get(song_id) or {}
         song = self.store.song(song_id) or {}
         downs = steady["downbeats"]
