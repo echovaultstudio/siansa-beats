@@ -188,6 +188,42 @@ class Finder(unittest.TestCase):
         self.store.set_skips("main", "podcasts", [])
         self.assertIn("sung", self.store.without_vocals(V.VERSION, need_voice=True))
 
+    def test_vocals_again_keeps_what_is_known_until_each_song_is_done(self):
+        """0.60.2: Start over › Vocals again."""
+        self.finder.one("sung")
+        self.finder.one("instr")
+        self.finder.download = lambda song_id, path: (_ for _ in ()).throw(RuntimeError("away"))
+        self.finder.set_only_sung(False)
+        self.assertEqual(self.finder.one("unscored"), "failed")
+        self.assertEqual(self.store.vocals_again(), 3)
+        self.assertEqual(self.store.vocal_counts(V.VERSION), {"separated": 0, "none": 0, "failed": 0, "waiting": 3})
+        self.assertEqual(V.fields(self.store.vocals(["sung"])["sung"])["intro_vocal_ms"], 10000)  # still in use
+        self.assertIsNone(self.store.vocals(["unscored"])["unscored"]["error"])
+        self.assertEqual(sorted(self.store.without_vocals(V.VERSION)), ["instr", "sung", "unscored"])  # the failed one too
+
+    def test_only_vocals_runs_while_the_rest_waits_and_hands_back_when_done(self):
+        """0.60.2, the owner: "no way to start only it"."""
+        rest_busy = [True]
+        handed_back = []
+        self.finder.busy = lambda: rest_busy[0] and not self.finder.alone
+        self.finder.done_alone = lambda: handed_back.append(True)
+        self.assertEqual(self.finder.turn(), 5.0)
+        self.assertEqual(self.downloaded, [])  # waits for the rest
+        self.finder.run_alone()
+        self.assertTrue(self.finder.status()["alone"])
+        self.finder.turn()
+        self.assertEqual(self.downloaded, ["sung"])  # the instrumental one isn't read; the unscored one waits
+        self.assertEqual(handed_back, [])
+        self.assertEqual(self.finder.turn(), 60)  # nothing left that can be done
+        self.assertEqual(handed_back, [True])
+        self.assertFalse(self.finder.alone)
+
+    def test_the_song_being_worked_on_says_for_how_long(self):
+        self.finder.working = {"id": "sung", "title": "S", "artist": "A", "since": V.time.time() - 12}
+        self.assertGreaterEqual(self.finder.status()["working"]["for_seconds"], 12)
+        self.finder.working = None
+        self.assertIsNone(self.finder.status()["working"])
+
     def test_a_song_without_its_beats_waits(self):
         self.finder.grid = lambda song_id: None
         self.assertEqual(self.finder.one("sung"), "waiting")

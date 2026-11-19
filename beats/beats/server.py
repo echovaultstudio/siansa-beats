@@ -212,7 +212,7 @@ def _remove(path):
 
 
 # What can be analysed again by itself (0.45, the owner, 14 Nov), as the page names it.
-AGAIN = {"beats": "Beats", "loudness": "Loudness and key", "sound": "Sound", "genres": "Genres"}
+AGAIN = {"beats": "Beats", "loudness": "Loudness and key", "sound": "Sound", "genres": "Genres", "vocals": "Vocals"}
 
 
 class App:
@@ -261,8 +261,11 @@ class App:
 
         self.vocals = Vocals(self.store, Separator(config.models_dir, config.device, config.threads), self.worker.download,
                              self.vocal_grid, lambda ids: {k: v["voice"] for k, v in self.traits.of(ids).items()},
-                             lambda: self.worker.busy() or bool(self.store.counts().get("queued")) or self.worker.paused,
+                             # Only vocals (0.60.2): the rest is paused, and only a song still being worked on waits.
+                             lambda: self.worker.busy() or (not self.vocals.alone and (bool(self.store.counts().get("queued"))
+                                                                                       or self.worker.paused)),
                              config.data_dir, voice_known=lambda: self.traits.available)
+        self.vocals.done_alone = lambda: self.worker.pause(False)
         self.started = time.time()
         # Answers the page and the app ask for often, kept ready: the genre list and the styles' counts change with
         # each song heard (the page asks every 2 s).
@@ -1636,9 +1639,19 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
                 return self._json({"doubted": doubted, **app.style_models()})
             if path == "/api/vocals":  # {"only_sung": bool}: separate only the songs the voice model calls sung (0.60)
-                app.vocals.set_only_sung(bool(body.get("only_sung")))
-                app.store.event("Vocals for DJ blends: " + ("only songs with vocals are separated" if body.get("only_sung")
-                                                          else "every song is separated"))
+                if "alone" in body:  # {"alone": true}: Only vocals (0.60.2): the rest pauses until every song's vocals are found
+                    if body["alone"] and not app.vocals.available:
+                        return self._error(HTTPStatus.CONFLICT, "This image has no vocal separation model.")
+                    if body["alone"]:
+                        app.worker.pause(True)
+                        app.store.event("Only vocals: the rest of the analysis waits until every song's vocals are found")
+                    app.vocals.run_alone(bool(body["alone"]))
+                    if not body["alone"]:
+                        app.worker.pause(False)
+                if "only_sung" in body:
+                    app.vocals.set_only_sung(bool(body.get("only_sung")))
+                    app.store.event("Vocals for DJ blends: " + ("only songs with vocals are separated" if body.get("only_sung")
+                                                              else "every song is separated"))
                 return self._json(app.vocals.status(fresh=True))
             if path == "/api/ai":  # the AI service that names the mixes (0.54): {on, provider, address, model, key}
                 from .ai import AiError
@@ -1744,6 +1757,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(HTTPStatus.BAD_REQUEST, "what needed: " + ", ".join(AGAIN))
                 if what == "beats":
                     songs = sum(app.store.queue(song_id, force=True) for song_id in app.store.song_ids())
+                elif what == "vocals":
+                    songs = app.store.vocals_again()
+                    app.vocals.wake()
                 else:
                     songs = {"loudness": app.store.measure_again, "sound": app.store.sound_again, "genres": app.store.styles_again}[what]()
                 app.store.event(f"{AGAIN[what]} again for every song: {songs} songs")
@@ -1759,6 +1775,7 @@ class Handler(BaseHTTPRequestHandler):
                 app.store.event("Debug details on: the log says every step" if name == "debug" else "Debug details off")
                 return self._json({"level": name})
             if path in ("/api/pause", "/api/resume"):
+                app.vocals.run_alone(False)  # Pause stops Only vocals too; Carry on brings the rest back
                 app.worker.pause(path == "/api/pause")
                 return self._json({"paused": app.worker.paused})
             m = re.fullmatch(r"/api/songs/([^/]+)/marks", path)

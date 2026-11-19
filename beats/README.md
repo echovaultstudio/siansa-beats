@@ -128,8 +128,12 @@ music's energy there; breaths are filled and blips dropped; a bar is sung when a
 nothing else is analysed, a few seconds a song on a GPU (much longer on a CPU), and lets the model go after 10
 minutes idle. **Setup › Vocals for DJ blends › Only songs with vocals** (ticked by default) separates only the songs
 the voice model scores 0.3 or more as sung, and keeps the rest as instrumental without reading them; unticked, every
-song is separated (also those kept as instrumental before). The Overview has a **Vocals** bar for its progress (0.60.1), and each library a **Vocals** pill under
-Libraries to leave its songs out (a library of podcasts or DJ sets, say).
+song is separated (also those kept as instrumental before). Each library has a **Vocals** pill under Libraries to
+leave its songs out (a library of podcasts or DJ sets, say; 0.60.1). The Overview has a **Vocals** card like the
+others, with the model and how many songs are done, and says in **Now** which song's vocals are being found (0.60.2).
+**Only vocals** (under Libraries, and in the Setup box) pauses the rest of the analysis and finds the vocals now; the
+rest carries on by itself once every song's vocals are found, or with **Carry on**. **Start over › Vocals again**
+finds every song's vocals again, the vocals known staying in use until each song is done.
 
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
@@ -195,8 +199,8 @@ Each page has its own address (`#songs`, `#loudness`…), so Back and bookmarks 
 
 | Group | Page | What's on it |
 |---|---|---|
-| Analysis | **Overview** | What's being done now, and a card for each thing analysed (beats, loudness and key, genres, sound): how far it is and what measures it; **Check what's new** reads the libraries for songs added since (nothing already analysed is touched) |
-| | **Libraries** | A row for each library: a switch to analyse it and what it gets (beats, loudness, sound, genres); Start analysis (with its checks), a progress bar for each thing measured, tidying up, and **Start over**: one kind of analysis again for every song, or all of it, each asked about first |
+| Analysis | **Overview** | What's being done now, and a card for each thing analysed (beats, loudness and key, genres, sound, voice and mood, vocals): how far it is and what measures it; **Check what's new** reads the libraries for songs added since (nothing already analysed is touched) |
+| | **Libraries** | A row for each library: a switch to analyse it and what it gets (beats, loudness, sound, genres, vocals); Start analysis (with its checks), Only vocals, a progress bar for each thing measured, tidying up, and **Start over**: one kind of analysis again for every song, or all of it, each asked about first |
 | | **Songs** | Every song (cards on a phone), and a song's page (its beats, loudness, fades, key and genres) when one is open |
 | Your listening | **Listening** | This month beside the last, how you listen over all your history (My profile), and any month or year (Time machine), with charts |
 | Used by the Siansa app | **Loudness** | How loud the songs are and how they start and end: for levelling the volume and timing fades |
@@ -686,10 +690,15 @@ and measured here. New songs are measured on the way.
 
 ## The page's API
 
-`POST /api/analyse-again` with `{"what": "beats" | "loudness" | "sound" | "genres"}` does one kind of analysis again
-for every song (0.45; on the page under Libraries › **Start over** since 0.46): beats are queued; loudness, key,
-genres and the sound are worked out again while what's known stays in use (0.46: the sound was forgotten first
-before). A paused service starts again.
+`POST /api/analyse-again` with `{"what": "beats" | "loudness" | "sound" | "genres" | "vocals"}` does one kind of
+analysis again for every song (0.45; on the page under Libraries › **Start over** since 0.46; vocals since 0.60.2):
+beats are queued; loudness, key, genres, the sound and the vocals are worked out again while what's known stays in
+use (0.46: the sound was forgotten first before). A paused service starts again.
+
+`POST /api/vocals` with `{"only_sung": bool}` sets Only songs with vocals; with `{"alone": true}` (0.60.2) the rest of
+the analysis pauses and the vocals are found now, until every song's are (409 in an image without the model);
+`{"alone": false}`, `/api/pause` and `/api/resume` end it. Its answer, like `GET /api/vocals`, has `alone`, and
+`working` has `for_seconds`.
 
 `GET /api/health`, `/api/status`, `/api/libraries`, `/api/songs`, `/api/songs/<id>` (with every beat),
 `/api/beats/<id>`, `/api/audio/<id>`, `/api/grids?ids=`, `/api/export.csv`, `/api/export.json`;

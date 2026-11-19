@@ -283,6 +283,12 @@ class Store:
                             (song_id, how, json.dumps(summary) if summary is not None else None, version, seconds,
                              (error or None) and str(error)[:300], time.time()))
 
+    def vocals_again(self):
+        """Every song's vocals are found again (0.60.2): what's kept stays in use until then, and songs that couldn't be
+        read are tried once more. How many songs."""
+        with self._write():
+            return self.db.execute("UPDATE vocals SET version = 0, error = NULL").rowcount
+
     def without_vocals(self, version, limit=20, again_none=False, need_voice=False):
         """Songs with their beats found whose vocals aren't known at ``version`` (not failed), newest first; with
         ``again_none``, also those kept as instrumental by the voice model without being separated; with
