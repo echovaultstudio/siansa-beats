@@ -771,6 +771,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
         <div class="reading" id="reading" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><b id="reading-what"></b><div class="sub" id="reading-step"></div></div></div>
         <div class="controls row-gap">
           <button class="primary" id="start" title="Checks the server, the libraries, the database, the disk, the models and the page's safety, then reads the ticked libraries for new songs and analyses them">Start analysis</button>
+          <button data-vocals-alone hidden title="Pauses the rest of the analysis and finds the vocals of the songs still waiting; the rest carries on after">Only vocals</button>
           <span class="sub" id="start-note"></span>
         </div>
         <ul class="checks" id="checks" aria-label="What was checked" hidden></ul>
@@ -796,6 +797,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <button class="danger" data-again="loudness">Loudness and key again</button>
           <button class="danger" data-again="genres">Genres again</button>
           <button class="danger" data-again="sound">Sound again</button>
+          <button class="danger" data-again="vocals">Vocals again</button>
           <button class="danger" id="all-again">Analyse every song again</button>
         </div>
       </div>
@@ -1318,10 +1320,11 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
       <!-- Where the vocals are (0.60): so a DJ blend never lets two singers be heard at once. -->
       <div class="card" data-fold id="vocals-card">
         <h3>Vocals for DJ blends</h3>
-        <p class="sub">Beats pulls the voice out of the first and last 1½ minutes of each song and marks, bar by bar, where someone sings. Siansa's DJ blends use it so two vocals are never heard at the same time. It runs when nothing else is being analysed.</p>
+        <p class="sub">Beats pulls the voice out of the first and last 1½ minutes of each song and marks, bar by bar, where someone sings. Siansa's DJ blends use it so two vocals are never heard at the same time. It runs when nothing else is being analysed; <b style="display:inline">Only vocals</b> pauses the rest and finds them now.</p>
         <label class="toggle"><input type="checkbox" id="vocals-only"> Only songs with vocals</label>
         <p class="sub">Ticked: only songs the voice model says are sung are separated; the rest count as instrumental. Faster, but a song with only a little singing can be missed. Unticked: every song is separated.</p>
         <p class="sub" id="vocals-state" role="status"></p>
+        <div class="controls row-gap"><button data-vocals-alone hidden title="Pauses the rest of the analysis and finds the vocals of the songs still waiting; the rest carries on after">Only vocals</button></div>
       </div>
       <div class="card" data-fold>
         <h3>Connect the Siansa app</h3>
@@ -1452,6 +1455,12 @@ async function refreshStatus() {
   } else if (s.next) {
     $("now-what").textContent = `${s.next.artist} – ${s.next.title}`;
     $("now-step").textContent = `${s.next.step} for ${fmt(s.next.for_seconds)} s`;
+  } else if (s.vocals && (s.vocals.working || s.vocals.alone)) {
+    // Where the vocals are (0.60.2): it runs when the rest is done, or by itself with Only vocals.
+    const v = s.vocals;
+    $("now-what").textContent = v.working ? `${v.working.artist} – ${v.working.title}` : "Only vocals";
+    $("now-step").textContent = (v.working ? `Finding its vocals for ${fmt(v.working.for_seconds, 0)} s` : "Looking for the next song…") +
+      (v.alone ? " · only vocals: the rest carries on after" : "");
   } else if (s.paused) {
     $("now-what").textContent = "Paused"; $("now-step").textContent = `${queued} waiting`;
   } else {
@@ -1459,6 +1468,7 @@ async function refreshStatus() {
     $("now-step").innerHTML = total ? "" : (libraries.some((l) => l.on) ? "Reading the libraries…" : 'Choose the libraries to analyse under <a href="#libraries">Libraries</a>.');
   }
   $("pause").textContent = s.paused ? "Carry on" : "Pause";
+  drawVocalsAlone(s.vocals);
   const failedCount = (s.counts || {}).failed || 0;
   $("export-failed").hidden = !failedCount;
   $("export-failed").textContent = `Download failed songs (${failedCount})`;
@@ -3368,7 +3378,7 @@ function tile(href, k, v, of, s, meter) {
 function kindsOf(s) {
   const c = s.counts || {}, total = (c.songs || 0) - (c.skipped || 0), done = c.done || 0, failed = c.failed || 0;
   const waiting = (c.queued || 0) + BUSY.reduce((n, k) => n + (c[k] || 0), 0);
-  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0, tr = s.traits || {};
+  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0, tr = s.traits || {}, vo = s.vocals || {};
   const where = s.device_name && s.device_name !== "CPU" ? ` on the GPU` : "";
   return [
     {id: "beats", href: "#songs", name: "Beats", what: "Tempo, every beat and the phrases: what DJ blends are laid on.",
@@ -3394,6 +3404,14 @@ function kindsOf(s) {
       by: tr.available ? "<b>Essentia's trained models</b>" : "<b>None</b>: this image has no voice and mood models",
       done: tr.scored || 0, total: tr.available ? tr.total || 0 : null, failed: 0, busy: 0,
       now: (tr.total || 0) > (tr.scored || 0) ? "scoring songs now" : "", left: Math.max(0, (tr.total || 0) - (tr.scored || 0)), off: !tr.available},
+    // 0.60.2 (the owner, 19 Nov: not on the Overview): of the songs with their beats found, how many have their vocals
+    // found (separated, or instrumental by the voice model). It runs when the rest is done, or alone with Only vocals.
+    {id: "vocals", href: "#setup", name: "Vocals", what: "Where someone sings, bar by bar, at each end of a song: so DJ blends never lay two voices over each other.",
+      by: vo.available ? `<b>Hybrid Demucs</b>${where}` : "<b>None</b>: this image has no vocal separation model",
+      done: (vo.separated || 0) + (vo.none || 0), total: vo.available ? (vo.separated || 0) + (vo.none || 0) + (vo.waiting || 0) + (vo.failed || 0) : null,
+      failed: vo.failed || 0, busy: 0, now: vo.working ? "separating a song now" : "", left: vo.waiting || 0, off: !vo.available,
+      // Waiting for the rest: it only runs when nothing else is analysed, unless Only vocals.
+      waits: !vo.working && !vo.alone && (vo.waiting || 0) > 0 && (waiting > 0 || !!s.current || (s.paused && !vo.alone))},
   ];
 }
 const AGAIN_ASK = {
@@ -3401,6 +3419,7 @@ const AGAIN_ASK = {
   loudness: "Measure the loudness and key of every song again? What's known now stays in use until each song is measured.",
   genres: "Hear every song's genres again? The genres known now stay in use until each song is heard.",
   sound: "Hear the sound of every song again? For a big library that takes many hours. The sound known now stays in use until each song is heard.",
+  vocals: "Find the vocals of every song again? On a CPU that takes days for a big library. The vocals known now stay in use until each song is done.",
 };
 // A new install's way in (the owner, 14 Nov: setting up must be plain): shown until a music server is added and a
 // library is switched on, each step with where to do it and a tick once it's done.
@@ -3421,7 +3440,8 @@ function drawStart(s) {
 function drawTiles(s) {
   $("tiles").innerHTML = kindsOf(s).map((k) => {
     const w = (n) => k.total ? `${Math.max(0, Math.min(100, 100 * n / k.total))}%` : "0";
-    const state = k.off ? "not in this image" : s.paused && k.left && k.id !== "voice" ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
+    const alone = k.id === "vocals" && (s.vocals || {}).alone;
+    const state = k.off ? "not in this image" : s.paused && k.left && k.id !== "voice" && !alone ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.waits ? `waits for the rest · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
     return `<div class="kind"><div class="top"><a href="${k.href}">${esc(k.name)}</a><span class="n">${k.total == null ? "–" : `${num(k.done)} <small>of ${num(k.total)}</small>`}</span></div>
       <div class="for">${esc(k.what)}</div>
       <div class="meter" aria-hidden="true"><span class="done" style="width:${w(k.done)}"></span><span class="failed" style="width:${w(k.failed)}"></span><span class="busy" style="width:${w(k.busy)}"></span></div>
@@ -3477,8 +3497,26 @@ async function refreshVocals() {
     `${num(done)} of ${num(all)} songs done: ${num(v.separated)} separated, ${num(v.none)} instrumental` +
     (v.failed ? `, ${num(v.failed)} couldn't be read` : "") +
     (v.working ? `. Now: ${v.working.artist} – ${v.working.title}` : v.waiting ? `. ${num(v.waiting)} waiting` : "") +
+    (v.alone ? ". Only vocals: the rest of the analysis waits" : "") +
     (v.last_seconds ? ` (the last took ${v.last_seconds} s)` : "") + ".";
 }
+// Only vocals (0.60.2, the owner: "no way to start only it"): shown while songs wait for their vocals; pressed again,
+// it stops and the rest carries on.
+function drawVocalsAlone(v) {
+  document.querySelectorAll("[data-vocals-alone]").forEach((b) => {
+    b.hidden = !v || !v.available || (!v.alone && !(v.waiting > 0));
+    b.textContent = v && v.alone ? "Stop only vocals" : "Only vocals";
+    b.setAttribute("aria-pressed", String(!!(v && v.alone)));
+  });
+}
+document.querySelectorAll("[data-vocals-alone]").forEach((b) => b.addEventListener("click", async () => {
+  const on = b.getAttribute("aria-pressed") !== "true";
+  b.disabled = true;
+  try { drawVocalsAlone(await api("api/vocals", {method: "POST", body: JSON.stringify({alone: on})})); } catch (e) { banner(e.message); }
+  b.disabled = false;
+  refreshStatus();
+  refreshVocals();
+}));
 $("vocals-only").addEventListener("change", async () => {
   try { await api("api/vocals", {method: "POST", body: JSON.stringify({only_sung: $("vocals-only").checked})}); refreshVocals(); }
   catch (e) { banner(e.message); }

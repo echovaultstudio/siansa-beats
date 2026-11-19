@@ -277,7 +277,12 @@ class Vocals:
         self.last_seconds = None
         self.last_work = time.time()
         self._counts = None  # (when, the counts): kept a few seconds
+        # Only vocals (0.60.2, the owner: "no way to start only it"): the rest of the analysis is paused and the vocals
+        # are found without waiting for it; ``done_alone()`` is called when no song is left, to carry on with the rest.
+        self.alone = False
+        self.done_alone = lambda: None
         self._stop = threading.Event()
+        self._wake = threading.Event()
 
     @property
     def available(self):
@@ -294,27 +299,53 @@ class Vocals:
 
     def stop(self):
         self._stop.set()
+        self._wake.set()
+
+    def wake(self):
+        """Looks for songs at once, not after its next rest (a minute when there was nothing to do)."""
+        self._wake.set()
+
+    def run_alone(self, on=True):
+        """Only vocals (``on``), or back to finding them while nothing else is analysed."""
+        self.alone = on
+        self._counts = None
+        self.wake()
+
+    def _rest(self, seconds):
+        self._wake.wait(seconds)
+        self._wake.clear()
 
     def _loop(self):
-        while not self._stop.wait(5.0):
+        rest = 5.0
+        while not self._stop.is_set():
+            self._rest(rest)
+            if self._stop.is_set():
+                break
             try:
-                if not self.available:
-                    self._stop.wait(300)
-                    continue
-                if self.busy():
-                    continue
-                only = self.only_sung() and self.voice_known()
-                waiting = self.store.without_vocals(VERSION, limit=20, again_none=not only, need_voice=only)
-                if not waiting:
-                    self._stop.wait(60)
-                    continue
-                for song_id in waiting:
-                    if self._stop.is_set() or self.busy():
-                        break
-                    self.one(song_id)
+                rest = self.turn()
             except Exception:  # noqa: BLE001 - tried again next round
                 _log.exception("Finding vocals went wrong")
-                self._stop.wait(60)
+                rest = 60
+
+    def turn(self):
+        """One round: the next songs' vocals, when it may. How long to rest before the next round, in seconds."""
+        if not self.available:
+            return 300
+        if self.busy():
+            return 5.0
+        only = self.only_sung() and self.voice_known()
+        waiting = self.store.without_vocals(VERSION, limit=20, again_none=not only, need_voice=only)
+        if not waiting:
+            if self.alone:  # every song's vocals found: the rest of the analysis carries on
+                self.alone = False
+                self.store.event("Only vocals: every song's vocals are found; the rest carries on")
+                self.done_alone()
+            return 60
+        for song_id in waiting:
+            if self._stop.is_set() or self.busy():
+                break
+            self.one(song_id)
+        return 5.0
 
     def one(self, song_id):
         """Finds and keeps one song's vocals (or why not): ``"separated"``, ``"none"`` (instrumental, by the voice
@@ -379,13 +410,15 @@ class Vocals:
 
     def status(self, fresh=False):
         """The page's numbers: ``{"available", "only_sung", "separated", "none", "failed", "waiting", "working",
-        "last_seconds"}``. The counts are kept for :data:`COUNTS_SECONDS` (the Overview asks every 2 s) unless ``fresh``."""
+        "last_seconds", "alone"}``. The counts are kept for :data:`COUNTS_SECONDS` (the Overview asks every 2 s) unless ``fresh``."""
         now = time.monotonic()
         if fresh or self._counts is None or now - self._counts[0] > COUNTS_SECONDS:
             self._counts = (now, self.store.vocal_counts(VERSION))
         counts = self._counts[1]
+        working = self.working
         return {"available": self.available, "only_sung": self.only_sung(), **counts,
-                "working": self.working, "last_seconds": self.last_seconds,
+                # How long the song has been worked on, by this machine's clock (the page's may differ).
+                "working": working and {**working, "for_seconds": round(time.time() - working["since"], 1)}, "alone": self.alone, "last_seconds": self.last_seconds,
                 "loaded": self.separator.model is not None}
 
 
