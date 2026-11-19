@@ -160,6 +160,12 @@ class ServersTest(Service):
         self.assertNotIn("outro_vocal_ms", sung)  # none in the outro: left out, as other unknowns are
         self.app.store.save_vocals("t122", "none", None, 1)
         self.assertEqual(self.call("/api/v1/profiles?ids=t122")["profiles"][0]["vocals"], "none")
+        # The bars vocals are marked on (0.60.3): a song's steady grid; None before its beats, False with no steady bars.
+        downbeats, _intro, _outro, duration = self.app.vocal_grid("t140")
+        self.assertGreater(len(downbeats), 1)
+        self.assertIsNone(self.app.vocal_grid("no-such-song"))
+        self.app.store.update_result("t122", self.app.config.model, {"bpm": None})
+        self.assertIs(self.app.vocal_grid("t122"), False)
 
         # What's answered is the named server's own ids, by its id or its name.
         self.assertEqual(sorted(self.call("/api/v1/genre?name=Trance")["ids"]), ["t140", "t96w"])

@@ -363,6 +363,8 @@ main > section.on { display: grid; gap: 16px; }
   background: var(--raised-2); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
 .card-head { display: flex; align-items: baseline; gap: 12px; } .card-head .more { margin-left: auto; font-size: 0.875rem; }
 .kicker { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 2px; }
+.now-bar { grid-column: 1 / -1; } .now-bar .meter { height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; display: flex; }
+.now-bar .sub { margin-top: 6px; }
 .now { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: center; }
 .what { font-size: 1rem; font-weight: 600; }
 .step { color: var(--muted); font-size: 0.875rem; }
@@ -747,6 +749,8 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <div class="step" id="now-step"></div>
         </div>
         <div class="controls"><button id="check-new" title="Reads the libraries you analyse for songs added since, and analyses those. Nothing already analysed is touched">Check what's new</button><button id="pause">Pause</button></div>
+        <!-- One bar for what's being worked on (0.60.3, the owner: what is working and what stage it is at), the card's width. -->
+        <div class="now-bar" id="now-bar" hidden><div class="meter" aria-hidden="true"><span class="done" id="now-meter"></span></div><div class="sub" id="now-count"></div></div>
       </div>
       <div class="card" id="start-card" hidden>
         <h3>Get started</h3>
@@ -1442,31 +1446,7 @@ async function refreshStatus() {
   const done = c.done || 0, failed = c.failed || 0, queued = c.queued || 0, skipped = c.skipped || 0;
   const busy = BUSY.reduce((n, k) => n + (c[k] || 0), 0);
   drawStatus(s);
-  if (s.current) {
-    $("now-what").textContent = `${s.current.artist} – ${s.current.title}`;
-    $("now-step").textContent = `${s.current.step} for ${fmt(s.current.for_seconds)} s` +
-      (s.next ? ` · next: ${s.next.artist} – ${s.next.title} (${s.next.step})` : "");
-  } else if (s.reading && !queued) {
-    $("now-what").textContent = `Reading ${s.reading.server_name}'s libraries`;
-    $("now-step").textContent = `${s.reading.library || "Starting"}: ${s.reading.songs == null ? "asking for its songs…" : `matching its ${num(s.reading.songs)} songs with those already here…`}`;
-  } else if (s.regridding) {
-    $("now-what").textContent = "Working out songs again from their saved beats";
-    $("now-step").textContent = `${s.regridding.done} of ${s.regridding.total} (an update changed how; no model needed)`;
-  } else if (s.next) {
-    $("now-what").textContent = `${s.next.artist} – ${s.next.title}`;
-    $("now-step").textContent = `${s.next.step} for ${fmt(s.next.for_seconds)} s`;
-  } else if (s.vocals && (s.vocals.working || s.vocals.alone)) {
-    // Where the vocals are (0.60.2): it runs when the rest is done, or by itself with Only vocals.
-    const v = s.vocals;
-    $("now-what").textContent = v.working ? `${v.working.artist} – ${v.working.title}` : "Only vocals";
-    $("now-step").textContent = (v.working ? `Finding its vocals for ${fmt(v.working.for_seconds, 0)} s` : "Looking for the next song…") +
-      (v.alone ? " · only vocals: the rest carries on after" : "");
-  } else if (s.paused) {
-    $("now-what").textContent = "Paused"; $("now-step").textContent = `${queued} waiting`;
-  } else {
-    $("now-what").textContent = total ? (queued ? "Starting the next song…" : "All done") : "No songs yet";
-    $("now-step").innerHTML = total ? "" : (libraries.some((l) => l.on) ? "Reading the libraries…" : 'Choose the libraries to analyse under <a href="#libraries">Libraries</a>.');
-  }
+  drawNow(s, total, queued);
   $("pause").textContent = s.paused ? "Carry on" : "Pause";
   drawVocalsAlone(s.vocals);
   const failedCount = (s.counts || {}).failed || 0;
@@ -3411,7 +3391,8 @@ function kindsOf(s) {
       done: (vo.separated || 0) + (vo.none || 0), total: vo.available ? (vo.separated || 0) + (vo.none || 0) + (vo.waiting || 0) + (vo.failed || 0) : null,
       failed: vo.failed || 0, busy: 0, now: vo.working ? "separating a song now" : "", left: vo.waiting || 0, off: !vo.available,
       // Waiting for the rest: it only runs when nothing else is analysed, unless Only vocals.
-      waits: !vo.working && !vo.alone && (vo.waiting || 0) > 0 && (waiting > 0 || !!s.current || (s.paused && !vo.alone))},
+      // Waiting for the rest, as the finder says (0.60.3), not guessed from the other counts.
+      waits: !vo.working && (vo.waiting || 0) > 0 && vo.state === "waits for the rest of the analysis"},
   ];
 }
 const AGAIN_ASK = {
@@ -3499,6 +3480,51 @@ async function refreshVocals() {
     (v.working ? `. Now: ${v.working.artist} – ${v.working.title}` : v.waiting ? `. ${num(v.waiting)} waiting` : "") +
     (v.alone ? ". Only vocals: the rest of the analysis waits" : "") +
     (v.last_seconds ? ` (the last took ${v.last_seconds} s)` : "") + ".";
+}
+// What's being worked on now, in the Overview's Now card (0.60.3, the owner: "one progress bar in the overview panel
+// that shows if something is working, what is working and what stage it is at"): the kind of analysis and how far it
+// is, the song and its step. The first that's running, in the order they take turns.
+function nowWork(s, total, queued) {
+  const c = s.counts || {}, st = s.styles || {}, l = s.loudness || {}, so = s.sound || {}, tr = s.traits || {}, v = s.vocals || {};
+  const who = (x) => x ? `${x.artist || ""} – ${x.title || ""}` : "";
+  const beats = {done: c.done || 0, total: (c.songs || 0) - (c.skipped || 0)};
+  if (s.current) return {kind: "Beats", what: who(s.current), step: `${s.current.step} for ${fmt(s.current.for_seconds)} s` + (s.next ? ` · next: ${who(s.next)} (${s.next.step})` : ""), ...beats};
+  if (s.reading && !queued) return {kind: "Reading the libraries", what: `Reading ${s.reading.server_name}'s libraries`,
+    step: `${s.reading.library || "Starting"}: ${s.reading.songs == null ? "asking for its songs…" : `matching its ${num(s.reading.songs)} songs with those already here…`}`};
+  if (s.regridding) return {kind: "Working out beats again", what: "Working out songs again from their saved beats", step: "an update changed how; no model needed", done: s.regridding.done, total: s.regridding.total};
+  if (s.next) return {kind: "Beats", what: who(s.next), step: `${s.next.step} for ${fmt(s.next.for_seconds)} s`, ...beats};
+  if (l.measuring) return {kind: "Loudness & key", what: who(l.measuring), step: "measuring", done: l.measured || 0, total: l.total || 0};
+  if (so.hearing) return {kind: "Sound", what: who(so.hearing), step: "hearing it", done: so.heard ?? so.sound ?? 0, total: so.wanted ?? so.songs ?? 0};
+  if (st.current) return {kind: "Genres", what: who(st.current), step: "hearing its styles", done: st.done || 0, total: st.total || 0};
+  if (tr.available && (tr.total || 0) > (tr.scored || 0)) return {kind: "Voice and mood", what: "Scoring songs", step: "from the sound already heard", done: tr.scored || 0, total: tr.total || 0};
+  const vDone = (v.separated || 0) + (v.none || 0), vAll = vDone + (v.waiting || 0) + (v.failed || 0);
+  if (v.available && (v.working || v.alone || (v.waiting || 0) > 0)) {
+    const what = v.working ? who(v.working) : v.alone ? "Only vocals" : "Vocals";
+    const step = v.working ? `${v.working.step || "finding its vocals"} for ${fmt(v.working.for_seconds, 0)} s` :
+      v.state === "waits for the rest of the analysis" ? "waits for the rest of the analysis" :
+      v.state === "resting" ? `${num(v.stepped_past || 0)} songs can't be done yet; looking again in a minute` :
+      v.state === "starting" ? "starting" : "looking for the next song…";
+    return {kind: "Vocals", what, step: step + (v.alone ? " · only vocals: the rest carries on after" : ""), done: vDone, total: vAll};
+  }
+  return null;
+}
+function drawNow(s, total, queued) {
+  const w = nowWork(s, total, queued);
+  if (w) {
+    $("now-what").textContent = w.what;
+    $("now-step").textContent = w.step;
+  } else if (s.paused) {
+    $("now-what").textContent = "Paused"; $("now-step").textContent = `${queued} waiting`;
+  } else {
+    $("now-what").textContent = total ? (queued ? "Starting the next song…" : "All done") : "No songs yet";
+    $("now-step").innerHTML = total ? "" : (libraries.some((l) => l.on) ? "Reading the libraries…" : 'Choose the libraries to analyse under <a href="#libraries">Libraries</a>.');
+  }
+  const bar = !!(w && w.total);
+  $("now-bar").hidden = !bar;
+  if (bar) {
+    $("now-meter").style.width = `${Math.max(0, Math.min(100, 100 * w.done / w.total))}%`;
+    $("now-count").textContent = `${w.kind}: ${num(w.done)} of ${num(w.total)}`;
+  }
 }
 // Only vocals (0.60.2, the owner: "no way to start only it"): shown while songs wait for their vocals; pressed again,
 // it stops and the rest carries on.

@@ -218,6 +218,28 @@ class Finder(unittest.TestCase):
         self.assertEqual(handed_back, [True])
         self.assertFalse(self.finder.alone)
 
+    def test_songs_that_cant_be_done_yet_are_stepped_past(self):
+        """0.60.3, the owner, 19 Nov: nothing was separated. Songs at the head of the list that can't be done yet (their
+        beats not known here) no longer hold up the ones after them; the list starts from the top again at its end."""
+        for i in range(25):
+            self.store.db.execute("INSERT INTO jobs (song_id, state, finished_at) VALUES (?, 'done', 9)", (f"new{i}",))
+            self.store.db.execute("INSERT INTO traits VALUES (?, 0.9)", (f"new{i}",))
+        self.store.db.commit()
+        self.finder.grid = lambda song_id: None if song_id.startswith("new") else self.grid(song_id)
+        self.finder.turn()  # the 20 newest: none can be done
+        self.assertEqual((self.finder.state, self.finder.status()["stepped_past"]), ("working", 20))
+        self.finder.turn()  # the 5 newest left, then the songs that can
+        self.finder.turn()
+        self.assertIn("sung", self.downloaded)
+        while self.finder.turn() != 60:
+            pass
+        self.assertEqual(self.finder.status()["stepped_past"], 0)  # from the top again next time
+
+    def test_it_says_when_it_waits_for_the_rest(self):
+        self.finder.busy = lambda: True
+        self.finder.turn()
+        self.assertEqual(self.finder.status()["state"], "waits for the rest of the analysis")
+
     def test_the_song_being_worked_on_says_for_how_long(self):
         self.finder.working = {"id": "sung", "title": "S", "artist": "A", "since": V.time.time() - 12}
         self.assertGreaterEqual(self.finder.status()["working"]["for_seconds"], 12)
@@ -227,6 +249,17 @@ class Finder(unittest.TestCase):
     def test_a_song_without_its_beats_waits(self):
         self.finder.grid = lambda song_id: None
         self.assertEqual(self.finder.one("sung"), "waiting")
+
+    def test_a_song_with_its_beats_but_no_steady_bars_is_not_asked_for_again_and_again(self):
+        """0.60.3, the owner, 19 Nov: 9 of 46,770 and nothing separated: songs without steady bars, newest first, were
+        asked for every round ahead of all the others."""
+        self.finder.grid = lambda song_id: False if song_id == "sung" else self.grid(song_id)
+        self.assertEqual(self.finder.one("sung"), "failed")
+        self.assertEqual(self.downloaded, [])
+        self.assertNotIn("sung", self.store.without_vocals(V.VERSION, need_voice=True))
+        self.assertEqual(self.store.vocals(["sung"])["sung"]["error"], "No steady bars to mark the vocals on")
+        self.finder.turn()  # the next round gets on with the rest
+        self.assertEqual(self.store.vocal_counts(V.VERSION)["none"], 1)
 
 
 if __name__ == "__main__":
