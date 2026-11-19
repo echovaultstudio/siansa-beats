@@ -184,7 +184,7 @@ Each page has its own address (`#songs`, `#loudness`…), so Back and bookmarks 
 | Analysis | **Overview** | What's being done now, and a card for each thing analysed (beats, loudness and key, genres, sound): how far it is and what measures it; **Check what's new** reads the libraries for songs added since (nothing already analysed is touched) |
 | | **Libraries** | A row for each library: a switch to analyse it and what it gets (beats, loudness, sound, genres); Start analysis (with its checks), a progress bar for each thing measured, tidying up, and **Start over**: one kind of analysis again for every song, or all of it, each asked about first |
 | | **Songs** | Every song (cards on a phone), and a song's page (its beats, loudness, fades, key and genres) when one is open |
-| Your listening | **Listening** | Your history: by year and month, your top artists, albums and songs, and when you listen |
+| Your listening | **Listening** | This month beside the last, how you listen over all your history (My profile), and any month or year (Time machine), with charts |
 | Used by the Siansa app | **Loudness** | How loud the songs are and how they start and end: for levelling the volume and timing fades |
 | | **Keys** | Each song's musical key: for blends in key |
 | | **Genres** | The genres heard from each song's sound, how often they agree with the tags, the genre descriptions, and every genre by songs |
@@ -254,6 +254,17 @@ production, tempo, era) a search can be steered by.
 months, with the listens, hours, artists, songs and albums of that time, the most played of each, the days or
 months as bars (press one to go there), when in the day and the week you listen, records, the artists heard for
 the first time, what's playing now and the last listens. Days and hours are your browser's clock's.
+
+**Three ways to look (0.59).** Listening opens on **This month**: its plays, hours, artists, albums, songs and new
+artists in coloured boxes beside last month's (the plays against last month's by the same day), the days as bars
+with last month's as a dashed line, the top artists, albums and songs (a small picture for each number one, then
+the next ones with a bar of their plays), a listening clock, the weekdays, genres, music by decade, who was new and
+records. **My profile** is all of your history: your top artists over time (their plays added up month by month, or
+their share), your top 40 artists as bubbles, a listening fingerprint (consistency, discovery, variety,
+concentration and replay, the last twelve months over the twelve before), when you listen by weekday and hour,
+genres over time, new artists month by month and music by decade. **Time machine** is any year or month: the same
+boxes and top lists, with a graph to choose (when, the clock, the week, genres or decades). Every chart says what's
+under the pointer. The genres are the analysis's (else the file's genre tag); the decades the files' years.
 
 - **Pictures (0.30):** the favourites of a time (top artist, album and song), the number one of each list, the
   lists' rows, what's playing and the last listens show the cover or the artist's picture. An animated cover
@@ -668,7 +679,7 @@ before). A paused service starts again.
 
 `GET /api/health`, `/api/status`, `/api/libraries`, `/api/songs`, `/api/songs/<id>` (with every beat),
 `/api/beats/<id>`, `/api/audio/<id>`, `/api/grids?ids=`, `/api/export.csv`, `/api/export.json`;
-`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/mixes?user=&tz=&part=&days=` (the Mixes page, 0.53), `/api/voice` (the Voice and mood page's numbers, 0.52), `/api/voice/songs?line=&order=&limit=&offset=` (the songs of one of its lines; order: `most`, `least` or `unsure`), `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
+`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `/api/listens/profile?user=&tz=` (My profile, 0.59), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/mixes?user=&tz=&part=&days=` (the Mixes page, 0.53), `/api/voice` (the Voice and mood page's numbers, 0.52), `/api/voice/songs?line=&order=&limit=&offset=` (the songs of one of its lines; order: `most`, `least` or `unsure`), `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
 `beats/server.py`.
 
 ## Building the image

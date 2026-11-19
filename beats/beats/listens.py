@@ -391,6 +391,82 @@ class Book:
         return r[DURATION] or self.lengths().get((r[AKEY], r[TKEY])) or self.library.durations.get(r[SONG])
 
 
+# ---- what was played, by genre, decade and habit (0.59) ----
+
+def style_name(label):
+    """A style as a listener reads it: "Electronic---Deep House" → "Deep House"; a tag as it is."""
+    return label.partition("---")[2] or label if "---" in label else label
+
+
+def family_name(label):
+    """The genre a style belongs to ("Electronic"), or the tag itself."""
+    return label.partition("---")[0] if "---" in label else label
+
+
+def genre_counts(rows, styles_of, most=10):
+    """``{"known": listens with a genre, "styles": [{"name", "family", "listens"}], "families": [{"name", "listens"}]}``
+    of ``rows``, most first."""
+    styles, families = Counter(), Counter()
+    for r in rows:
+        style = styles_of.get(r[SONG])
+        if style:
+            styles[style] += 1
+            families[family_name(style)] += 1
+    return {"known": sum(styles.values()),
+            "styles": [{"name": style_name(n), "family": family_name(n), "listens": c} for n, c in styles.most_common(most)],
+            "families": [{"name": n, "listens": c} for n, c in families.most_common(8)]}
+
+
+def decade_counts(rows, years_of):
+    """``[{"decade": 1990, "listens"}]``, oldest first, of the songs whose year is known."""
+    found = Counter()
+    for r in rows:
+        y = years_of.get(r[SONG])
+        if y:
+            found[y // 10 * 10] += 1
+    return [{"decade": d, "listens": n} for d, n in sorted(found.items())]
+
+
+FINGERPRINT = ("Consistency", "Discovery", "Variety", "Concentration", "Replay")
+
+
+def habits(rows, firsts_between, days):
+    """Five habits of ``rows`` (listens over ``days`` days), each 0 to 100: Consistency, the share of days with music;
+    Discovery, the share of listens of artists first heard then (``firsts_between``: their keys); Variety, how evenly
+    the listens spread over artists; Concentration, the share of the ten most played artists; Replay, the share of
+    listens of a song heard before in the time."""
+    if not rows:
+        return None
+    import math
+
+    per_artist = Counter(r[CREDITS][0][0] for r in rows)
+    on_days = {r[AT] // 86400 for r in rows}
+    songs = {(r[AKEY], r[TKEY]) for r in rows}
+    n = len(rows)
+    spread = 0.0
+    if len(per_artist) > 1:
+        spread = -sum(c / n * math.log(c / n) for c in per_artist.values()) / math.log(len(per_artist))
+    return [round(min(100.0, len(on_days) / max(1, days) * 100), 1),
+            round(sum(c for k, c in per_artist.items() if k in firsts_between) / n * 100, 1),
+            round(spread * 100, 1),
+            round(sum(c for _, c in per_artist.most_common(10)) / n * 100, 1),
+            round((n - len(songs)) / n * 100, 1)]
+
+
+def fingerprint(book, now, styles_of=None):
+    """How the last twelve months were listened to, beside the twelve before: ``{"axes", "recent", "before"}``
+    (``before`` None when there's nothing then)."""
+    year = 365 * 86400
+    firsts = book.artists()
+
+    def part(start, end):
+        new = {k for k, one in firsts.items() if start <= one[0] < end}
+        rows = book.between(start, end)
+        first_day = max(start, book.ats[0]) if book.ats else start
+        return habits(rows, new, max(1, (min(end, now) - first_day) // 86400 + 1))
+    return {"axes": list(FINGERPRINT), "recent": part(now - year, now + 1), "before": part(now - 2 * year, now - year)}
+
+
 # ---- the history ----
 
 class Listens:
@@ -410,6 +486,7 @@ class Listens:
         self._names = (None, [])  # (the change they were read at, the listeners with a listen kept)
         self._books, self._forgot = {}, 0  # listener -> Book; counts the times everything in memory was dropped
         self._library_kept = None
+        self._facts = None  # (when, {song: year}, {song: style}): Listening's genres and decades
         self._clock = {}  # time zone -> {quarter of an hour since 1970: (year, month, day, hour, weekday, day number)}
         self._keys_kept = {}  # a name -> as compared
         self._marked = 0  # counts the changes to what's sent on to Last.fm
@@ -979,6 +1056,8 @@ class Listens:
             streak = streak + 1 if previous is not None and day - previous == 1 else 1
             best, previous = max(best, streak), day
         busiest = max(days.items(), key=lambda p: p[1]) if days else None
+        years_of, styles_of = self.song_facts()
+        new_keys = {k for k, one in book.artists().items() if start <= one[0] < end}
         return {
             "user": user, "period": {"label": label, "year": year, "month": month, "zone": str(tz_name or "UTC")},
             "years": [{"year": y, "listens": n} for y, n in sorted(years.items())],
@@ -996,6 +1075,139 @@ class Listens:
                         "per_day": round(len(rows) / len(days), 1) if days else 0},
             "all": {"listens": len(book.ats), "first": book.ats[0] if book.ats else None,
                     "last": book.ats[-1] if book.ats else None},
+            # 0.59 (the owner, 19 Nov: "more graph representations of different listening data, similar to how lastfm
+            # does it"): the period before, to compare with; what was played by genre and by decade, of the songs here
+            # whose genre and year Siansa Beats knows; and the share of listens that went to artists new in it.
+            "previous": self._previous(book, year, month, tz_name),
+            "genres": genre_counts(rows, styles_of),
+            "decades": decade_counts(rows, years_of),
+            "discovery": round(sum(1 for r in rows if r[CREDITS][0][0] in new_keys) / len(rows), 3) if rows else 0,
+        }
+
+    def _previous(self, book, year, month, tz_name):
+        """The period before a month or a year, as the page compares with it ("vs 218 last month"): its label, totals
+        and listens per day (a month) or per month (a year); None for all time."""
+        if not year:
+            return None
+        if month:
+            before_year, before_month = (year - 1, 12) if month == 1 else (year, month - 1)
+        else:
+            before_year, before_month = year - 1, None
+        start, end, label = self.window(before_year, before_month, zone(tz_name))
+        rows, local = book.between(start, end), self._local(tz_name)
+        seconds, days, artists, songs, albums = 0, Counter(), set(), set(), set()
+        per = Counter()
+        for r in rows:
+            seconds += book.length(r) or TYPICAL_SECONDS
+            d = local(r[AT])
+            days[d[5]] += 1
+            per[d[2] if month else d[1]] += 1
+            for akey, _ in r[CREDITS]:
+                artists.add(akey)
+            songs.add((r[AKEY], r[TKEY]))
+            if r[ALBUM]:
+                albums.add((r[CREDITS][0][0], r[ALBUM].casefold()))
+        new = sum(1 for one in book.artists().values() if start <= one[0] < end)
+        length = (datetime.date(before_year + (before_month == 12), before_month % 12 + 1, 1) - datetime.timedelta(days=1)).day \
+            if month else 12
+        return {"label": label, "year": before_year, "month": before_month,
+                "totals": {"listens": len(rows), "seconds": seconds, "artists": len(artists), "songs": len(songs),
+                           "albums": len(albums), "days": len(days), "new_artists": new},
+                "points": [per[i] for i in range(1, length + 1)]}
+
+    def song_facts(self):
+        """``({song id: year}, {song id: its strongest style})`` of the songs here, for the genres and decades of what
+        was played: read from the database at most every ten minutes, and again when a library was read."""
+        stamp = (self.store.library_changes, int(self.now() // 600))
+        if self._facts is None or self._facts[0] != stamp:
+            self._facts = (stamp, *self.store.listening_facts())
+        return self._facts[1], self._facts[2]
+
+    def profile(self, user, tz_name=None, artists=8):
+        """How ``user`` listens, over all their history (0.59, the owner, 19 Nov: "My Listening Profile - graphs and
+        data around how the user listens to music, times, discovery, new artists"); kept until a listen is added,
+        like :meth:`summary`."""
+        user = self.who(user)
+        self.library()
+        self._used = self.now()
+        kept_as = ("profile", user, tz_name, artists)
+        with self._lock:
+            kept = self._kept.get(kept_as)
+        if kept and kept[0] == self.changes:
+            return kept[1]
+        seen, started = self.changes, time.monotonic()
+        answer = self._profile(user, tz_name, artists)
+        with self._lock:
+            if len(self._kept) > 60:
+                self._kept.clear()
+            self._kept[kept_as] = (seen, answer, time.monotonic() - started)
+        return answer
+
+    def _profile(self, user, tz_name, most_artists):
+        book, local = self.book(user), self._local(tz_name)
+        rows = book.rows
+        if not rows:
+            return {"user": user, "months": [], "artists": [], "clock": [[0] * 24 for _ in range(7)], "fingerprint": None,
+                    "genres": {"names": [], "months": []}, "decades": [], "bubbles": [], "totals": {"listens": 0}}
+        years_of, styles_of = self.song_facts()
+        first, last = local(rows[0][AT]), local(self.now())
+        months = []  # (year, month) from the first listen's month to this one
+        y, m = first[0], first[1]
+        while (y, m) <= (last[0], last[1]):
+            months.append((y, m))
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+        place = {ym: i for i, ym in enumerate(months)}
+        per_month = [0] * len(months)
+        clock = [[0] * 24 for _ in range(7)]
+        firsts = book.artists()
+        new_per_month = [0] * len(months)
+        for one in firsts.values():
+            d = local(one[0])
+            new_per_month[place[(d[0], d[1])]] += 1
+
+        top = self._top(rows, "artists", most_artists)
+        counted = Counter(akey for r in rows for akey, _ in r[CREDITS])
+        top_keys = [k for k, _ in counted.most_common(len(top))]  # the same artists, in the same order, by their keys
+        wanted = {k: i for i, k in enumerate(top_keys)}
+        series = [[0] * len(months) for _ in top]
+        style_month = [Counter() for _ in months]
+        for r in rows:
+            d = local(r[AT])
+            i = place.get((d[0], d[1]))
+            if i is None:  # a listen dated after now (a wrong clock): left out of the months
+                continue
+            per_month[i] += 1
+            clock[d[4]][d[3]] += 1
+            for akey, _ in r[CREDITS]:
+                j = wanted.get(akey)
+                if j is not None:
+                    series[j][i] += 1
+            style = styles_of.get(r[SONG])
+            if style:
+                style_month[i][style] += 1
+
+        # The genres over time: the six most played styles of all time, each month's listens of them.
+        totals_by_style = Counter()
+        for c in style_month:
+            totals_by_style.update(c)
+        names = [name for name, _ in totals_by_style.most_common(6)]
+        genre_months = [{"label": f"{MONTHS[mm - 1][:3]} {yy}", "counts": [c.get(n, 0) for n in names],
+                         "other": sum(c.values()) - sum(c.get(n, 0) for n in names)} for (yy, mm), c in zip(months, style_month)]
+
+        return {
+            "user": user,
+            "months": [{"year": yy, "month": mm, "label": f"{MONTHS[mm - 1][:3]} {yy}", "listens": per_month[i],
+                        "new_artists": new_per_month[i]} for i, (yy, mm) in enumerate(months)],
+            # The most played artists of all time, each month's listens of each (the page adds them up, or shares them).
+            "artists": [dict(t, months=series[i]) for i, t in enumerate(top)],
+            "clock": clock,  # [weekday Monday first][hour]
+            "fingerprint": fingerprint(book, self.now(), styles_of),
+            "genres": {"names": [style_name(n) for n in names], "families": [family_name(n) for n in names],
+                       "months": genre_months},
+            "decades": decade_counts(rows, years_of),
+            "bubbles": self._top(rows, "artists", 40),
+            "totals": {"listens": len(rows), "artists": len(firsts), "first": rows[0][AT],
+                       "months": sum(1 for n in per_month if n)},
         }
 
     def artist(self, user, name, tz_name=None, most=20):

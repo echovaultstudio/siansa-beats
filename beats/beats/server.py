@@ -364,6 +364,17 @@ class App:
         answer["new_artists"] = [pictured(r, cover=False, face=True) for r in answer["new_artists"]]
         return answer
 
+    def listening_profile(self, user=None, tz=None):
+        """My listening profile (0.59): how a listener listens over all their history, the artists with their
+        pictures."""
+        if user is None:
+            user = self.default_listener()
+        found = dict(self.listens.profile(user, tz))
+        face = lambda r: dict(r, face=self.art.song_for("artist", r.get("song"), r.get("artist")))  # noqa: E731
+        found["artists"] = [face(r) for r in found["artists"]]
+        found["bubbles"] = [face(r) for r in found["bubbles"]]
+        return found
+
     def listening_artist(self, user, name, tz=None):
         """One artist's page in ``user``'s listening, with the pictures each row shows; None when never listened to."""
         if user is None:  # opened straight from its address: the same person Listening shows first
@@ -1443,6 +1454,8 @@ class Handler(BaseHTTPRequestHandler):
                                                 part=(query.get("part") or [None])[0], days=(query.get("days") or [None])[0]))
             if path == "/api/listens/import":
                 return self._json(dict(app.listens.importing))
+            if path == "/api/listens/profile":  # how a listener listens, all time (0.59): ?user=&tz=
+                return self._json(app.listening_profile((query.get("user") or [None])[0], (query.get("tz") or [None])[0]))
             if path == "/api/listens/artist":  # one artist in a listener's history: its own page
                 name = (query.get("name") or [""])[0].strip()
                 if not name:
