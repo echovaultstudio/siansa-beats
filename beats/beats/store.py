@@ -289,7 +289,7 @@ class Store:
         with self._write():
             return self.db.execute("UPDATE vocals SET version = 0, error = NULL").rowcount
 
-    def without_vocals(self, version, limit=20, again_none=False, need_voice=False):
+    def without_vocals(self, version, limit=20, again_none=False, need_voice=False, offset=0):
         """Songs with their beats found whose vocals aren't known at ``version`` (not failed), newest first; with
         ``again_none``, also those kept as instrumental by the voice model without being separated; with
         ``need_voice``, only songs the voice model has scored (the table ``traits``, :mod:`beats.traits`)."""
@@ -297,7 +297,7 @@ class Store:
         return [r["song_id"] for r in self._rows(
             "SELECT j.song_id FROM jobs j LEFT JOIN vocals v ON v.song_id = j.song_id WHERE j.state = 'done' AND "
             f"(v.song_id IS NULL OR v.version IS NOT ? OR (? AND v.how = 'none')){voice} AND NOT {skipped('vocals', 'j.song_id')} "
-            "ORDER BY v.song_id IS NOT NULL, j.finished_at DESC, j.song_id LIMIT ?", (version, 1 if again_none else 0, limit))]
+            "ORDER BY v.song_id IS NOT NULL, j.finished_at DESC, j.song_id LIMIT ? OFFSET ?", (version, 1 if again_none else 0, limit, offset))]
 
     def vocals(self, song_ids):
         """``{song id: row}`` of ``vocals`` for the songs among ``song_ids`` that have one."""

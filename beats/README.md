@@ -135,7 +135,10 @@ others, with the model and how many songs are done, and says in **Now** which so
 rest carries on by itself once every song's vocals are found, or with **Carry on**. **Start over › Vocals again**
 finds every song's vocals again, the vocals known staying in use until each song is done. A song whose beats have no steady
 bars to mark the vocals on is kept as failed ("No steady bars to mark the vocals on"), so it doesn't hold up the rest
-(0.60.3: such songs, newest first, were asked for again every round ahead of all the others).
+(0.60.3: such songs, newest first, were asked for again every round ahead of all the others). Songs that can't be
+done yet (their beats or voice not known) are stepped past, and looked at again once the list has been gone through.
+The Overview's **Now** has one bar for whatever is being worked on: the kind of analysis and how far it is, the song
+and its step (for vocals: getting the file, separating the voice, marking the bars), or why the vocals wait.
 
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,

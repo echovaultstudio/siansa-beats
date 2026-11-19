@@ -281,6 +281,11 @@ class Vocals:
         # are found without waiting for it; ``done_alone()`` is called when no song is left, to carry on with the rest.
         self.alone = False
         self.done_alone = lambda: None
+        # What it's doing now, for the page (0.60.3, the owner: "one progress bar … what is working and what stage"),
+        # and how many songs at the head of the list it has stepped past: songs that can't be done yet (no beats, no
+        # voice score) would otherwise be asked for every round ahead of all the others.
+        self.state = "starting"
+        self._past = 0
         self._stop = threading.Event()
         self._wake = threading.Event()
 
@@ -330,22 +335,35 @@ class Vocals:
     def turn(self):
         """One round: the next songs' vocals, when it may. How long to rest before the next round, in seconds."""
         if not self.available:
+            self.state = "not in this image"
             return 300
         if self.busy():
+            self.state = "waits for the rest of the analysis"
             return 5.0
         only = self.only_sung() and self.voice_known()
-        waiting = self.store.without_vocals(VERSION, limit=20, again_none=not only, need_voice=only)
+        waiting = self.store.without_vocals(VERSION, limit=20, again_none=not only, need_voice=only, offset=self._past)
         if not waiting:
+            if self._past:  # the end of the list, with songs stepped past: from the top again in a while
+                _log.info("Vocals: %d songs can't be done yet (their beats or voice aren't known); looking again later", self._past)
+                self._past = 0
+                self.state = "resting"
+                return 60
             if self.alone:  # every song's vocals found: the rest of the analysis carries on
                 self.alone = False
                 self.store.event("Only vocals: every song's vocals are found; the rest carries on")
                 self.done_alone()
+            self.state = "all done"
             return 60
+        moved = 0
         for song_id in waiting:
             if self._stop.is_set() or self.busy():
                 break
-            self.one(song_id)
-        return 5.0
+            if self.one(song_id) != "waiting":
+                moved += 1
+        if not moved:
+            self._past += len(waiting)  # none of these can be done yet: the next ones
+        self.state = "working"
+        return 0.5 if not moved else 5.0
 
     def one(self, song_id):
         """Finds and keeps one song's vocals (or why not): ``"separated"``, ``"none"`` (instrumental, by the voice
@@ -372,19 +390,23 @@ class Vocals:
             if share < SUNG:
                 self.store.save_vocals(song_id, "none", None, VERSION)
                 return "none"
-        self.working = {"id": song_id, "title": song.get("title"), "artist": song.get("artist"), "since": time.time()}
+        # Its step, for the page: getting the file, pulling the voice out, then marking the bars.
+        self.working = {"id": song_id, "title": song.get("title"), "artist": song.get("artist"), "since": time.time(),
+                        "step": "getting the file"}
         path = None
         started = time.monotonic()
         try:
             fd, path = tempfile.mkstemp(prefix="vocals-", dir=self.data_dir)
             os.close(fd)
             self.download(song_id, path)
+            self.working["step"] = "separating the voice" + ("" if self.separator.model is not None else " (loading the model)")
             parts, vocal, mix = [], [], []
             for start, seconds in windows(duration):
                 v, m = self.separator.vocals(decode(path, start, seconds))
                 parts.append((start, len(v)))
                 vocal.append(v)
                 mix.append(m)
+            self.working["step"] = "marking the bars"
             sung = activity(np.concatenate(vocal), np.concatenate(mix))  # the loud vocals of both ends together
             flags, at = [], 0
             for start, n in parts:
@@ -425,7 +447,8 @@ class Vocals:
         working = self.working
         return {"available": self.available, "only_sung": self.only_sung(), **counts,
                 # How long the song has been worked on, by this machine's clock (the page's may differ).
-                "working": working and {**working, "for_seconds": round(time.time() - working["since"], 1)}, "alone": self.alone, "last_seconds": self.last_seconds,
+                "working": working and {**working, "for_seconds": round(time.time() - working["since"], 1)}, "alone": self.alone,
+                "state": self.state, "stepped_past": self._past, "last_seconds": self.last_seconds,
                 "loaded": self.separator.model is not None}
 
 
