@@ -52,6 +52,7 @@ GAP_SECONDS = 0.6  # a gap this short in the vocals (a breath) is filled
 BLIP_SECONDS = 0.3  # vocals this short alone are dropped (a click, a stray syllable of bleed)
 BAR_SUNG = 0.25  # a bar is sung when this share of it is
 
+COUNTS_SECONDS = 10
 ONLY_SUNG_SETTING = "vocals_only_sung"
 SUNG = 0.3  # the voice model's share at or over which a song is separated with "only songs with vocals"
 
@@ -275,6 +276,7 @@ class Vocals:
         self.working = None  # {"id", "title", "artist", "since"} while a song is separated
         self.last_seconds = None
         self.last_work = time.time()
+        self._counts = None  # (when, the counts): kept a few seconds
         self._stop = threading.Event()
 
     @property
@@ -375,10 +377,13 @@ class Vocals:
         self.store.event(f"Let go of the vocal separation model after {idle // 60} minutes without a song")
         return True
 
-    def status(self):
+    def status(self, fresh=False):
         """The page's numbers: ``{"available", "only_sung", "separated", "none", "failed", "waiting", "working",
-        "last_seconds"}``."""
-        counts = self.store.vocal_counts(VERSION)
+        "last_seconds"}``. The counts are kept for :data:`COUNTS_SECONDS` (the Overview asks every 2 s) unless ``fresh``."""
+        now = time.monotonic()
+        if fresh or self._counts is None or now - self._counts[0] > COUNTS_SECONDS:
+            self._counts = (now, self.store.vocal_counts(VERSION))
+        counts = self._counts[1]
         return {"available": self.available, "only_sung": self.only_sung(), **counts,
                 "working": self.working, "last_seconds": self.last_seconds,
                 "loaded": self.separator.model is not None}

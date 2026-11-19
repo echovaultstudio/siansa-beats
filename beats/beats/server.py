@@ -869,6 +869,8 @@ class App:
             "sound": sound,
             # Voice and mood (0.52): how many of the songs with a sound are scored, for the Overview's card.
             "traits": {k: voice[k] for k in ("available", "total", "scored")},
+            # Where the vocals are (0.60): the Overview's bar for it.
+            "vocals": timed("vocals", self.vocals.status),
             "libraries": {"chosen": self.store.setting(folders_key(server)) or [],
                           "read_at": self.store.setting("library_read_at")},
             # The server these numbers are of, and all of them (for the page's switch).
@@ -1514,7 +1516,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/loudness":
                 return self._json(app.loudness_report(server))
             if path == "/api/vocals":  # where the vocals are, for DJ blends (0.60): the finder's numbers and its setting
-                return self._json(app.vocals.status())
+                return self._json(app.vocals.status(fresh=True))
             if path == "/api/voice":  # the Voice and mood page (0.52)
                 return self._json(app.voice(server))
             if path == "/api/voice/songs":  # the songs of one of its lines: ?line=&order=&limit=&offset=
@@ -1637,7 +1639,7 @@ class Handler(BaseHTTPRequestHandler):
                 app.vocals.set_only_sung(bool(body.get("only_sung")))
                 app.store.event("Vocals for DJ blends: " + ("only songs with vocals are separated" if body.get("only_sung")
                                                           else "every song is separated"))
-                return self._json(app.vocals.status())
+                return self._json(app.vocals.status(fresh=True))
             if path == "/api/ai":  # the AI service that names the mixes (0.54): {on, provider, address, model, key}
                 from .ai import AiError
                 try:

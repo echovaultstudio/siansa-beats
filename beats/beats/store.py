@@ -104,7 +104,7 @@ RESULT_FIELDS = ("bpm", "bpm_fit", "main_share", "grid_bpm", "on_grid", "grid_dr
                  "outro_steady", "beats_per_bar", "bar_share", "first_downbeat_ms", "beat_count", "downbeat_count",
                  "download_seconds", "decode_seconds", "model_seconds")
 BUSY = ("downloading", "decoding", "ready", "analysing")  # ready: downloaded and decoded, waiting for the model
-TASKS = ("beats", "loudness", "sound", "styles")  # what a library can be left out of (library_skips)
+TASKS = ("beats", "loudness", "sound", "styles", "vocals")  # what a library can be left out of (library_skips)
 HAS_BEATS = "('done', 'skipped')"  # a song's beats are settled: found, or left out by its library's choice
 
 
@@ -290,7 +290,7 @@ class Store:
         voice = " AND EXISTS (SELECT 1 FROM traits t WHERE t.song_id = j.song_id AND t.voice IS NOT NULL)" if need_voice else ""
         return [r["song_id"] for r in self._rows(
             "SELECT j.song_id FROM jobs j LEFT JOIN vocals v ON v.song_id = j.song_id WHERE j.state = 'done' AND "
-            f"(v.song_id IS NULL OR v.version IS NOT ? OR (? AND v.how = 'none')){voice} "
+            f"(v.song_id IS NULL OR v.version IS NOT ? OR (? AND v.how = 'none')){voice} AND NOT {skipped('vocals', 'j.song_id')} "
             "ORDER BY v.song_id IS NOT NULL, j.finished_at DESC, j.song_id LIMIT ?", (version, 1 if again_none else 0, limit))]
 
     def vocals(self, song_ids):
@@ -307,7 +307,7 @@ class Store:
         out = {"separated": 0, "none": 0, "failed": 0, "waiting": 0}
         for r in self._rows("SELECT CASE WHEN v.song_id IS NULL OR v.version IS NOT ? THEN 'waiting' ELSE v.how END AS how, "
                             "COUNT(*) AS n FROM jobs j LEFT JOIN vocals v ON v.song_id = j.song_id WHERE j.state = 'done' "
-                            "GROUP BY 1", (version,)):
+                            f"AND NOT {skipped('vocals', 'j.song_id')} GROUP BY 1", (version,)):
             out[r["how"]] = out.get(r["how"], 0) + r["n"]
         return out
 

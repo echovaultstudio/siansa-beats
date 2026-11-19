@@ -238,9 +238,9 @@ class LibraryTasksTest(Service):
         db.link_songs("main", "1", [song])
         db.link_songs("emby", "2", [song])  # the same song on a second server (a song is in one library of a server)
         self.assertEqual(db.set_skips("main", "1", ["beats"]), None)  # the other library still wants them
-        self.assertEqual(db.wanted("x"), {"beats", "loudness", "sound", "styles"})
+        self.assertEqual(db.wanted("x"), {"beats", "loudness", "sound", "styles", "vocals"})
         self.assertEqual(db.set_skips("emby", "2", ["beats", "sound"]), {"skipped": 1, "queued": 0})
-        self.assertEqual(db.wanted("x"), {"loudness", "sound", "styles"})  # sound: the first library still wants it
+        self.assertEqual(db.wanted("x"), {"loudness", "sound", "styles", "vocals"})  # sound: the first library still wants it
         self.assertEqual(db.set_skips("main", "1", []), {"skipped": 0, "queued": 1})
         self.assertEqual(db.skips("emby"), {"2": ["beats", "sound"]})
         self.assertFalse(db.set_skips("emby", "2", ["nonsense"]))  # unknown tasks are ignored
