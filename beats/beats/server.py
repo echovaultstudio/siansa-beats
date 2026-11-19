@@ -256,6 +256,13 @@ class App:
         self.traits = Traits(config.models_dir, self.store, config.threads)
         self.worker = Worker(self.store, self.servers, self.tracker, decode or analyser.decode,
                              config.data_dir, config.model, measure, self.style, sound, self.hearer)
+        # Where each song's vocals are at its ends (0.60, beats.vocals): separated when nothing else is being done.
+        from .vocals import Separator, Vocals
+
+        self.vocals = Vocals(self.store, Separator(config.models_dir, config.device, config.threads), self.worker.download,
+                             self.vocal_grid, lambda ids: {k: v["voice"] for k, v in self.traits.of(ids).items()},
+                             lambda: self.worker.busy() or bool(self.store.counts().get("queued")) or self.worker.paused,
+                             config.data_dir, voice_known=lambda: self.traits.available)
         self.started = time.time()
         # Answers the page and the app ask for often, kept ready: the genre list and the styles' counts change with
         # each song heard (the page asks every 2 s).
@@ -289,6 +296,20 @@ class App:
         self.art = Art(self.store, self.servers, config.data_dir)
 
 
+    def vocal_grid(self, song_id):
+        """``(downbeats, intro lock, outro lock, duration)`` in seconds of a song with its beats found (its steady
+        grid's bars, as the app blends on them), for :mod:`beats.vocals`; None without."""
+        full = self.store.result(song_id, self.config.model, with_beats=True)
+        steady = self.steady_grid(full)
+        if not steady or len(steady.get("downbeats") or []) < 2:
+            return None
+        kept = self.store.ends([song_id], self.config.model).get(song_id) or {}
+        song = self.store.song(song_id) or {}
+        downs = steady["downbeats"]
+        duration = float(song.get("duration") or 0) or downs[-1] + 2.0
+        lock = lambda ms: ms / 1000.0 if ms is not None else None  # noqa: E731
+        return downs, lock(kept.get("intro_lock_ms")), lock(kept.get("outro_lock_ms")), duration
+
     def mind_memory_every_minute(self):
         """Every minute from the start: the models nobody has needed for a while are let go (:meth:`mind_memory`)."""
         def loop():
@@ -307,6 +328,8 @@ class App:
             if self.words.unload_if_idle():
                 memory.trim()
             self.worker.let_models_go_if_idle()
+            if self.vocals.let_go_if_idle():
+                memory.trim()
             if self.arousal.catch_up():  # songs heard since the last minute
                 memory.trim()
             if self.traits.catch_up():
@@ -1490,6 +1513,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.genre_songs(name, limit, server))
             if path == "/api/loudness":
                 return self._json(app.loudness_report(server))
+            if path == "/api/vocals":  # where the vocals are, for DJ blends (0.60): the finder's numbers and its setting
+                return self._json(app.vocals.status())
             if path == "/api/voice":  # the Voice and mood page (0.52)
                 return self._json(app.voice(server))
             if path == "/api/voice/songs":  # the songs of one of its lines: ?line=&order=&limit=&offset=
@@ -1608,6 +1633,11 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
                 return self._json({"doubted": doubted, **app.style_models()})
+            if path == "/api/vocals":  # {"only_sung": bool}: separate only the songs the voice model calls sung (0.60)
+                app.vocals.set_only_sung(bool(body.get("only_sung")))
+                app.store.event("Vocals for DJ blends: " + ("only songs with vocals are separated" if body.get("only_sung")
+                                                          else "every song is separated"))
+                return self._json(app.vocals.status())
             if path == "/api/ai":  # the AI service that names the mixes (0.54): {on, provider, address, model, key}
                 from .ai import AiError
                 try:
@@ -1927,6 +1957,7 @@ def main():
         log.set_level(chosen)
     _log.info("Log level %s (%s)", log.level(), "chosen on the page" if chosen else "LOG_LEVEL")
     app.worker.start()
+    app.vocals.start()
     app.about.start()
     app.mind_memory_every_minute()
     app.relay_now_and_then()

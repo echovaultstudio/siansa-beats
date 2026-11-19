@@ -117,6 +117,19 @@ title, sound search, line and sound words to steer by of its vibes, Today's mix,
 needs no AI service of its own, and switches its own off. Only what the app writes in the brief is sent: the moment,
 the time slot or the listener's words, recent plays and the sound words the search knows, never a name.
 
+**Where the vocals are, for DJ blends (0.60).** So a blend never lets two singers be heard at once, Beats pulls
+the voice out of each song's first and last 96 seconds (the whole song when it's short) with Hybrid Demucs, and marks
+bar by bar where someone sings. The app gets, with each song's profile (`/api/v1/profiles`): `vocals`
+(`separated`, or `none` for a song the voice model calls instrumental), where the first vocals start and the last
+end (`intro_vocal_ms`, `outro_vocal_ms`), the bars from each lock to them (`intro_vocal_free_bars`,
+`outro_vocal_free_bars`), every sung stretch (`vocal_sections_ms`) and what was heard (`vocal_heard_ms`). A frame
+counts as sung when the vocal stem is within 18 dB of the song's loud vocals, over -48 dBFS and at least 6 % of the
+music's energy there; breaths are filled and blips dropped; a bar is sung when a quarter of it is. It runs when
+nothing else is analysed, a few seconds a song on a GPU (much longer on a CPU), and lets the model go after 10
+minutes idle. **Setup › Vocals for DJ blends › Only songs with vocals** (ticked by default) separates only the songs
+the voice model scores 0.3 or more as sung, and keeps the rest as instrumental without reading them; unticked, every
+song is separated (also those kept as instrumental before).
+
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
 acoustic and electronic with its songs against the whole library; and MIREX's five groups by plain names, each song
@@ -703,4 +716,6 @@ Siansa Beats is built on other people's work, each under its own licence:
   downloads the models from that project's releases. Siansa Beats runs them itself and needs no AudioMuse-AI
   installed; it's a separate project, not affiliated with it. The answers under `/api/v1/sound/` keep the layout of
   that project's API, which the Siansa app already read.
+- **Where the vocals are:** Hybrid Demucs by Alexandre Défossez (Meta, 2021), the weights torchaudio publishes as
+  `HDEMUCS_HIGH_MUSDB_PLUS` (trained on MUSDB-HQ and 150 more songs), MIT licence.
 - **Genre descriptions:** Wikipedia (CC BY-SA), named and linked wherever one is shown.

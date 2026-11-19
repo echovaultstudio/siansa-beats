@@ -1315,6 +1315,14 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <li><b>After:</b> the old model's genres are gone. Going back means hearing every song again.</li>
         </ul>
       </div>
+      <!-- Where the vocals are (0.60): so a DJ blend never lets two singers be heard at once. -->
+      <div class="card" data-fold id="vocals-card">
+        <h3>Vocals for DJ blends</h3>
+        <p class="sub">Beats pulls the voice out of the first and last 1½ minutes of each song and marks, bar by bar, where someone sings. Siansa's DJ blends use it so two vocals are never heard at the same time. It runs when nothing else is being analysed.</p>
+        <label class="toggle"><input type="checkbox" id="vocals-only"> Only songs with vocals</label>
+        <p class="sub">Ticked: only songs the voice model says are sung are separated; the rest count as instrumental. Faster, but a song with only a little singing can be missed. Unticked: every song is separated.</p>
+        <p class="sub" id="vocals-state" role="status"></p>
+      </div>
       <div class="card" data-fold>
         <h3>Connect the Siansa app</h3>
         <ol class="steps">
@@ -2285,7 +2293,7 @@ function showView(view, keepHash) {
   }
   if (view === "listening") refreshListening();
   if (view === "mixes") refreshMixes();
-  if (view === "setup") refreshAi();
+  if (view === "setup") { refreshAi(); refreshVocals(); }
   if (view === "mix") {  // part of Mixes: its menu entry stays marked
     document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
     $("page-name").textContent = "Mixes · " + (mx.open || "Mix");
@@ -3455,6 +3463,22 @@ function drawSetup(s) {
 
 // ---- the style model to hear genres with (0.39) ----
 let styleModels = null;
+// Vocals for DJ blends (0.60): the box and how far it is.
+async function refreshVocals() {
+  let v;
+  try { v = await api("api/vocals"); } catch (e) { $("vocals-state").textContent = e.message; return; }
+  if (document.activeElement !== $("vocals-only")) $("vocals-only").checked = v.only_sung;
+  const done = v.separated + v.none, all = done + v.waiting + v.failed;
+  $("vocals-state").textContent = !v.available ? "Not in this image: the vocal separation model is missing." :
+    `${num(done)} of ${num(all)} songs done: ${num(v.separated)} separated, ${num(v.none)} instrumental` +
+    (v.failed ? `, ${num(v.failed)} couldn't be read` : "") +
+    (v.working ? `. Now: ${v.working.artist} – ${v.working.title}` : v.waiting ? `. ${num(v.waiting)} waiting` : "") +
+    (v.last_seconds ? ` (the last took ${v.last_seconds} s)` : "") + ".";
+}
+$("vocals-only").addEventListener("change", async () => {
+  try { await api("api/vocals", {method: "POST", body: JSON.stringify({only_sung: $("vocals-only").checked})}); refreshVocals(); }
+  catch (e) { banner(e.message); }
+});
 async function drawStyleModels() {
   try { styleModels = await api("api/style/models"); } catch (e) { return; }
   $("style-choices").innerHTML = styleModels.models.map((m) => {

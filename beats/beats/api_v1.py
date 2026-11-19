@@ -130,6 +130,9 @@ def profiles(app, ids, server=None):
     here = app.store.resolve(ids, server)
     measures = app.store.measures(here.values())
     grids = app.store.ends(here.values(), app.config.model)
+    from . import vocals as vocals_module
+
+    sung = app.store.vocals(here.values())
     out, pending = [], []
     for song_id in ids:
         sound, grid = measures.get(here.get(song_id)), grids.get(here.get(song_id))
@@ -149,6 +152,11 @@ def profiles(app, ids, server=None):
         if grid is not None:
             profile.update({k: v for k, v in grid.items() if v is not None})
             profile["beat_grid"] = "siansa_beats"
+        # Where the vocals are at each end (0.60, beats.vocals): "vocals" is "separated" (with the fields) or "none"
+        # (instrumental, by the voice model); missing while not known.
+        voice = vocals_module.fields(sung.get(here.get(song_id)))
+        if voice is not None:
+            profile.update({k: v for k, v in voice.items() if v is not None})
         out.append(profile)
     return {"schema_version": SCHEMA_VERSION, "profiles": out, "pending": pending}
 
