@@ -1553,11 +1553,11 @@ async function refreshLibraries() {
 const savedIds = () => libraries.filter((l) => l.on).map((l) => l.id);
 // What each ticked library gets (0.40): a library of two-hour mixes wants its loudness, not its beats. Each chip is
 // a task; a crossed-out one is left out. Kept in skips (library id → the tasks left out) until Start analysis.
-const TASKS = [["beats", "Beats", "Tempo, beats and phrases (Beat This!): what the DJ blends need. Slow on very long songs."], ["loudness", "Loudness & key", "LUFS, fades and the key: what the app levels the volume and mixes in key by."], ["sound", "Sound", "Moods, energy and what sounds alike (MusiCNN, CLAP): similar music and the search by words."], ["styles", "Genres", "The 400 Discogs styles by sound: the genre radios."]];
+const TASKS = [["beats", "Beats", "Tempo, beats and phrases (Beat This!): what the DJ blends need. Slow on very long songs."], ["loudness", "Loudness & key", "LUFS, fades and the key: what the app levels the volume and mixes in key by."], ["sound", "Sound", "Moods, energy and what sounds alike (MusiCNN, CLAP): similar music and the search by words."], ["styles", "Genres", "The 400 Discogs styles by sound: the genre radios."], ["vocals", "Vocals", "Where the vocals are, bar by bar (each song's ends separated): so DJ blends never lay two voices over each other. Slow on a CPU."]];
 let skips = null;
 const savedSkips = () => Object.fromEntries(libraries.filter((l) => l.skip && l.skip.length).map((l) => [l.id, [...l.skip]]));
 // The four things a library can get, as chips in line under (or beside) its name; short names so four fit a phone.
-const TASK_SHORT = {beats: "Beats", loudness: "Loudness", sound: "Sound", styles: "Genres"};
+const TASK_SHORT = {beats: "Beats", loudness: "Loudness", sound: "Sound", styles: "Genres", vocals: "Vocals"};
 function taskChips(l, current) {
   return `<div class="gets" role="group" aria-label="What ${esc(l.name)} gets">` + TASKS.map(([id, name, hint]) => {
     const out = (current[l.id] || []).includes(id);
@@ -2031,9 +2031,13 @@ function drawWork(s) {
   // Every thing that's measured has its bar, also when it's done (the owner, 14 Nov), so the page says what's complete.
   jobs.push(job("loudness", "Loudness & key", l.measured || 0, l.total ?? ((l.measured || 0) + (l.waiting || 0) + (l.failed || 0)), l.measuring ? who(l.measuring) : "", l.failed || 0));
   if (so.hears !== false) jobs.push(job("sound", "Sound", so.heard ?? so.sound ?? 0, so.wanted ?? so.songs ?? 0, so.hearing ? who(so.hearing) : "", (so.sources || {}).failed || 0));
+  // Where the vocals are (0.60): the songs done (separated, or instrumental by the voice model) of those with beats.
+  const v = s.vocals;
+  if (v && v.available) jobs.push(job("vocals", "Vocals", (v.separated || 0) + (v.none || 0), (v.separated || 0) + (v.none || 0) + (v.waiting || 0) + (v.failed || 0),
+    v.working ? who(v.working) : "", v.failed || 0));
   if (s.regridding) jobs.push(job("regrid", "Working out beats again", s.regridding.done, s.regridding.total, ""));
   if (st.switch && $("style-note").textContent.indexOf("…") < 0) $("style-note").innerHTML = st.switch.phase === "marking" ? `Switching to ${esc(st.switch.model_name)}: marking ${num(st.switch.songs)} songs to be heard again (${st.switch.for_seconds} s)…` : `${esc(st.switch.model_name)}: ${num(st.done || 0)} of ${num(st.switch.doubted || 0)} songs heard again so far. <a href="#libraries">Progress is under Libraries.</a>`;
-  $("work").innerHTML = jobs.join("") + (!toGo && !s.current && !st.current && !l.measuring && !so.hearing && !s.reading ? `<div class="sub">Nothing is running now. Start analysis looks for new songs; what's new is analysed as it comes. Check what's new on the Overview looks for new songs too.</div>` : "");
+  $("work").innerHTML = jobs.join("") + (!toGo && !s.current && !st.current && !l.measuring && !so.hearing && !s.reading && !(v && v.working) ? `<div class="sub">Nothing is running now. Start analysis looks for new songs; what's new is analysed as it comes. Check what's new on the Overview looks for new songs too.</div>` : "");
 }
 
 // ---- controls ----

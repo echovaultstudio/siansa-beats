@@ -177,6 +177,17 @@ class Finder(unittest.TestCase):
         self.assertNotIn("sung", self.store.without_vocals(V.VERSION))  # not tried again and again
         self.assertEqual(self.finder.status()["failed"], 1)
 
+    def test_a_library_left_out_of_vocals_is_not_separated(self):
+        """0.60: a library's Vocals pill: its songs aren't separated, nor counted."""
+        self.store.db.execute("INSERT INTO links VALUES ('main', 'i-sung', 'sung', 'podcasts')")
+        self.store.db.commit()
+        self.store.set_skips("main", "podcasts", ["vocals"])
+        self.assertNotIn("sung", self.store.without_vocals(V.VERSION, need_voice=True))
+        self.assertEqual(sum(self.store.vocal_counts(V.VERSION).values()), 2)
+        self.assertEqual(self.finder.status(fresh=True)["waiting"], 2)
+        self.store.set_skips("main", "podcasts", [])
+        self.assertIn("sung", self.store.without_vocals(V.VERSION, need_voice=True))
+
     def test_a_song_without_its_beats_waits(self):
         self.finder.grid = lambda song_id: None
         self.assertEqual(self.finder.one("sung"), "waiting")

@@ -128,7 +128,8 @@ music's energy there; breaths are filled and blips dropped; a bar is sung when a
 nothing else is analysed, a few seconds a song on a GPU (much longer on a CPU), and lets the model go after 10
 minutes idle. **Setup › Vocals for DJ blends › Only songs with vocals** (ticked by default) separates only the songs
 the voice model scores 0.3 or more as sung, and keeps the rest as instrumental without reading them; unticked, every
-song is separated (also those kept as instrumental before).
+song is separated (also those kept as instrumental before). The Overview has a **Vocals** bar for its progress (0.60.1), and each library a **Vocals** pill under
+Libraries to leave its songs out (a library of podcasts or DJ sets, say).
 
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
