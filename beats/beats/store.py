@@ -806,6 +806,23 @@ class Store:
 
     # ---- settings ----
 
+    def listening_facts(self):
+        """``({song id: year}, {song id: style})`` for Listening's genres and decades (0.59): a song's year from its
+        file, its style the strongest the sound gave (``Electronic---House``), else its file's first genre tag."""
+        with self.lock:
+            years = {r[0]: r[1] for r in self.db.execute("SELECT song_id, year FROM sound WHERE year BETWEEN 1900 AND 2100")}
+            styles, tags = {}, {}
+            for song, source, label, weight in self.db.execute(
+                    "SELECT song_id, source, label, weight FROM genres WHERE source IN ('sound', 'sound-doubted', 'tag')"):
+                if source == "tag":
+                    tags.setdefault(song, label)
+                elif weight > styles.get(song, (None, -1))[1]:
+                    styles[song] = (label, weight)
+        styles = {song: label for song, (label, _) in styles.items()}
+        for song, label in tags.items():
+            styles.setdefault(song, label)
+        return years, styles
+
     def setting(self, key, default=None):
         rows = self._rows("SELECT value FROM settings WHERE key=?", (key,))
         return json.loads(rows[0]["value"]) if rows else default
