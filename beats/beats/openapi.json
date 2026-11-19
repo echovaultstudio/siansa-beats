@@ -2487,6 +2487,17 @@
             "type": "number",
             "description": "Where the beat stops well before the end (ms)"
           },
+          "vocals": {
+            "type": "string",
+            "enum": ["separated", "none"],
+            "description": "Where the vocals are (0.60): separated (the fields below are known; a missing intro_vocal_ms or outro_vocal_ms means that end has none), or none (instrumental, by the voice model, not separated). Missing while not known."
+          },
+          "intro_vocal_ms": {"type": "number", "description": "Where the first vocals start, on a bar line (ms)"},
+          "outro_vocal_ms": {"type": "number", "description": "Where the last vocals end, on a bar line (ms)"},
+          "intro_vocal_free_bars": {"type": "integer", "description": "Bars from the intro lock to the first vocals (with none in the intro, the bars heard)"},
+          "outro_vocal_free_bars": {"type": "integer", "description": "Bars from the last vocals to the outro lock (with none in the outro, the bars heard)"},
+          "vocal_sections_ms": {"type": "array", "description": "Every sung stretch heard: [from, to] ms on bar lines", "items": {"type": "array", "items": {"type": "number"}}},
+          "vocal_heard_ms": {"type": "array", "description": "The stretches that were separated: [from, to] ms", "items": {"type": "array", "items": {"type": "number"}}},
           "mix_track": {
             "type": "boolean",
             "description": "Part of a continuous mix"

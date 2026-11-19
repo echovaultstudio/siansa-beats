@@ -150,6 +150,16 @@ class ServersTest(Service):
         # Without naming the server too: an id is understood from any of them.
         self.assertEqual(self.call("/api/v1/profiles?ids=e-t140")["profiles"][0]["track_id"], "e-t140")
         self.assertEqual(self.call("/api/grids?ids=e-t140,t122")["missing"], [])
+        # Where the vocals are (0.60), with the profile asked by either server's id.
+        self.app.store.save_vocals("t140", "separated", {"intro_vocal_ms": 32000, "outro_vocal_ms": None,
+                                                         "intro_vocal_free_bars": 16, "outro_vocal_free_bars": 40,
+                                                         "vocal_sections_ms": [[32000, 64000]], "vocal_heard_ms": [[0, 96000]]}, 1)
+        sung = self.call("/api/v1/profiles?ids=e-t140&server=emby")["profiles"][0]
+        self.assertEqual((sung["vocals"], sung["intro_vocal_ms"], sung["intro_vocal_free_bars"], sung["vocal_sections_ms"]),
+                         ("separated", 32000, 16, [[32000, 64000]]))
+        self.assertNotIn("outro_vocal_ms", sung)  # none in the outro: left out, as other unknowns are
+        self.app.store.save_vocals("t122", "none", None, 1)
+        self.assertEqual(self.call("/api/v1/profiles?ids=t122")["profiles"][0]["vocals"], "none")
 
         # What's answered is the named server's own ids, by its id or its name.
         self.assertEqual(sorted(self.call("/api/v1/genre?name=Trance")["ids"]), ["t140", "t96w"])

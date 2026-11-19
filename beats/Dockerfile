@@ -173,6 +173,17 @@ RUN for pair in $TRAIT_SHA256; do \
       [ -n "$ok" ] || { echo "$file couldn't be downloaded"; exit 1; }; \
     done
 
+# Vocal separation (0.60, beats.vocals): Hybrid Demucs, Meta's weights (MIT) as torchaudio publishes them
+# (HDEMUCS_HIGH_MUSDB_PLUS), through the torchaudio Beat This! already brings. Must load into the model.
+RUN for try in 1 2 3 4 5; do \
+      python -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" \
+        "https://download.pytorch.org/torchaudio/models/hdemucs_high_trained.pt" /models/hdemucs_high_trained.pt \
+        && break || { echo "download $try failed, trying again"; rm -f /models/hdemucs_high_trained.pt; sleep 15; }; \
+    done \
+ && python -c "import torch, hashlib; from torchaudio.models import hdemucs_high; \
+m = hdemucs_high(sources=['drums', 'bass', 'other', 'vocals']); m.load_state_dict(torch.load('/models/hdemucs_high_trained.pt', map_location='cpu')); \
+print('vocal separation model loads:', sum(p.numel() for p in m.parameters()), 'parameters, sha256', hashlib.sha256(open('/models/hdemucs_high_trained.pt', 'rb').read()).hexdigest())"
+
 # Everything that doesn't change with Beats' own code comes before it, so an update is the layers from here on only.
 COPY --from=arousal /emomusic-msd-musicnn-2.onnx /models/emomusic-msd-musicnn-2.onnx
 RUN useradd --uid 1000 --create-home beats && mkdir -p /data && chown beats /data
@@ -202,6 +213,14 @@ print('text model ok: alike', round(float(a @ b), 3), 'unlike', round(float(a @ 
 RUN python -c "import torch, beat_this.inference, beats.server; print('imports ok, torch', torch.__version__, 'cuda', torch.version.cuda)" \
  && python -c "import numpy, beats.style as s; m = s.StyleModel('/models'); assert m.available; \
 r = m(numpy.zeros(16000 * 5, numpy.float32)); assert len(r) == 400 and 0 <= r[0][1] <= 1, r[:3]; print('style model ok:', r[0])"
+
+# The vocal separation for real: a made-up song with a "voice" (a sung vowel's harmonics, coming and going) over a beat.
+RUN python -c "import numpy; from beats.vocals import Separator, activity, RATE; s = Separator('/models'); assert s.available; \
+t = numpy.arange(RATE * 12) / RATE; kick = numpy.sin(2 * numpy.pi * 55 * t) * (numpy.mod(t, 0.5) < 0.08); \
+voice = sum(numpy.sin(2 * numpy.pi * 220 * k * t) / k for k in range(1, 8)) * (numpy.mod(t, 4) < 2) * 0.2; \
+x = numpy.stack([kick + voice, kick + voice]).astype(numpy.float32) * 0.5; v, m = s.vocals(x); \
+assert v.shape == m.shape and len(v) == 120 and numpy.all(numpy.isfinite(v)), (v.shape, m.shape); \
+print('vocal separation ok: loaded in', s.load_seconds, 's, sung frames', int(activity(v, m).sum()), 'of', len(v))"
 
 # The arousal model for real: any number of songs at once, the same answer each time, each about 1 to 9.
 RUN python -c "import numpy, tempfile, os; from beats.store import Store; from beats.drive import Arousal; \

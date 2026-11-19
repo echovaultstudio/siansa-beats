@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS sound (
 );
 -- What a library is left out of (0.40, the owner, 13 Nov): a library of two-hour mixes needs its loudness, not its
 -- beats. A song is left out of a task only when every library it's in leaves it out.
+-- Where each song's vocals are at its ends (0.60, beats.vocals): how ("separated", "none": instrumental by the voice
+-- model, "failed"), and the bar-snapped summary the app blends by (JSON).
+CREATE TABLE IF NOT EXISTS vocals (song_id TEXT PRIMARY KEY, how TEXT, summary TEXT, version INTEGER, seconds REAL,
+    error TEXT, at REAL);
 CREATE TABLE IF NOT EXISTS library_skips (server TEXT, folder TEXT, task TEXT, PRIMARY KEY (server, folder, task));
 CREATE INDEX IF NOT EXISTS links_by_song ON links (song_id, server);
 CREATE INDEX IF NOT EXISTS links_by_server ON links (server, song_id);
@@ -269,6 +273,43 @@ class Store:
     def sound_waiting(self):
         """How many songs' sound is marked to be heard again."""
         return self._rows("SELECT COUNT(*) AS n FROM sound WHERE again = 1")[0]["n"]
+
+    # ---- vocals (0.60, beats.vocals) ----
+
+    def save_vocals(self, song_id, how, summary, version, seconds=None, error=None):
+        with self._write():
+            self.db.execute("INSERT OR REPLACE INTO vocals (song_id, how, summary, version, seconds, error, at) "
+                            "VALUES (?,?,?,?,?,?,?)",
+                            (song_id, how, json.dumps(summary) if summary is not None else None, version, seconds,
+                             (error or None) and str(error)[:300], time.time()))
+
+    def without_vocals(self, version, limit=20, again_none=False, need_voice=False):
+        """Songs with their beats found whose vocals aren't known at ``version`` (not failed), newest first; with
+        ``again_none``, also those kept as instrumental by the voice model without being separated; with
+        ``need_voice``, only songs the voice model has scored (the table ``traits``, :mod:`beats.traits`)."""
+        voice = " AND EXISTS (SELECT 1 FROM traits t WHERE t.song_id = j.song_id AND t.voice IS NOT NULL)" if need_voice else ""
+        return [r["song_id"] for r in self._rows(
+            "SELECT j.song_id FROM jobs j LEFT JOIN vocals v ON v.song_id = j.song_id WHERE j.state = 'done' AND "
+            f"(v.song_id IS NULL OR v.version IS NOT ? OR (? AND v.how = 'none')){voice} "
+            "ORDER BY v.song_id IS NOT NULL, j.finished_at DESC, j.song_id LIMIT ?", (version, 1 if again_none else 0, limit))]
+
+    def vocals(self, song_ids):
+        """``{song id: row}`` of ``vocals`` for the songs among ``song_ids`` that have one."""
+        out, ids = {}, list(dict.fromkeys(song_ids))
+        for start in range(0, len(ids), 500):
+            chunk = ids[start:start + 500]
+            for r in self._rows(f"SELECT * FROM vocals WHERE song_id IN ({', '.join('?' for _ in chunk)})", chunk):
+                out[r["song_id"]] = dict(r)
+        return out
+
+    def vocal_counts(self, version):
+        """``{"separated", "none", "failed", "waiting"}``: songs with their beats found, by how their vocals are known."""
+        out = {"separated": 0, "none": 0, "failed": 0, "waiting": 0}
+        for r in self._rows("SELECT CASE WHEN v.song_id IS NULL OR v.version IS NOT ? THEN 'waiting' ELSE v.how END AS how, "
+                            "COUNT(*) AS n FROM jobs j LEFT JOIN vocals v ON v.song_id = j.song_id WHERE j.state = 'done' "
+                            "GROUP BY 1", (version,)):
+            out[r["how"]] = out.get(r["how"], 0) + r["n"]
+        return out
 
     def without_sound(self, limit=20):
         """Songs analysed for their beats whose sound isn't known (and that didn't fail to be heard), newest first."""
