@@ -200,11 +200,12 @@ class Ai:
         _log.info("Planned \"%s\" for the app", plan["title"])
         return plan
 
-    def name_mixes(self, described):
+    def name_mixes(self, described, taken=()):
         """Names for mixes, and a short line on what's in each (0.55, the owner: "briefly describe its contents, very
         short and snappy"), from ``described`` (``[{"id", "genres", "energy", "mood", "artists", "tags"}]``):
         ``{id: {"name", "about"}}`` of those it named well (``about`` may be missing); the rest keep their own.
-        Nothing when it isn't set up or fails."""
+        Nothing when it isn't set up or fails. ``taken`` are names the listener's other mixes already have, which none
+        of these may take (0.60.5, the owner: "the mixes are often named the same")."""
         if not described or not self.ready:
             return {}
         lines = "\n".join(json.dumps({k: d.get(k) for k in ("id", "genres", "energy", "mood", "artists", "tags")}, ensure_ascii=False)
@@ -217,6 +218,9 @@ class Ai:
                   '("Wiry guitars and restless drums"). Answer with JSON only: '
                   '{"<id>": {"name": "<name>", "about": "<line>"}, ...}')
         user = "The playlists (energy and mood are in words, against the listener's own library):\n" + lines
+        if taken:
+            user += "\nNames the listener's other playlists already have, so use none of them or anything close: " + \
+                ", ".join(sorted(set(taken)))
         try:
             text = self.complete(system, user)
         except AiError as e:

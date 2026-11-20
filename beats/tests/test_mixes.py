@@ -242,11 +242,32 @@ class TheMixes(Library):
         self.play("rock", "2026-11-10 06:30")
         self.assertEqual(self.mixes.listeners(), ["max"])
 
+    def test_no_two_mixes_shown_together_share_a_name(self):
+        # 0.60.5, the owner: "the mixes are often named the same".
+        class Namer:
+            ready, asked = True, []
+
+            def name_mixes(self, described, taken=()):
+                self.asked.append(list(taken))
+                return {d["id"]: {"name": "Velvet Undertow"} for d in described}
+
+        self.play("rock", "2026-11-10 06:30")
+        self.play("piano", "2026-02-02 21:00", songs=range(20), times=3)
+        namer = Namer()
+        self.mixes.ai, self.mixes.background = namer, False
+        got = self.make()
+        names = [m["name"].casefold() for s in got["shelves"] for m in s["mixes"]]
+        self.assertEqual(len(names), len(set(names)), names)
+        # One keeps the AI's name; the others their own.
+        self.assertEqual(sum(m["named"] == "ai" for s in got["shelves"] for m in s["mixes"]), 1)
+        # The AI was told the fixed names.
+        self.assertIn("Rediscover", namer.asked[0])
+
     def test_the_ai_names_the_mixes_of_a_kind_and_they_are_kept_for_the_day(self):
         class Namer:
             ready, asked = True, []
 
-            def name_mixes(self, described):
+            def name_mixes(self, described, taken=()):
                 self.asked.append(described)
                 return {d["id"]: {"name": f"Name {d['id']}", **({"about": "Wiry guitars, restless drums"} if d["id"] == "now-1" else {})}
                         for d in described if d["id"] != "daily-2"}

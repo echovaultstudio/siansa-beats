@@ -113,6 +113,11 @@ as they come, the mixes are made as before. After a change, **Make the mixes aga
 app's Mix settings) makes them again now, a new pick from the same songs and settings, as many times as wanted that day
 (0.60.4; `POST /api/v1/mixes/again` with the `user`; a new day starts afresh).
 
+**Names that match the app, and never the same twice (0.60.5).** The switches on the Mixes page say which row of the
+app's Home each mix is in: For now, Made for you, and More of you (On repeat, Rediscover, New for you). No two mixes shown
+together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
+anyway gives way to the mix's own name from its sound (with a number if that's taken too).
+
 **The app's plans, by the AI here (0.57).** The Siansa app asks the AI set up on Setup for its own playlists too: the
 title, sound search, line and sound words to steer by of its vibes, Today's mix, Flow's words and the mood radios
 (`POST /api/v1/plan` with the app's `brief`; `features.plans` in the capabilities says whether it can). The app then

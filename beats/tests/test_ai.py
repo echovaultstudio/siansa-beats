@@ -112,6 +112,9 @@ class TheService(unittest.TestCase):
         sent = self.fake.sent[0][2]["messages"]
         self.assertIn("never weather", sent[0]["content"])
         self.assertIn('"genres": ["Ambient"]', sent[1]["content"])
+        # Names its other mixes have are said, so none comes back (0.60.5).
+        self.ai.name_mixes([{"id": "now-3"}], taken=["On repeat", "Night Drive"])
+        self.assertIn("Night Drive, On repeat", self.fake.sent[-1][2]["messages"][1]["content"])
         self.fake.fail = urllib.error.URLError("down")
         self.assertEqual(self.ai.name_mixes([{"id": "now-1"}]), {})
         self.assertIn("can't be reached", self.ai.settings()["error"])
