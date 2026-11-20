@@ -14,13 +14,13 @@ KEY = "mix_settings:"
 # "number" a whole number from low to high, "words" a list of names (genres, artists) to leave out.
 SETTINGS = {
     # Which mixes are made.
-    "now": (True, "on", None, None, "For now: mixes for this part of the day"),
+    "now": (True, "on", None, None, "For now: mixes for this part of the day (Home's For now)"),
     "now_count": (4, "number", 1, 6, "How many For now mixes"),
-    "daily": (True, "on", None, None, "Made for you: the kinds of music you play most"),
+    "daily": (True, "on", None, None, "Made for you: the kinds of music you play most (Home's Made for you)"),
     "daily_count": (5, "number", 1, 8, "How many Made for you mixes"),
-    "repeat": (True, "on", None, None, "On repeat"),
-    "rediscover": (True, "on", None, None, "Rediscover"),
-    "new": (True, "on", None, None, "New for you"),
+    "repeat": (True, "on", None, None, "More of you: On repeat"),
+    "rediscover": (True, "on", None, None, "More of you: Rediscover"),
+    "new": (True, "on", None, None, "More of you: New for you"),
     # What's in each.
     "size": (40, "number", 10, 100, "Songs in a mix"),
     "familiar": (40, "number", 0, 100, "Songs you know, in %: the rest are new to you"),

@@ -373,15 +373,25 @@ class Mixes:
         and its ``key``."""
         shelves = []
         day = datetime.date.fromordinal(kept["day"]).isoformat()
+        # No two mixes the listener sees together share a name (0.60.5, the owner: "the mixes are often named the
+        # same"): the fixed ones keep theirs, an AI name already used gives way to the mix's own name from its sound,
+        # and that, if it's taken too, gets a number.
+        seen = {m["name"].casefold() for shelf in kept["shelves"] for m in shelf["mixes"] if not m.get("signature")}
         for shelf in kept["shelves"]:
             mixes = []
             for m in shelf["mixes"]:
                 given = self._names.get((user, kept["day"], m["id"], m["signature"])) if m.get("signature") else None
                 # The mixes of now are for one part of the week; the others are the same all day.
                 key = f"{day}-{kept['part']}-{kept['days']}-{m['id']}" if m["id"].startswith("now-") else f"{day}-{m['id']}"
+                name, about, named = (given or {}).get("name") or m["name"], (given or {}).get("about") or m["about"], "ai" if given else "sound"
+                if m.get("signature"):
+                    if name.casefold() in seen and given:
+                        _log.info("The AI's name %r for %s is taken: its own, %r", name, m["id"], m["name"])
+                        name, about, named = m["name"], m["about"], "sound"
+                    name = _unused(name, seen)
+                    seen.add(name.casefold())
                 mixes.append({k: v for k, v in m.items() if k != "signature"} |
-                             {"sound_name": m["name"], "sound_about": m["about"], "key": key, "name": (given or {}).get("name") or m["name"], "about": (given or {}).get("about") or m["about"],
-                              "named": "ai" if given else "sound"})
+                             {"sound_name": m["name"], "sound_about": m["about"], "key": key, "name": name, "about": about, "named": named})
             shelves.append(dict(shelf, mixes=mixes))
         return {k: v for k, v in kept.items() if k != "day"} | {"shelves": shelves}
 
@@ -509,7 +519,11 @@ class Mixes:
                 described = [{"id": m["id"], "genres": m["genres"][:2], "artists": m["artists"][:3], "tags": m["tags"],
                               "energy": _word(m["energy"], ("calm", "steady", "high-energy")),
                               "mood": _word(m["mood"], ("dark", "even", "bright"))} for m in wanted]
-                names = self.ai.name_mixes(described)
+                # The names its other mixes have, today's and the fixed ones, so the AI gives none of them again.
+                with self._lock:
+                    given = [n["name"] for (u, d, _, _), n in self._names.items() if u == user and d == day and n.get("name")]
+                fixed = [m["name"] for shelf in kept["shelves"] for m in shelf["mixes"] if not m.get("signature")]
+                names = self.ai.name_mixes(described, taken=given + fixed)
                 with self._lock:
                     if len(self._names) > 2000:
                         self._names.clear()
@@ -868,3 +882,13 @@ def _and(names):
     """"A", "A and B", "A, B and C"."""
     names = list(names)
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1] if names else ""
+
+
+def _unused(name, seen):
+    """``name``, or with a number after it when a mix shown with it has it already (``seen``, in lower case)."""
+    if name.casefold() not in seen:
+        return name
+    number = 2
+    while f"{name} {number}".casefold() in seen:
+        number += 1
+    return f"{name} {number}"
