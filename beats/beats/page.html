@@ -754,7 +754,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
       </div>
       <div class="card" id="start-card" hidden>
         <h3>Get started</h3>
-        <p class="sub">Four steps, all on this page. Nothing is ever changed on your music server.</p>
+        <p class="sub">Five steps, all on this page. Nothing is ever changed on your music server.</p>
         <ol class="steps" id="start-steps"></ol>
       </div>
       <div class="kinds" id="tiles"></div>
@@ -1326,11 +1326,17 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
       <!-- Where the vocals are (0.60): so a DJ blend never lets two singers be heard at once. -->
       <div class="card" data-fold id="vocals-card">
         <h3>Vocals for DJ blends</h3>
-        <p class="sub">Beats pulls the voice out of the first and last 1½ minutes of each song and marks, bar by bar, where someone sings. Siansa's DJ blends use it so two vocals are never heard at the same time. It runs when nothing else is being analysed; <b style="display:inline">Only vocals</b> pauses the rest and finds them now.</p>
-        <label class="toggle"><input type="checkbox" id="vocals-only"> Only songs with vocals</label>
-        <p class="sub">Ticked: only songs the voice model says are sung are separated; the rest count as instrumental. Faster, but a song with only a little singing can be missed. Unticked: every song is separated.</p>
+        <p class="sub">Beats pulls the voice out of the first and last 1½ minutes of each song and marks, bar by bar, where someone sings. Siansa's DJ blends use it so two vocals are never heard at the same time. Without it, DJ blends still work: they just don't know where the singing is.</p>
+        <!-- Optional (0.61, the owner, 20 Nov: "with clear warning that it takes much longer"): off until switched on. -->
+        <label class="toggle"><input type="checkbox" id="vocals-on"> Find vocals</label>
+        <p class="note warn" id="vocals-warning">Slow. Pulling the voice out takes much longer than the rest of the analysis, most of all without a GPU: for a big library it can take days. It only starts a song when nothing else is being analysed, but a song added meanwhile is analysed alongside it, more slowly. Leave it off if you don't use DJ blends.<span id="vocals-times"></span></p>
+        <div id="vocals-more" hidden>
+          <label class="toggle"><input type="checkbox" id="vocals-only"> Only songs with vocals</label>
+          <p class="sub">Ticked: only songs the voice model says are sung are separated; the rest count as instrumental. Faster, but a song with only a little singing can be missed. Unticked: every song is separated.</p>
+          <p class="sub"><b style="display:inline">Only vocals</b> pauses the rest of the analysis and finds the vocals now.</p>
+          <div class="controls row-gap"><button data-vocals-alone hidden title="Pauses the rest of the analysis and finds the vocals of the songs still waiting; the rest carries on after">Only vocals</button></div>
+        </div>
         <p class="sub" id="vocals-state" role="status"></p>
-        <div class="controls row-gap"><button data-vocals-alone hidden title="Pauses the rest of the analysis and finds the vocals of the songs still waiting; the rest carries on after">Only vocals</button></div>
       </div>
       <div class="card" data-fold>
         <h3>Connect the Siansa app</h3>
@@ -3404,6 +3410,8 @@ function kindsOf(s) {
       by: vo.available ? `<b>Hybrid Demucs</b>${where}` : "<b>None</b>: this image has no vocal separation model",
       done: (vo.separated || 0) + (vo.none || 0), total: vo.available ? (vo.separated || 0) + (vo.none || 0) + (vo.waiting || 0) + (vo.failed || 0) : null,
       failed: vo.failed || 0, busy: 0, now: vo.working ? "separating a song now" : "", left: vo.waiting || 0, off: !vo.available,
+      // Optional (0.61): off until switched on under Setup, as it's slow.
+      switchedOff: vo.available && vo.on === false && !vo.working,
       // Waiting for the rest: it only runs when nothing else is analysed, unless Only vocals.
       // Waiting for the rest, as the finder says (0.60.3), not guessed from the other counts.
       waits: !vo.working && (vo.waiting || 0) > 0 && vo.state === "waits for the rest of the analysis"},
@@ -3424,10 +3432,15 @@ function drawStart(s) {
   // The genre model, chosen at setup (0.58): asked before the first analysis; an install that heard songs has one.
   const picked = styleModels ? !!styleModels.picked : true;
   $("start-card").hidden = server && libs && songs && picked;
+  const vx = s.vocals || vocals;  // the vocals finder: switched on or off yet (0.61)
   const step = (done, title, text) => `<li data-done="${done}"><div><b>${title}</b><p class="sub">${text}</p></div></li>`;
   $("start-steps").innerHTML = [
     step(server, "Add your music server", server ? "Done." : 'Under <a href="#setup">Setup › Music servers</a>: its address, user name and password, as you sign in to Siansa. Navidrome, Emby and Jellyfin work.'),
     step(picked, "Choose the genre model", picked ? "Done." : 'Under <a href="#setup">Setup › Genre model</a>: Discogs-EffNet is quick on any machine; MAEST is more accurate but slow without a GPU. Each says what it\'s good at and what to watch out for.'),
+    // Optional (0.61, the owner, 20 Nov): done once switched on or off; it doesn't keep this card up.
+    step(!!(vx && (vx.chosen || !vx.available)), "Find vocals? (optional, slow)", vx && !vx.available ? "Not in this image." :
+      vx && vx.chosen ? (vx.on ? "Switched on." : "Left off.") :
+      'Under <a href="#setup">Setup › Vocals for DJ blends</a>: so DJ blends never lay two voices over each other. <b style="display:inline">It takes much longer than the rest of the analysis</b>, most of all without a GPU. Leave it off if you don\'t use DJ blends.'),
     step(libs && songs, "Choose what to analyse", libs && songs ? "Done." : 'Under <a href="#libraries">Libraries</a>: switch on the libraries you want and press <b style="display:inline">Start analysis</b>. Try one small library first; a song takes a few seconds on a GPU and much longer on a CPU.'),
     step(false, "Connect the Siansa app", 'In the app: Settings › Connections › Siansa Beats, with the address and key shown under <a href="#setup">Setup › Connect the Siansa app</a>. A password for this page is set there too, under Access.'),
   ].join("");
@@ -3436,7 +3449,7 @@ function drawTiles(s) {
   $("tiles").innerHTML = kindsOf(s).map((k) => {
     const w = (n) => k.total ? `${Math.max(0, Math.min(100, 100 * n / k.total))}%` : "0";
     const alone = k.id === "vocals" && (s.vocals || {}).alone;
-    const state = k.off ? "not in this image" : s.paused && k.left && k.id !== "voice" && !alone ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.waits ? `waits for the rest · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
+    const state = k.off ? "not in this image" : k.switchedOff ? `switched off · <a href="#setup">switch on under Setup</a>` : s.paused && k.left && k.id !== "voice" && !alone ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.waits ? `waits for the rest · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
     return `<div class="kind"><div class="top"><a href="${k.href}">${esc(k.name)}</a><span class="n">${k.total == null ? "–" : `${num(k.done)} <small>of ${num(k.total)}</small>`}</span></div>
       <div class="for">${esc(k.what)}</div>
       <div class="meter" aria-hidden="true"><span class="done" style="width:${w(k.done)}"></span><span class="failed" style="width:${w(k.failed)}"></span><span class="busy" style="width:${w(k.busy)}"></span></div>
@@ -3482,13 +3495,23 @@ function drawSetup(s) {
 
 // ---- the style model to hear genres with (0.39) ----
 let styleModels = null;
-// Vocals for DJ blends (0.60): the box and how far it is.
+// Vocals for DJ blends (0.60): the box and how far it is; whether it's switched on (0.61), for the Get started step.
+let vocals = null;
 async function refreshVocals() {
   let v;
   try { v = await api("api/vocals"); } catch (e) { $("vocals-state").textContent = e.message; return; }
+  vocals = v;
   if (document.activeElement !== $("vocals-only")) $("vocals-only").checked = v.only_sung;
+  if (document.activeElement !== $("vocals-on")) $("vocals-on").checked = !!v.on;
+  $("vocals-on").disabled = !v.available;
+  $("vocals-more").hidden = !v.on || !v.available;
+  // The warning in this machine's own numbers, once there are any: the median of the latest songs.
+  $("vocals-times").textContent = v.vocal_seconds && v.analysis_seconds ?
+    ` On this machine a song has taken about ${fmt(v.vocal_seconds, 0)} s for its vocals, against ${fmt(v.analysis_seconds, 0)} s for the rest of its analysis.` :
+    v.vocal_seconds ? ` On this machine a song has taken about ${fmt(v.vocal_seconds, 0)} s for its vocals.` : "";
   const done = v.separated + v.none, all = done + v.waiting + v.failed;
   $("vocals-state").textContent = !v.available ? "Not in this image: the vocal separation model is missing." :
+    !v.on ? (done ? `Switched off. The vocals of ${num(done)} songs found before stay in use.` : "Switched off.") :
     `${num(done)} of ${num(all)} songs done: ${num(v.separated)} separated, ${num(v.none)} instrumental` +
     (v.failed ? `, ${num(v.failed)} couldn't be read` : "") +
     (v.working ? `. Now: ${v.working.artist} – ${v.working.title}` : v.waiting ? `. ${num(v.waiting)} waiting` : "") +
@@ -3512,7 +3535,7 @@ function nowWork(s, total, queued) {
   if (st.current) return {kind: "Genres", what: who(st.current), step: "hearing its styles", done: st.done || 0, total: st.total || 0};
   if (tr.available && (tr.total || 0) > (tr.scored || 0)) return {kind: "Voice and mood", what: "Scoring songs", step: "from the sound already heard", done: tr.scored || 0, total: tr.total || 0};
   const vDone = (v.separated || 0) + (v.none || 0), vAll = vDone + (v.waiting || 0) + (v.failed || 0);
-  if (v.available && (v.working || v.alone || (v.waiting || 0) > 0)) {
+  if (v.available && (v.working || ((v.on || v.alone) && (v.alone || (v.waiting || 0) > 0)))) {
     const what = v.working ? who(v.working) : v.alone ? "Only vocals" : "Vocals";
     const step = v.working ? `${v.working.step || "finding its vocals"} for ${fmt(v.working.for_seconds, 0)} s` :
       v.state === "waits for the rest of the analysis" ? "waits for the rest of the analysis" :
@@ -3544,7 +3567,7 @@ function drawNow(s, total, queued) {
 // it stops and the rest carries on.
 function drawVocalsAlone(v) {
   document.querySelectorAll("[data-vocals-alone]").forEach((b) => {
-    b.hidden = !v || !v.available || (!v.alone && !(v.waiting > 0));
+    b.hidden = !v || !v.available || !v.on || (!v.alone && !(v.waiting > 0));
     b.textContent = v && v.alone ? "Stop only vocals" : "Only vocals";
     b.setAttribute("aria-pressed", String(!!(v && v.alone)));
   });
@@ -3557,6 +3580,15 @@ document.querySelectorAll("[data-vocals-alone]").forEach((b) => b.addEventListen
   refreshStatus();
   refreshVocals();
 }));
+$("vocals-on").addEventListener("change", async () => {
+  const on = $("vocals-on").checked;
+  $("vocals-on").disabled = true;
+  try { await api("api/vocals", {method: "POST", body: JSON.stringify({on})}); }
+  catch (e) { banner(e.message); }
+  await refreshVocals();
+  refreshStatus();
+  if (status) drawStart(status);
+});
 $("vocals-only").addEventListener("change", async () => {
   try { await api("api/vocals", {method: "POST", body: JSON.stringify({only_sung: $("vocals-only").checked})}); refreshVocals(); }
   catch (e) { banner(e.message); }

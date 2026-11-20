@@ -426,6 +426,11 @@ class ServiceTest(Service):
             self.assertEqual(self.call("/api/analyse-again", "POST", {"what": what})["what"], what)
         # Only vocals (0.60.2): the rest pauses while it runs, and Carry on ends it; an image without the model says so.
         if self.app.vocals.available:
+            self.assertFalse(self.call("/api/vocals")["on"])  # off until switched on (0.61)
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/vocals", "POST", {"alone": True})
+            self.assertEqual(caught.exception.code, 409)
+            self.assertTrue(self.call("/api/vocals", "POST", {"on": True})["on"])
             self.assertTrue(self.call("/api/vocals", "POST", {"alone": True})["alone"])
             self.assertTrue(self.call("/api/status")["paused"])
             self.call("/api/resume", "POST")
@@ -436,6 +441,8 @@ class ServiceTest(Service):
             self.assertEqual(caught.exception.code, 409)
         self.assertFalse(self.call("/api/status")["paused"])
         self.assertTrue(self.call("/api/vocals", "POST", {"only_sung": True})["only_sung"])
+        off = self.call("/api/vocals", "POST", {"on": False})
+        self.assertEqual((off["on"], off["chosen"]), (False, True))
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.call("/api/analyse-again", "POST", {"what": "everything"})
         self.assertEqual(caught.exception.code, 400)

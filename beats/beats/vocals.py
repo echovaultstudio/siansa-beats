@@ -54,6 +54,10 @@ BAR_SUNG = 0.25  # a bar is sung when this share of it is
 
 COUNTS_SECONDS = 10
 ONLY_SUNG_SETTING = "vocals_only_sung"
+# Whether vocals are found at all (0.61, the owner, 20 Nov: "optional … with clear warning that it takes much longer"):
+# off until switched on under Setup, also where some were found before; what's found stays in use either way.
+ON_SETTING = "vocals_on"
+TIMED_SONGS = 100  # the latest songs whose times say how long one takes on this machine
 SUNG = 0.3  # the voice model's share at or over which a song is separated with "only songs with vocals"
 
 
@@ -293,6 +297,24 @@ class Vocals:
     def available(self):
         return self.separator.available
 
+    def on(self):
+        """Whether vocals are being found: only once switched on (the setting is unset, or "0", until then)."""
+        return self.store.setting(ON_SETTING) == "1"
+
+    def chosen(self):
+        """Whether anyone has switched it on or off yet: the Get started step is done once they have."""
+        return self.store.setting(ON_SETTING) is not None
+
+    def set_on(self, on):
+        """Switches finding vocals on or off. Off stops Only vocals too (``done_alone()``: the rest carries on); a
+        song being separated finishes first."""
+        self.store.set_setting(ON_SETTING, "1" if on else "0")
+        if not on and self.alone:
+            self.alone = False
+            self.done_alone()
+        self._counts = None
+        self.wake()
+
     def only_sung(self):
         return (self.store.setting(ONLY_SUNG_SETTING) or "1") == "1"
 
@@ -337,6 +359,9 @@ class Vocals:
         if not self.available:
             self.state = "not in this image"
             return 300
+        if not self.on():
+            self.state = "switched off"
+            return 60
         if self.busy():
             self.state = "waits for the rest of the analysis"
             return 5.0
@@ -442,10 +467,12 @@ class Vocals:
         "last_seconds", "alone"}``. The counts are kept for :data:`COUNTS_SECONDS` (the Overview asks every 2 s) unless ``fresh``."""
         now = time.monotonic()
         if fresh or self._counts is None or now - self._counts[0] > COUNTS_SECONDS:
-            self._counts = (now, self.store.vocal_counts(VERSION))
+            # With how long a song takes on this machine (the median of the latest), against the rest of the analysis:
+            # the warning beside the switch, in this machine's own numbers.
+            self._counts = (now, {**self.store.vocal_counts(VERSION), **self.store.median_seconds(TIMED_SONGS)})
         counts = self._counts[1]
         working = self.working
-        return {"available": self.available, "only_sung": self.only_sung(), **counts,
+        return {"available": self.available, "on": self.on(), "chosen": self.chosen(), "only_sung": self.only_sung(), **counts,
                 # How long the song has been worked on, by this machine's clock (the page's may differ).
                 "working": working and {**working, "for_seconds": round(time.time() - working["since"], 1)}, "alone": self.alone,
                 "state": self.state, "stepped_past": self._past, "last_seconds": self.last_seconds,
