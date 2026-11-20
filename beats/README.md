@@ -109,7 +109,9 @@ Mixes page (**What goes into your mixes**) or from the Siansa app: which shelves
 in a mix, how many of them you know, songs by one artist, how long a song you played stays out, genres and artists to
 leave out, whether the part of the day, weekends, the dark and this time of year count, how far back listening counts,
 On repeat's and Rediscover's spans, and AI names (`beats/mix_settings.py`, `GET`/`POST /api/v1/mixes/settings`). Left
-as they come, the mixes are made as before.
+as they come, the mixes are made as before. After a change, **Make the mixes again** (on the Mixes page, and in the
+app's Mix settings) makes them again now, a new pick from the same songs and settings, as many times as wanted that day
+(0.60.4; `POST /api/v1/mixes/again` with the `user`; a new day starts afresh).
 
 **The app's plans, by the AI here (0.57).** The Siansa app asks the AI set up on Setup for its own playlists too: the
 title, sound search, line and sound words to steer by of its vibes, Today's mix, Flow's words and the mood radios

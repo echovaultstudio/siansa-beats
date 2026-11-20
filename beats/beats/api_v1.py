@@ -319,6 +319,8 @@ def post(handler, path, body, server=None):
             return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.set_mix_settings(body.get("user"), body.get("settings"))}) or True
         except ValueError as e:
             return handler._error(HTTPStatus.BAD_REQUEST, str(e)) or True
+    if path == "/api/v1/mixes/again":  # {"user", "tz"}: their mixes made again now, picked anew (0.60.4)
+        return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.mixes_again(body.get("user"), body.get("tz"))}) or True
     if path == "/api/v1/loves":  # a heart from the app: on to Last.fm for a listener who sends listens on
         if not str(body.get("artist") or "").strip() or not str(body.get("title") or "").strip():
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True

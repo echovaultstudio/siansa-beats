@@ -456,6 +456,11 @@ class App:
         self.mixes.set_settings(who, given)
         return self.mix_settings_of(who)
 
+    def mixes_again(self, user=None, tz=None):
+        """``user``'s mixes made again now, picked anew (0.60.4): ``{"user", "times"}`` (how many times today)."""
+        user = self.listens.who(user or self.default_listener())
+        return {"user": user, "times": self.mixes.again(user, tz=tz or self._listening_zone)}
+
     def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None):
         """The mixes made for ``user`` (:meth:`beats.mixes.Mixes.make`; the listener Listening shows first without
         one) from ``server``'s songs, on the clock of ``tz`` (the one Listening last used without one). With
@@ -1667,6 +1672,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(app.set_mix_settings(body.get("user"), body.get("settings")))
                 except ValueError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
+            if path == "/api/mixes/again":  # {"user"}: their mixes made again now, picked anew (0.60.4)
+                return self._json(app.mixes_again(body.get("user"), body.get("tz")))
             if path == "/api/mixes/keep":  # {"days"}: how long the mixes given out are kept (0.55)
                 try:
                     return self._json({"keep_days": app.mixes.set_keep_days(body.get("days"))})

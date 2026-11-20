@@ -179,6 +179,22 @@ class TheMixes(Library):
         self.clock[0] = NOW + 86400
         self.assertNotEqual(ids(first), ids(self.make()))
 
+    def test_made_again_by_hand_is_a_new_pick_and_a_new_day_starts_afresh(self):
+        """0.60.4, the owner: a button to make the mixes again after changing how they're made."""
+        self.play("rock", "2026-11-10 06:30")
+        songs = lambda got: [[s["id"] for s in m["songs"]] for sh in got["shelves"] for m in sh["mixes"]]  # noqa: E731
+        first = self.make()
+        self.assertEqual(self.mixes.again("max", tz=TZ), 1)
+        again = self.make()
+        self.assertNotEqual(songs(first), songs(again))
+        self.assertEqual(songs(again), songs(self.make()))  # kept until asked again
+        self.assertEqual(self.mixes.again("max", tz=TZ), 2)
+        self.assertNotEqual(songs(again), songs(self.make()))
+        self.clock[0] = NOW + 86400  # the next day: picked as any day is, not as the day before's again
+        next_day = self.make()
+        self.assertEqual(self.mixes.again("max", tz=TZ), 1)
+        self.assertNotEqual(songs(next_day), songs(self.make()))
+
     def test_another_slot_can_be_looked_at(self):
         self.play("techno", "2026-11-14 19:00")
         got = self.make(part="evening", days="weekend")

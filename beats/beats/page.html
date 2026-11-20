@@ -964,7 +964,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
            The app's Settings › Connections › Siansa Beats › Mixes changes the same (/api/v1/mixes/settings). -->
       <div class="card" id="mx-settings">
         <h3>What goes into your mixes</h3>
-        <p class="sub">For the listener above. The Siansa app changes the same. Changes make the mixes again.</p>
+        <p class="sub">For the listener above. The Siansa app changes the same. After a change, make the mixes again to see them now.</p>
         <div id="mx-set-groups" class="mx-set"></div>
         <div class="controls" style="margin-top:12px">
           <label class="sub" for="mx-keep">Keep mixes for</label>
@@ -975,6 +975,8 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
         </div>
         <div class="controls" style="margin-top:12px">
           <button type="button" class="btn" id="mx-set-reset">As they come</button>
+          <!-- After a change (0.60.4, the owner): the mixes made again now, picked anew, not only at the next ask. -->
+          <button type="button" class="btn primary" id="mx-again" hidden title="Makes the listener's mixes again now, a new pick from the same songs">Make the mixes again</button>
           <span class="sub" id="mx-set-note" role="status"></span>
         </div>
       </div>
@@ -2429,10 +2431,22 @@ async function saveMixSettings(changes) {
   try {
     mxSettings = await api("api/mixes/settings", {method: "POST", body: JSON.stringify({user: mxSettings.user, settings: changes})});
     drawMixSettings();
-    $("mx-set-note").textContent = "Saved: the mixes are made again";
+    $("mx-set-note").textContent = "Saved. Make the mixes again to see them now.";
+    $("mx-again").hidden = false;
     refreshMixes();
   } catch (err) { $("mx-set-note").textContent = err.message; }
 }
+$("mx-again").addEventListener("click", async () => {
+  if (!mxSettings) return;
+  $("mx-again").disabled = true;
+  $("mx-set-note").textContent = "Making them again…";
+  try {
+    await api("api/mixes/again", {method: "POST", body: JSON.stringify({user: mxSettings.user})});
+    await refreshMixes();
+    $("mx-set-note").textContent = "Made again";
+  } catch (err) { $("mx-set-note").textContent = err.message; }
+  $("mx-again").disabled = false;
+});
 $("mx-keep").addEventListener("change", async () => {
   $("mx-keep-note").textContent = "Saving…";
   try { const got = await api("api/mixes/keep", {method: "POST", body: JSON.stringify({days: +$("mx-keep").value})}); $("mx-keep-note").textContent = `Kept ${got.keep_days} days`; }

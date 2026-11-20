@@ -1975,6 +1975,16 @@
         }
       }
     },
+    "/api/v1/mixes/again": {
+      "post": {
+        "summary": "Makes a listener's mixes again now, picked anew from the same songs and settings (0.60.4)",
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {
+          "user": {"type": "string", "description": "The listener"},
+          "tz": {"type": "string", "description": "IANA time zone, for which day it is"}}}}}},
+        "responses": {"200": {"description": "How many times today", "content": {"application/json": {"schema": {"type": "object", "properties": {
+          "schema_version": {"type": "integer"}, "user": {"type": "string"}, "times": {"type": "integer"}}}}}}}
+      }
+    },
     "/api/v1/mixes/settings": {
       "get": {
         "summary": "What goes into a listener's mixes (0.56), each setting described",
