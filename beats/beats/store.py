@@ -308,6 +308,23 @@ class Store:
                 out[r["song_id"]] = dict(r)
         return out
 
+    def median_seconds(self, latest=100):
+        """``{"vocal_seconds", "analysis_seconds"}``: the median seconds a song took, over the ``latest`` songs, to
+        find its vocals and to be analysed (from starting it to done); None for either with no song yet (0.61)."""
+        def median(values):
+            values = sorted(v for v in values if v is not None and v >= 0)
+            if not values:
+                return None
+            mid = len(values) // 2
+            return round(values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2, 1)
+        with self.lock:
+            vocal = [r[0] for r in self.db.execute(
+                "SELECT seconds FROM vocals WHERE how = 'separated' AND seconds IS NOT NULL ORDER BY at DESC LIMIT ?", (latest,))]
+            analysis = [r[0] for r in self.db.execute(
+                "SELECT finished_at - started_at FROM jobs WHERE state = 'done' AND started_at IS NOT NULL "
+                "AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT ?", (latest,))]
+        return {"vocal_seconds": median(vocal), "analysis_seconds": median(analysis)}
+
     def vocal_counts(self, version):
         """``{"separated", "none", "failed", "waiting"}``: songs with their beats found, by how their vocals are known."""
         out = {"separated": 0, "none": 0, "failed": 0, "waiting": 0}
