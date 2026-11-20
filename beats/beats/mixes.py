@@ -295,6 +295,9 @@ class Mixes:
         self._lock = threading.Lock()
         self._kept = {}  # what was asked -> its answer, while nothing it's made from changed
         self._names = {}  # (listener, day, mix id, its songs) -> the AI's name for it
+        # Made again by hand (0.60.4, the owner: a button to make the mixes again after changing how they're made):
+        # listener -> (the day, how many times), so the same day's mixes are picked anew; a new day starts afresh.
+        self._again = {}
         self._naming = set()  # what's being named now
         self.asked = {}  # listener -> (tz, lat, lon, server, size): how the app last asked, to make theirs ahead
         self._stored = {}  # (listener, key) -> (name, about) as kept in the database: written again only when changed
@@ -342,12 +345,12 @@ class Mixes:
         size = max(A_FEW, min(100, int(chosen["size"] if chosen["size"] != mix_settings.SETTINGS["size"][0] else size)))
         self.sound._load()
         key = (user, tz, server, ordinal, slot_part, slot_days, spot and (round(spot[0], 1), round(spot[1], 1)),
-               sun and sun["light"], size, self._grown(user), mix_settings.signature(chosen))
+               sun and sun["light"], size, self._grown(user), mix_settings.signature(chosen), self._times_again(user, ordinal))
         with self._lock:
             kept = self._kept.get(key)
         if kept is None:
             started = time.monotonic()
-            kept = self._make(user, tz, at, server, slot_part, slot_days, sun, size, local, ordinal, chosen)
+            kept = self._make(user, tz, at, server, slot_part, slot_days, sun, size, local, ordinal, chosen, self._times_again(user, ordinal))
             with self._lock:
                 if len(self._kept) > KEPT:
                     self._kept.clear()
@@ -387,6 +390,21 @@ class Mixes:
     def settings(self, user):
         """What ``user`` chose to go into their mixes (:mod:`beats.mix_settings`), every setting."""
         return mix_settings.load(self.store, self.listens.who(user))
+
+    def again(self, user, at=None, tz=None):
+        """Makes ``user``'s mixes again now, picked anew for the same day and settings: how many times today."""
+        user = self.listens.who(user)
+        ordinal = self.listens._local(tz)(int(at if at is not None else self.now()))[5]
+        with self._lock:
+            day, times = self._again.get(user, (ordinal, 0))
+            times = times + 1 if day == ordinal else 1
+            self._again[user] = (ordinal, times)
+        _log.info("Mixes for %s made again by hand (%d today)", user or "nobody", times)
+        return times
+
+    def _times_again(self, user, ordinal):
+        day, times = self._again.get(user, (ordinal, 0))
+        return times if day == ordinal else 0
 
     def set_settings(self, user, given):
         """Changes ``user``'s choices by ``given``; their mixes are made again at the next ask."""
@@ -721,7 +739,7 @@ class Mixes:
         centre = unit((self.sound.matrix[rows] * weights[:, None]).sum(axis=0))[0]
         return centre, max(0.02, REACH * float(np.quantile(1.0 - self.sound.matrix[rows] @ centre, REACH_OF)))
 
-    def _make(self, user, tz, at, server, part, days, sun, size, local, ordinal, chosen=None):
+    def _make(self, user, tz, at, server, part, days, sun, size, local, ordinal, chosen=None, again=0):
         chosen = chosen or mix_settings.defaults()
         out = self._left_out(chosen)
         played = self._played(user, at, server, local, ordinal, chosen, out)
@@ -730,7 +748,9 @@ class Mixes:
         if not chosen["daylight"]:  # the light outside isn't to count: as if it were always light
             sun = None
         fill = lambda *a, **k: self._fill(*a, familiar=k.pop("familiar", familiar), per_artist=per_artist, out=out, **k)  # noqa: E731
-        seed = lambda what: random.Random(int(hashlib.sha256(f"{user}|{ordinal}|{what}".encode()).hexdigest()[:12], 16))  # noqa: E731
+        # Made again by hand (0.60.4): another pick from the same songs, as many times as asked.
+        mark = f"|again {again}" if again else ""
+        seed = lambda what: random.Random(int(hashlib.sha256(f"{user}|{ordinal}|{what}{mark}".encode()).hexdigest()[:12], 16))  # noqa: E731
         stale = {row for row, when in played["last"].items() if at - when < chosen["fresh_days"] * 86400}
         weekly = "weekdays" if days == DAYS[0] else "the weekend"
         slot = played["slots"].get((part, days), {}) if chosen["weekend_apart"] else {}

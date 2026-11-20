@@ -654,6 +654,10 @@ class ServiceTest(Service):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.call("/api/v1/mixes/settings", "POST", {"user": "max", "settings": {"size": "big"}})
         self.assertEqual(caught.exception.code, 400)
+        # Made again by hand (0.60.4): from the page and from the app, counted per listener and day.
+        self.assertEqual(self.call("/api/mixes/again", "POST", {"user": "max", "tz": "Europe/Helsinki"})["times"], 1)
+        got = self.call("/api/v1/mixes/again", "POST", {"user": "max", "tz": "Europe/Helsinki"})
+        self.assertEqual((got["user"], got["times"]), ("max", 2))
         self.call("/api/mixes/keep", "POST", {"days": 14})
         self.assertEqual(self.call("/api/mixes?tz=Europe/Helsinki")["keep_days"], 14)
         with self.assertRaises(urllib.error.HTTPError) as caught:
