@@ -172,6 +172,8 @@ def decode(path, start, seconds, rate=RATE):
     return np.frombuffer(done.stdout, dtype=np.float32).reshape(-1, 2).T.copy()
 
 
+STUCK_REST = 600  # seconds before looking again when every song left can't be done yet
+
 class Separator:
     """Hybrid Demucs, loaded when first needed and let go when idle (:meth:`release`). On the GPU when there is one."""
 
@@ -286,6 +288,10 @@ class Vocals:
         # voice score) would otherwise be asked for every round ahead of all the others.
         self.state = "starting"
         self._past = 0
+        # Songs a whole round over the list couldn't do, none done between (0.61.1, the owner: "beats will report
+        # looking for song even though it's done"): the page counts them apart, and it rests longer before looking again.
+        self._moved = 0
+        self.stuck = 0
         self._stop = threading.Event()
         self._wake = threading.Event()
 
@@ -344,14 +350,18 @@ class Vocals:
         waiting = self.store.without_vocals(VERSION, limit=20, again_none=not only, need_voice=only, offset=self._past)
         if not waiting:
             if self._past:  # the end of the list, with songs stepped past: from the top again in a while
+                if not self._moved:  # a whole round and none done: these can't be, for now; the rest is done
+                    if self.stuck != self._past:
+                        _log.info("Vocals: every song that can be is done; %d can't be yet (their beats or voice aren't known)", self._past)
+                    self.stuck, self._past = self._past, 0
+                    self._finish_alone()
+                    self.state = "all done"
+                    return STUCK_REST
                 _log.info("Vocals: %d songs can't be done yet (their beats or voice aren't known); looking again later", self._past)
-                self._past = 0
+                self._past, self._moved = 0, 0
                 self.state = "resting"
                 return 60
-            if self.alone:  # every song's vocals found: the rest of the analysis carries on
-                self.alone = False
-                self.store.event("Only vocals: every song's vocals are found; the rest carries on")
-                self.done_alone()
+            self._finish_alone()
             self.state = "all done"
             return 60
         moved = 0
@@ -362,8 +372,17 @@ class Vocals:
                 moved += 1
         if not moved:
             self._past += len(waiting)  # none of these can be done yet: the next ones
+        else:
+            self._moved += moved
+            self.stuck = 0
         self.state = "working"
         return 0.5 if not moved else 5.0
+
+    def _finish_alone(self):
+        if self.alone:  # every song's vocals found: the rest of the analysis carries on
+            self.alone = False
+            self.store.event("Only vocals: every song's vocals are found; the rest carries on")
+            self.done_alone()
 
     def one(self, song_id):
         """Finds and keeps one song's vocals (or why not): ``"separated"``, ``"none"`` (instrumental, by the voice
@@ -448,7 +467,9 @@ class Vocals:
         return {"available": self.available, "only_sung": self.only_sung(), **counts,
                 # How long the song has been worked on, by this machine's clock (the page's may differ).
                 "working": working and {**working, "for_seconds": round(time.time() - working["since"], 1)}, "alone": self.alone,
-                "state": self.state, "stepped_past": self._past, "last_seconds": self.last_seconds,
+                "state": self.state, "stepped_past": self._past,
+                # Every song it could do is done: the ones still waiting (no voice score, no beats here) can't be yet.
+                "stuck": counts.get("waiting", 0) if self.state == "all done" else self.stuck, "last_seconds": self.last_seconds,
                 "loaded": self.separator.model is not None}
 
 
