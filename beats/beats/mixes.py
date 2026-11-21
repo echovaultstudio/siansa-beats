@@ -108,6 +108,8 @@ SEASONS = ("Winter", "Spring", "Summer", "Autumn")  # by month, December to Febr
 MOMENTS = {"early": "Early", "morning": "Morning", "afternoon": "Afternoon", "evening": "Evening", "night": "Late-night"}
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 LOW, HIGH = 0.42, 0.58  # where low ends and high starts, as a share of the library
+AI_WAIT = 12  # seconds the app's ask waits for the AI's names of new mixes before it gets their own
+NAMES_REMEMBERED = 14  # days of the AI's names it's told not to give again
 AHEAD_MINUTES = 10  # the next part of the day's mixes are made this long before it starts
 KEEP_DAYS = 7  # how long a mix given out is kept, unless the page says otherwise (setting "mixes_keep_days")
 KEEP_MOST = 90
@@ -373,10 +375,11 @@ class Mixes:
             for m in sh["mixes"]:
                 m.pop("sound_name", None)
                 m.pop("sound_about", None)
+                m.pop("moment", None)
         self._keep(user, answer)
         return answer
 
-    def _made(self, user, tz, at, server, lat, lon, part, days, size, weather=None):
+    def _made(self, user, tz, at, server, lat, lon, part, days, size, weather=None, wait_names=True):
         """The mixes of that slot, made or kept; and the light they were made for."""
         local = self.listens._local(tz)
         year, month, day, hour, weekday, ordinal = local(at)
@@ -407,7 +410,11 @@ class Mixes:
             _log.info("Mixes for %s, %s on %s: %d made from %s in %.1fs", user or "nobody", said(slot_part), slot_days,
                       sum(len(s["mixes"]) for s in kept["shelves"]), kept["basis"], time.monotonic() - started)
         if self.ai is not None and self.ai.ready and chosen["ai_names"]:
-            self._name_soon(user, ordinal, kept)
+            # Waited for a little (0.61.2): the first answer had the mixes' own names, the AI's only the next time
+            # the app asked (the owner saw "Hushed Folk" beside the AI's "Kinetic Luster").
+            naming = self._name_soon(user, ordinal, kept)
+            if naming is not None and wait_names:
+                naming.join(AI_WAIT)
         return kept, sun and sun["light"]
 
     def _grown(self, user):
@@ -567,14 +574,15 @@ class Mixes:
             try:
                 described = [{"id": m["id"], "genres": m["genres"][:2], "artists": m["artists"][:3], "tags": m["tags"],
                               "energy": _word(m["energy"], ("calm", "steady", "high-energy")),
-                              "mood": _word(m["mood"], ("dark", "even", "bright"))} for m in wanted]
-                # The names its other mixes have, today's and the fixed ones, so the AI gives none of them again.
+                              "mood": _word(m["mood"], ("dark", "even", "bright")), "moment": m.get("moment")} for m in wanted]
+                # The names its mixes have had in the last two weeks and the fixed ones, so the AI gives none of them
+                # again (0.61.2, the owner: unique names).
                 with self._lock:
-                    given = [n["name"] for (u, d, _, _), n in self._names.items() if u == user and d == day and n.get("name")]
+                    given = [n["name"] for (u, d, _, _), n in self._names.items() if u == user and day - NAMES_REMEMBERED <= d <= day and n.get("name")]
                 fixed = [m["name"] for shelf in kept["shelves"] for m in shelf["mixes"] if not m.get("signature")]
                 names = self.ai.name_mixes(described, taken=given + fixed)
                 with self._lock:
-                    if len(self._names) > 2000:
+                    if len(self._names) > 4000:
                         self._names.clear()
                     for m in wanted:
                         if m["id"] in names:
@@ -585,9 +593,10 @@ class Mixes:
                 with self._lock:
                     self._naming.discard(token)
         if self.background:
-            threading.Thread(target=work, name="mix-names", daemon=True).start()
-        else:
-            work()
+            thread = threading.Thread(target=work, name="mix-names", daemon=True)
+            thread.start()
+            return thread
+        work()
 
     # ---- made ahead ----
 
@@ -613,7 +622,8 @@ class Mixes:
             for at in (self.now(), self.now() + minutes * 60):
                 before = len(self._kept)
                 try:
-                    self._made(self.listens.who(user), tz or default_tz, int(at), server, lat, lon, None, None, size, rest[0] if rest else None)
+                    self._made(self.listens.who(user), tz or default_tz, int(at), server, lat, lon, None, None, size, rest[0] if rest else None,
+                               wait_names=False)
                 except Exception:  # noqa: BLE001 - made again when asked; never stops the loop
                     _log.exception("The mixes for %s weren't made ahead", user or "nobody")
                     continue
@@ -723,7 +733,7 @@ class Mixes:
         """A mix's name: never one of ``taken``, its first word none of ``used`` (the page's other names') where it
         can (0.61). Made by turns, so a row isn't all alike: from the moment (``moment``: words for now, the weather,
         the light, the day or the season: "Rainy Folk", "Late-night Metalcore"; the mixes of now only), from its
-        sound ("Smoky Alternative Rock"), or from who's in it ("Loathe, Spiritbox & more")."""
+        sound ("Smoky Alternative Rock"); never from who's in it."""
         used = used if used is not None else set()
 
         def band(share):
@@ -733,7 +743,8 @@ class Mixes:
         sound = []
         if like["energy"] is not None:
             sound = list(MORE_NAMES[band(like["energy"])][1 if like["mood"] is None else band(like["mood"])])
-        ways = ["moment", "sound", "artists"] if moment else ["sound", "artists"]
+        # Never who's in it (0.61.2, the owner: "unique names without artists. We have artist radios for that job").
+        ways = ["moment", "sound"] if moment else ["sound"]
         ways = ways[turn % len(ways):] + ways[:turn % len(ways)]
         name = None
         for way in ways:
@@ -745,12 +756,6 @@ class Mixes:
                 word = next((w for w in sound if w.casefold() not in used), None)
                 if word or not sound:
                     name = " ".join(x for x in (word, genre) if x) if genre else f"{word} mix"
-            elif way == "artists" and like["artists"]:
-                first = like["artists"][0]
-                name = f"{first}, {like['artists'][1]} & more" if len(like["artists"]) > 1 and len(first) + len(like["artists"][1]) <= 22 \
-                    else f"{first} & more"
-                if first.casefold() in used:
-                    name = None
             if name and name not in taken:
                 break
             name = None
@@ -895,7 +900,12 @@ class Mixes:
                 why = ("Like " + _and(like["artists"]) + ".") if like["artists"] and weights is not None else "From your library."
                 _, month, _, _, weekday, _ = local(at)
                 moment = moment_words(part, weekday, month, sun and sun["light"], weather, south)
-                mixes.append(self._mix(f"now-{n + 1}", picked, why, taken, used=used, moment=moment, turn=n))
+                mix = self._mix(f"now-{n + 1}", picked, why, taken, used=used, moment=moment, turn=n)
+                # For the AI's name (0.61.2): what right now is like, which its name may draw on.
+                mix["moment"] = {k: v for k, v in (("part of the day", said(part)), ("day", WEEKDAYS[weekday]),
+                                                    ("light", sun and sun["light"]), ("weather", weather),
+                                                    ("season", SEASONS[((month % 12) // 3 + 2) % 4 if south else (month % 12) // 3].lower())) if v}
+                mixes.append(mix)
         note = " · ".join(x for x in (f"{weekly.capitalize()}, {hours(part)}", sun and sun["said"]) if x)
         if chosen["now"]:
             shelves.append({"key": "now", "title": f"Your {said(part)}", "note": note, "mixes": mixes})
