@@ -139,7 +139,8 @@ class TheMixes(Library):
         self.assertEqual(len(now["mixes"]), 3)
         self.assertEqual(self.kinds(now["mixes"][0]), {"piano"})  # calm and dark at 6:40 in November…
         self.assertEqual(self.kinds(now["mixes"][-1]), {"techno"})  # …and nothing bright and busy first
-        self.assertEqual(now["mixes"][0]["name"], "Hushed Piano")
+        # Named for the moment first (0.61): it's dark this early morning.
+        self.assertEqual(now["mixes"][0]["name"], "Dark-morning Piano")
         self.assertTrue(all("sun" not in m["name"].lower() for m in now["mixes"]))
         self.assertIn("From your library", got["based"])
         # In the afternoon light the busier ones lead.
@@ -156,7 +157,7 @@ class TheMixes(Library):
         self.assertEqual(got["based"], "From what you play in the early morning on weekdays.")
         now = got["shelves"][0]["mixes"]
         self.assertEqual(self.kinds(now[0]), {"rock"})
-        self.assertEqual(now[0]["name"], "Easy Rock")
+        self.assertEqual(now[0]["name"], "Dark-morning Rock")
         self.assertTrue(now[0]["why"].startswith("Like Rock Artist "))
         self.assertEqual(len(now[0]["songs"]), M.SIZE)
         self.assertEqual(now[0]["own"], sum(1 for s in now[0]["songs"] if s["own"]))
@@ -405,3 +406,34 @@ class TheMixes(Library):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheNames(unittest.TestCase):
+    """0.61, the owner: "the naming is way too generic, hushed appears many times"; a mix of everything "as long as
+    it's suitable, taking weather, location, season etc into consideration"."""
+
+    def like(self, energy=0.3, mood=0.2, genre="Alternative Rock", artists=("Loathe", "Spiritbox")):
+        return {"energy": energy, "mood": mood, "genres": [genre], "tags": [], "artists": list(artists)}
+
+    def test_a_page_says_each_first_word_once(self):
+        taken, used = set(), set()
+        names = [M.Mixes._name(self.like(genre=g), taken, used, turn=0) for g in ("Alternative Rock", "Metalcore", "Folk", "Piano")]
+        self.assertEqual(names, ["Hushed Alternative Rock", "Shadowed Metalcore", "Smoky Folk", "Brooding Piano"])
+
+    def test_a_row_takes_turns_moment_sound_and_artists(self):
+        taken, used = set(), set()
+        moment = M.moment_words("evening", 4, 12, "dark", "rain")
+        self.assertEqual(moment[:3], ["Rainy", "After-dark", "Friday-night"])
+        names = [M.Mixes._name(self.like(genre=g, artists=a), taken, used, moment, n)
+                 for n, (g, a) in enumerate([("Folk", ("Vaya Con Dios",)), ("Metalcore", ("Loathe", "Spiritbox")), ("Drum n Bass", ("Pendulum", "Sub Focus"))])]
+        self.assertEqual(names, ["Rainy Folk", "Hushed Metalcore", "Pendulum, Sub Focus & more"])
+
+    def test_the_season_turns_round_in_the_south(self):
+        self.assertEqual(M.moment_words("afternoon", 1, 1)[-1], "Winter")
+        self.assertEqual(M.moment_words("afternoon", 1, 1, south=True)[-1], "Summer")
+        self.assertEqual(M.moment_words("afternoon", 1, 7)[-1], "Summer")
+
+    def test_no_weather_word_without_the_app_saying(self):
+        self.assertNotIn("Rainy", M.moment_words("evening", 2, 11, "light", None))
+        self.assertNotIn("Rainy", M.moment_words("evening", 2, 11, "light", "nonsense"))
+
