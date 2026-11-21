@@ -14,8 +14,9 @@ The app's mixes for the time of day were a fixed list by the clock. These are ma
 - **what it's like outside**: where the sun is, worked out from the day and the place (the time zone's city, or a
   latitude and longitude from the app): no weather service is asked. In the dark the calmer, darker groups come
   first; the less is known of a slot, the more the hour and the daylight count (:data:`LEAN`);
-- **what each is called**: by its sound (its energy and valence against the library's, and the genre most of its songs
-  are in): "Calm Indie Rock", "Driving Techno". A name never promises weather.
+- **what each is called**: by turns from the moment, its sound or who's in it (0.61): "Rainy Folk", "Smoky Indie
+  Rock", "Loathe, Spiritbox & more", no first word twice on a page. Only the mixes of now, made again as the moment
+  changes, are named for it (the weather the app says, the dark, the day, the part of the day, the season).
 
 A slot with too little listening (:data:`ENOUGH` songs) borrows from that part of the day on any day, then from all
 the listening; with none at all the mixes are made from the library, so there is always something to play.
@@ -91,6 +92,21 @@ SUITS = {"early": 0.3, "morning": 0.5, "afternoon": 0.6, "evening": 0.5, "night"
 DARK_SUITS = -0.12  # in the dark, a little calmer still
 # A group's name: its energy (rows: low, middle, high) and its valence (columns: dark, middle, bright).
 NAMES = (("Hushed", "Calm", "Gentle"), ("Moody", "Easy", "Warm"), ("Driving", "Lively", "Upbeat"))
+# More words for each, so a page doesn't say "Hushed" four times (0.61, the owner: "the naming is way too generic,
+# hushed appears many times"): a mix takes the first its page hasn't used yet.
+MORE_NAMES = (
+    (("Hushed", "Shadowed", "Smoky", "Brooding"), ("Calm", "Soft", "Unhurried", "Still"), ("Gentle", "Tender", "Airy", "Glowing")),
+    (("Moody", "Restless", "Dusky", "Low-lit"), ("Easy", "Steady", "Laid-back", "Rolling"), ("Warm", "Breezy", "Golden", "Bright")),
+    (("Driving", "Heavy", "Relentless", "Fierce"), ("Lively", "Punchy", "Charged", "Kinetic"), ("Upbeat", "Euphoric", "Bouncy", "Sparkling")),
+)
+# What it's like right now, for the names of the mixes of now (0.61, the owner: "taking weather, location, season etc
+# into consideration"): those are made again when the part of the day, the light or the weather changes, so a name
+# can say it. The mixes made for all day never do.
+WEATHER = {"rain": "Rainy", "snow": "Snowy", "storm": "Stormy", "fog": "Foggy", "cloudy": "Grey-sky", "clear": "Clear-sky",
+           "hot": "Heatwave", "cold": "Frosty"}
+SEASONS = ("Winter", "Spring", "Summer", "Autumn")  # by month, December to February first; turned round in the south
+MOMENTS = {"early": "Early", "morning": "Morning", "afternoon": "Afternoon", "evening": "Evening", "night": "Late-night"}
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 LOW, HIGH = 0.42, 0.58  # where low ends and high starts, as a share of the library
 AHEAD_MINUTES = 10  # the next part of the day's mixes are made this long before it starts
 KEEP_DAYS = 7  # how long a mix given out is kept, unless the page says otherwise (setting "mixes_keep_days")
@@ -118,6 +134,24 @@ def part_of(hour):
         if first <= hour < end or (first > end and (hour >= first or hour < end)):
             return key
     return "night"
+
+
+def moment_words(part, weekday, month, light=None, weather=None, south=False):
+    """Words for what it's like now, the likeliest first, for the names of the mixes of now (0.61): the weather (when
+    the app says), the dark, a Friday or the weekend's day, the part of the day, then the season."""
+    words = []
+    if weather in WEATHER:
+        words.append(WEATHER[weather])
+    if light == "dark" and part in ("early", "morning", "afternoon"):
+        words.append("Dark-morning" if part != "afternoon" else "Dark-afternoon")
+    elif light == "dark" and part == "evening":
+        words.append("After-dark")
+    if weekday >= 4:
+        words.append(WEEKDAYS[weekday] + ("-night" if part in ("evening", "night") else ""))
+    words.append(MOMENTS.get(part, "Now"))
+    season = (month % 12) // 3
+    words.append(SEASONS[(season + 2) % 4 if south else season])
+    return words
 
 
 def days_of(weekday):
@@ -322,7 +356,7 @@ class Mixes:
         """Who mixes can be made for: the listeners, most listens first."""
         return [u["user"] for u in self.listens.users() if u["listens"]]
 
-    def make(self, user, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=SIZE):
+    def make(self, user, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=SIZE, weather=None):
         """The mixes for ``user`` at ``at`` (now) on the clock of ``tz``: ``{"user", "at", "tz", "part", "days",
         "said", "hours", "basis", "based", "listens", "songs", "daylight", "shelves": [{"key", "title", "note",
         "mixes": [{"id", "name", "why", "tags", "artists", "energy", "mood", "own", "songs": [{"id", "title",
@@ -330,7 +364,7 @@ class Mixes:
         at another time); ``lat`` and ``lon`` say where the listener is, instead of the time zone's city."""
         user = self.listens.who(user)
         at = int(at if at is not None else self.now())
-        kept, light = self._made(user, tz, at, server, lat, lon, part, days, size)
+        kept, light = self._made(user, tz, at, server, lat, lon, part, days, size, weather)
         answer = {"user": user, "at": at, "tz": tz, "keep_days": self.keep_days(), **self._named(user, kept)}
         if not self.settings(user)["ai_names"]:  # names from the sound only, as the listener chose
             answer["shelves"] = [dict(sh, mixes=[dict(m, name=m["sound_name"], about=m["sound_about"], named="sound") for m in sh["mixes"]])
@@ -342,7 +376,7 @@ class Mixes:
         self._keep(user, answer)
         return answer
 
-    def _made(self, user, tz, at, server, lat, lon, part, days, size):
+    def _made(self, user, tz, at, server, lat, lon, part, days, size, weather=None):
         """The mixes of that slot, made or kept; and the light they were made for."""
         local = self.listens._local(tz)
         year, month, day, hour, weekday, ordinal = local(at)
@@ -357,13 +391,15 @@ class Mixes:
         # The listener's own size, from the page or the app's settings; the app's ask only when they set none.
         size = max(A_FEW, min(100, int(chosen["size"] if chosen["size"] != mix_settings.SETTINGS["size"][0] else size)))
         self.sound._load()
+        weather = weather if weather in WEATHER else None
         key = (user, tz, server, ordinal, slot_part, slot_days, spot and (round(spot[0], 1), round(spot[1], 1)),
-               sun and sun["light"], size, self._grown(user), mix_settings.signature(chosen), self._times_again(user, ordinal))
+               sun and sun["light"], size, self._grown(user), mix_settings.signature(chosen), self._times_again(user, ordinal), weather)
         with self._lock:
             kept = self._kept.get(key)
         if kept is None:
             started = time.monotonic()
-            kept = self._make(user, tz, at, server, slot_part, slot_days, sun, size, local, ordinal, chosen, self._times_again(user, ordinal))
+            kept = self._make(user, tz, at, server, slot_part, slot_days, sun, size, local, ordinal, chosen, self._times_again(user, ordinal),
+                              weather, bool(spot and spot[0] < 0))
             with self._lock:
                 if len(self._kept) > KEPT:
                     self._kept.clear()
@@ -555,13 +591,13 @@ class Mixes:
 
     # ---- made ahead ----
 
-    def remember(self, user, tz, lat=None, lon=None, server=None, size=SIZE):
-        """How the app asked for ``user``'s mixes: theirs are made ahead the same way."""
+    def remember(self, user, tz, lat=None, lon=None, server=None, size=SIZE, weather=None):
+        """How the app asked for ``user``'s mixes (the weather it said too): theirs are made ahead the same way."""
         user = self.listens.who(user)
         with self._lock:
             if len(self.asked) > 50:
                 self.asked.clear()
-            self.asked[user] = (tz, lat, lon, server, size)
+            self.asked[user] = (tz, lat, lon, server, size, weather)
 
     def ahead(self, minutes=AHEAD_MINUTES, default_tz=None, servers=(None,)):
         """Makes, for each listener the app has asked for (else the one with most listens), the mixes of now and of
@@ -571,13 +607,13 @@ class Mixes:
             asked = dict(self.asked)
         if not asked:
             first = next(iter(self.listeners()), None)
-            asked = {first: (default_tz, None, None, server, SIZE) for server in servers} if first is not None else {}
+            asked = {first: (default_tz, None, None, server, SIZE, None) for server in servers} if first is not None else {}
         made = 0
-        for user, (tz, lat, lon, server, size) in asked.items():
+        for user, (tz, lat, lon, server, size, *rest) in asked.items():
             for at in (self.now(), self.now() + minutes * 60):
                 before = len(self._kept)
                 try:
-                    self._made(self.listens.who(user), tz or default_tz, int(at), server, lat, lon, None, None, size)
+                    self._made(self.listens.who(user), tz or default_tz, int(at), server, lat, lon, None, None, size, rest[0] if rest else None)
                 except Exception:  # noqa: BLE001 - made again when asked; never stops the loop
                     _log.exception("The mixes for %s weren't made ahead", user or "nobody")
                     continue
@@ -683,23 +719,52 @@ class Mixes:
                 "artists": [name for name, _ in sorted(artists.items(), key=lambda kv: (-kv[1], kv[0]))][:3]}
 
     @staticmethod
-    def _name(like, taken):
-        """A mix's name from its sound: "Calm Indie Rock"; never one of ``taken``."""
+    def _name(like, taken, used=None, moment=None, turn=0):
+        """A mix's name: never one of ``taken``, its first word none of ``used`` (the page's other names') where it
+        can (0.61). Made by turns, so a row isn't all alike: from the moment (``moment``: words for now, the weather,
+        the light, the day or the season: "Rainy Folk", "Late-night Metalcore"; the mixes of now only), from its
+        sound ("Smoky Alternative Rock"), or from who's in it ("Loathe, Spiritbox & more")."""
+        used = used if used is not None else set()
+
         def band(share):
             return 0 if share < LOW else 2 if share > HIGH else 1
 
-        word = NAMES[band(like["energy"])][1 if like["mood"] is None else band(like["mood"])] if like["energy"] is not None else None
-        for genre in like["genres"] or [None]:
+        genre = (like["genres"] or [None])[0]
+        sound = []
+        if like["energy"] is not None:
+            sound = list(MORE_NAMES[band(like["energy"])][1 if like["mood"] is None else band(like["mood"])])
+        ways = ["moment", "sound", "artists"] if moment else ["sound", "artists"]
+        ways = ways[turn % len(ways):] + ways[:turn % len(ways)]
+        name = None
+        for way in ways:
+            if way == "moment" and genre:
+                word = next((w for w in moment if w.casefold() not in used), None)
+                if word:
+                    name = f"{word} {genre}"
+            elif way == "sound" and (sound or genre):
+                word = next((w for w in sound if w.casefold() not in used), None)
+                if word or not sound:
+                    name = " ".join(x for x in (word, genre) if x) if genre else f"{word} mix"
+            elif way == "artists" and like["artists"]:
+                first = like["artists"][0]
+                name = f"{first}, {like['artists'][1]} & more" if len(like["artists"]) > 1 and len(first) + len(like["artists"][1]) <= 22 \
+                    else f"{first} & more"
+                if first.casefold() in used:
+                    name = None
+            if name and name not in taken:
+                break
+            name = None
+        if name is None:  # every way taken: the old name, with a number where it's needed
+            word = (sound or [None])[0]
             name = " ".join(w for w in (word, genre) if w) or "Mix"
             if genre is None and word:
                 name = f"{word} mix"
-            if name not in taken:
-                break
         number = 2
         while name in taken:
             name = f"{name.rstrip(' 0123456789')} {number}"
             number += 1
         taken.add(name)
+        used.add(name.split(",")[0].split(" ")[0].casefold())
         return name
 
     # ---- a mix's songs ----
@@ -736,12 +801,12 @@ class Mixes:
         mine = set(mine)
         return [(row, row in mine) for row, _ in picked]
 
-    def _mix(self, mix_id, picked, why, taken, name=None, like=None):
+    def _mix(self, mix_id, picked, why, taken, name=None, like=None, used=None, moment=None, turn=0):
         rows = [row for row, _ in picked]
         like = like or self._like(rows)
         # What the AI's name is kept by (none for a mix with a name of its own): the same songs the same day.
         signature = None if name else hashlib.sha256(",".join(sorted(self.sound.ids[row] for row in rows)).encode()).hexdigest()[:16]
-        return {"id": mix_id, "name": name or self._name(like, taken), "signature": signature, "why": why,
+        return {"id": mix_id, "name": name or self._name(like, taken, used, moment, turn), "signature": signature, "why": why,
                 "about": ABOUT.get(mix_id) or _about(like), "tags": like["tags"],
                 "genres": like["genres"], "artists": like["artists"], "energy": like["energy"], "mood": like["mood"],
                 "own": sum(1 for _, own in picked if own),
@@ -766,8 +831,10 @@ class Mixes:
         centre = unit((self.sound.matrix[rows] * weights[:, None]).sum(axis=0))[0]
         return centre, max(0.02, REACH * float(np.quantile(1.0 - self.sound.matrix[rows] @ centre, REACH_OF)))
 
-    def _make(self, user, tz, at, server, part, days, sun, size, local, ordinal, chosen=None, again=0):
+    def _make(self, user, tz, at, server, part, days, sun, size, local, ordinal, chosen=None, again=0, weather=None, south=False):
         chosen = chosen or mix_settings.defaults()
+        # One page, no first word twice (0.61): For now's, Made for you's and the others' names together.
+        used = set()
         out = self._left_out(chosen)
         played = self._played(user, at, server, local, ordinal, chosen, out)
         familiar, per_artist = chosen["familiar"] / 100, chosen["per_artist"]
@@ -826,7 +893,9 @@ class Mixes:
             picked = fill(centre, list(map(int, own)) if weights is not None else [], stale, server, size, seed(f"now-{n}"), reach=reach)
             if len(picked) >= A_FEW:
                 why = ("Like " + _and(like["artists"]) + ".") if like["artists"] and weights is not None else "From your library."
-                mixes.append(self._mix(f"now-{n + 1}", picked, why, taken))
+                _, month, _, _, weekday, _ = local(at)
+                moment = moment_words(part, weekday, month, sun and sun["light"], weather, south)
+                mixes.append(self._mix(f"now-{n + 1}", picked, why, taken, used=used, moment=moment, turn=n))
         note = " · ".join(x for x in (f"{weekly.capitalize()}, {hours(part)}", sun and sun["said"]) if x)
         if chosen["now"]:
             shelves.append({"key": "now", "title": f"Your {said(part)}", "note": note, "mixes": mixes})
@@ -843,7 +912,8 @@ class Mixes:
             picked = fill(centre, list(map(int, own)), stale, server, size, seed(f"daily-{n}"), reach=reach)
             if len(picked) >= A_FEW:
                 like = self._like(own[:60], own_w[:60])
-                mixes.append(self._mix(f"daily-{n + 1}", picked, "Like " + _and(like["artists"]) + "." if like["artists"] else "", taken, like=like))
+                mixes.append(self._mix(f"daily-{n + 1}", picked, "Like " + _and(like["artists"]) + "." if like["artists"] else "", taken,
+                                       like=like, used=used, turn=n + 1))
         if mixes:
             shelves.append({"key": "daily", "title": "Made for you", "note": "The kinds of music you play most, each with more like it.", "mixes": mixes})
 

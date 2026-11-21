@@ -118,6 +118,14 @@ app's Home each mix is in: For now, Made for you, and More of you (On repeat, Re
 together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
 anyway gives way to the mix's own name from its sound (with a number if that's taken too).
 
+**Names with more to them (0.61.0).** A page no longer says "Hushed" four times. Each mix's name takes a first word
+none of the page's other names have, from a bigger choice of words for its sound ("Smoky", "Restless", "Kinetic"…),
+and a row takes turns: named for the moment, for its sound, or for who's in it ("Loathe, Spiritbox & more"). The mixes
+of now, which are made again when the part of the day, the light or the weather changes, can say the moment: the
+weather when the app sends it (`weather=rain`, one word, never where you are; only when its Weather is on), the dark,
+a Friday or the weekend's day, the part of the day or the season ("Rainy Folk", "Dark-morning Metalcore", "Sunday
+Piano"). The mixes for all day never do. Names from the AI service are as before.
+
 **As many mixes as you ask for (0.60.6).** For now looked for at most four groups, whatever its count said, and kinds of
 music that sound alike were joined to fewer mixes than asked. Now For now and Made for you make as many as their counts
 say, where you've played songs enough (about 40 a mix): kinds that sound alike stay apart, and the biggest is halved if

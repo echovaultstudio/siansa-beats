@@ -218,10 +218,14 @@ def get(handler, path, query, server=None):
         part, days = arg("part") or None, arg("days") or None
         if (part and part not in mixes_module.SUITS) or (days and days not in mixes_module.DAYS):
             return handler._error(HTTPStatus.BAD_REQUEST, "part: " + ", ".join(mixes_module.SUITS) + "; days: weekdays or weekend") or True
+        # What it's like outside, as the app read it (0.61; only when its weather is on): for the names of the mixes of now.
+        weather = arg("weather") or None
+        if weather and weather not in mixes_module.WEATHER:
+            return handler._error(HTTPStatus.BAD_REQUEST, "weather: " + ", ".join(mixes_module.WEATHER)) or True
         if not part and not days and at is None:  # asked for now: this listener's are made ahead the same way (0.54)
             app.mixes.remember(arg("user") or app.default_listener(), arg("tz") or None, lat, lon,
-                               app.only(server or app.servers.default_id), size or mixes_module.SIZE)
-        made = app.mixes_for(arg("user"), arg("tz") or None, at, server, lat, lon, part, days, size)
+                               app.only(server or app.servers.default_id), size or mixes_module.SIZE, weather)
+        made = app.mixes_for(arg("user"), arg("tz") or None, at, server, lat, lon, part, days, size, weather)
         # Each song by the id of the server the app plays from; a song that server hasn't is left out.
         named = server or app.servers.default_id
         ids = app.store.item_ids([s["id"] for shelf in made["shelves"] for m in shelf["mixes"] for s in m["songs"]], named)
