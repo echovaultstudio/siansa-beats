@@ -118,6 +118,10 @@ app's Home each mix is in: For now, Made for you, and More of you (On repeat, Re
 together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
 anyway gives way to the mix's own name from its sound (with a number if that's taken too).
 
+**Vocals done is done (0.61.1).** Songs whose vocals can't be found yet (no voice score, or no beats here) kept the
+Overview saying "looking for the next song…" and "46 to go" when every other song was done. They're now counted apart
+("✓ all done · 46 can't be done yet"), the Now card doesn't show Vocals for them, and it looks again every ten minutes.
+
 **Names with more to them (0.61.0).** A page no longer says "Hushed" four times. Each mix's name takes a first word
 none of the page's other names have, from a bigger choice of words for its sound ("Smoky", "Restless", "Kinetic"…),
 and a row takes turns: named for the moment, for its sound, or for who's in it ("Loathe, Spiritbox & more"). The mixes
