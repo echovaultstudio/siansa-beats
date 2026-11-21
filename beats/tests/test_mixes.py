@@ -420,13 +420,15 @@ class TheNames(unittest.TestCase):
         names = [M.Mixes._name(self.like(genre=g), taken, used, turn=0) for g in ("Alternative Rock", "Metalcore", "Folk", "Piano")]
         self.assertEqual(names, ["Hushed Alternative Rock", "Shadowed Metalcore", "Smoky Folk", "Brooding Piano"])
 
-    def test_a_row_takes_turns_moment_sound_and_artists(self):
+    def test_a_row_takes_turns_moment_and_sound_never_artists(self):
         taken, used = set(), set()
         moment = M.moment_words("evening", 4, 12, "dark", "rain")
         self.assertEqual(moment[:3], ["Rainy", "After-dark", "Friday-night"])
         names = [M.Mixes._name(self.like(genre=g, artists=a), taken, used, moment, n)
                  for n, (g, a) in enumerate([("Folk", ("Vaya Con Dios",)), ("Metalcore", ("Loathe", "Spiritbox")), ("Drum n Bass", ("Pendulum", "Sub Focus"))])]
-        self.assertEqual(names, ["Rainy Folk", "Hushed Metalcore", "Pendulum, Sub Focus & more"])
+        # Never who's in it (0.61.2, the owner: "we have artist radios for that job").
+        self.assertEqual(names, ["Rainy Folk", "Hushed Metalcore", "After-dark Drum n Bass"])
+        self.assertFalse(any("Pendulum" in n or "Loathe" in n for n in names))
 
     def test_the_season_turns_round_in_the_south(self):
         self.assertEqual(M.moment_words("afternoon", 1, 1)[-1], "Winter")
