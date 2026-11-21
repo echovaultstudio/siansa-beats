@@ -118,6 +118,11 @@ app's Home each mix is in: For now, Made for you, and More of you (On repeat, Re
 together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
 anyway gives way to the mix's own name from its sound (with a number if that's taken too).
 
+**As many mixes as you ask for (0.60.6).** For now looked for at most four groups, whatever its count said, and kinds of
+music that sound alike were joined to fewer mixes than asked. Now For now and Made for you make as many as their counts
+say, where you've played songs enough (about 40 a mix): kinds that sound alike stay apart, and the biggest is halved if
+need be.
+
 **The app's plans, by the AI here (0.57).** The Siansa app asks the AI set up on Setup for its own playlists too: the
 title, sound search, line and sound words to steer by of its vibes, Today's mix, Flow's words and the mood radios
 (`POST /api/v1/plan` with the app's `brief`; `features.plans` in the capabilities says whether it can). The app then

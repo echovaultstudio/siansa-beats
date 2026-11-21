@@ -109,6 +109,7 @@ SAME = 0.5  # two groups are one when their centres are nearer than this share o
 REACH = 1.3  # a mix reaches this far past where most of its group's songs are (REACH_OF of them), and no further
 REACH_OF = 0.9
 GROUP = 12  # songs per group, at least, when deciding how many groups to look for
+KIND = 40  # songs played, for each mix of its own kept apart when two sound alike (0.60.6)
 
 
 def part_of(hour):
@@ -245,10 +246,11 @@ def daylight(lat, lon, at, tz_name=None):
 
 # ---- groups of songs that sound alike ----
 
-def groups(vectors, weights, k, rounds=12):
+def groups(vectors, weights, k, rounds=12, least=1):
     """``vectors`` (rows of length one) in at most ``k`` groups that sound alike, the songs with more ``weights``
     pulling harder: ``[rows of each group]``, the heaviest group first. The same every time: it starts from the
-    heaviest song and then, each time, the song least like any start so far."""
+    heaviest song and then, each time, the song least like any start so far. Groups that sound alike are joined, but
+    never to fewer than ``least`` (0.60.6: the listener asked for that many mixes)."""
     n = len(vectors)
     k = max(1, min(k, n))
     starts = [int(np.argmax(weights))]
@@ -275,7 +277,7 @@ def groups(vectors, weights, k, rounds=12):
     out = [np.flatnonzero(belongs == g) for g in big]
     # Two halves of one kind of music are one group: their centres are nearer each other than their own songs are
     # to them (SAME of that). The nearest two first, until none are.
-    while len(out) > 1:
+    while len(out) > max(1, least):
         middles = [unit((vectors[rows] * weights[rows, None]).sum(axis=0))[0] for rows in out]
         spread = [float((1.0 - vectors[rows] @ middle).mean()) for rows, middle in zip(out, middles)]
         apart, a, b = min((1.0 - float(middles[a] @ middles[b]), a, b) for a in range(len(out)) for b in range(a + 1, len(out)))
@@ -283,6 +285,17 @@ def groups(vectors, weights, k, rounds=12):
             break
         out[a] = np.sort(np.concatenate([out[a], out[b]]))
         del out[b]
+    # Still fewer than asked for (a group too small to be a mix joined another): the biggest is halved, while it has
+    # songs enough for two.
+    while len(out) < least:
+        biggest = max(range(len(out)), key=lambda g: len(out[g]))
+        rows = out[biggest]
+        if len(rows) < 8:
+            break
+        halves = groups(vectors[rows], weights[rows], 2, least=2)
+        if len(halves) < 2:
+            break
+        out[biggest:biggest + 1] = [rows[h] for h in halves]
     return sorted(out, key=lambda rows: -float(weights[rows].sum()))
 
 
@@ -736,13 +749,13 @@ class Mixes:
                            "artist": self.sound.rows[row]["artist"] or "", "album": self.sound.rows[row]["album"] or "",
                            "own": own} for row, own in picked]}
 
-    def _grouped(self, weights, most, k):
+    def _grouped(self, weights, most, k, least=1):
         """The heaviest ``most`` songs of ``weights`` (``{row: weight}``) in groups: ``[(rows heaviest first, their
-        weights, the group's centre, its reach)]``."""
+        weights, the group's centre, its reach)]``, at least ``least`` of them where there are songs enough."""
         top = sorted(weights, key=lambda row: (-weights[row], row))[:most]
         rows, w = np.array(top), np.array([weights[row] for row in top], np.float32)
         out = []
-        for members in groups(self.sound.matrix[rows], w, k):
+        for members in groups(self.sound.matrix[rows], w, k, least=least):
             order = members[np.argsort(-w[members], kind="stable")]
             own, own_w = rows[order], w[order]
             out.append((own, own_w, *self._middle(own, own_w)))
@@ -794,9 +807,11 @@ class Mixes:
             sample = np.array(sorted(rng.sample(have_in, min(len(have_in), 1500)))) if have_in else np.array([], int)
             ones = np.ones(len(sample), np.float32)
             found = [(sample[members], ones[members], *self._middle(sample[members], ones[members]))
-                     for members in groups(self.sound.matrix[sample], ones, 6)] if len(sample) >= A_FEW else []
+                     for members in groups(self.sound.matrix[sample], ones, max(6, chosen["now_count"]))] if len(sample) >= A_FEW else []
         else:
-            found = self._grouped(weights, 150, min(4, max(1, len(weights) // GROUP)))
+            # As many as asked for (0.60.6, the owner: "I said make 6 mixes but I still only see 4"): it looked for 4.
+            k = min(max(4, chosen["now_count"]), max(1, len(weights) // GROUP))
+            found = self._grouped(weights, 150, k, least=min(chosen["now_count"], k, len(weights) // KIND))
         suits = (SUITS[part] if chosen["time_of_day"] else 0.5) + (DARK_SUITS if sun and sun["light"] == "dark" else 0.0)
         ranked = []
         for own, own_w, centre, reach in found:
@@ -819,7 +834,10 @@ class Mixes:
         # Made for you: the listener's all-time groups.
         taken = set()
         everything = played["all"]
-        daily = self._grouped(everything, 300, min(chosen["daily_count"], len(everything) // GROUP)) if len(everything) >= ENOUGH else []
+        k = min(chosen["daily_count"], len(everything) // GROUP)
+        # As many as asked for, where there are songs enough: kinds of music that sound alike are no longer joined to
+        # fewer (0.60.6).
+        daily = self._grouped(everything, 300, k, least=min(k, len(everything) // KIND)) if len(everything) >= ENOUGH else []
         mixes = []
         for n, (own, own_w, centre, reach) in enumerate(daily if chosen["daily"] else []):
             picked = fill(centre, list(map(int, own)), stale, server, size, seed(f"daily-{n}"), reach=reach)

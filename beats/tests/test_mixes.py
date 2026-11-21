@@ -76,6 +76,16 @@ class Groups(unittest.TestCase):
         self.assertEqual(len(M.groups(vectors[:11], weights[:11], 2)), 1)
         self.assertEqual([sorted(map(int, g)) for g in M.groups(vectors, weights, 2)], [sorted(map(int, g)) for g in found])
 
+    def test_asked_for_so_many_they_are_not_joined_to_fewer(self):
+        # 0.60.6, the owner: "I said make 6 mixes but I still only see 4".
+        rng = np.random.default_rng(2)
+        a = np.zeros(200, np.float32)
+        a[0] = 1
+        vectors = M.unit(np.vstack([a + rng.normal(0, 0.05, 200) for _ in range(300)]))
+        weights = np.ones(300, np.float32)
+        self.assertLess(len(M.groups(vectors, weights, 6)), 6)  # one kind of music: joined to fewer
+        self.assertEqual(len(M.groups(vectors, weights, 6, least=6)), 6)  # but six asked for: six
+
 
 class Library(unittest.TestCase):
     """Three kinds of music, 60 songs each: calm piano (low energy, dark), rock (middle), techno (high, bright)."""
