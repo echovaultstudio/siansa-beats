@@ -344,6 +344,7 @@ class Mixes:
         self._lock = threading.Lock()
         self._kept = {}  # what was asked -> its answer, while nothing it's made from changed
         self._names = {}  # (listener, day, mix id, its songs) -> the AI's name for it
+        self._weather = {}  # listener -> the last weather word the app said (0.61.3)
         # Made again by hand (0.60.4, the owner: a button to make the mixes again after changing how they're made):
         # listener -> (the day, how many times), so the same day's mixes are picked anew; a new day starts afresh.
         self._again = {}
@@ -394,9 +395,14 @@ class Mixes:
         # The listener's own size, from the page or the app's settings; the app's ask only when they set none.
         size = max(A_FEW, min(100, int(chosen["size"] if chosen["size"] != mix_settings.SETTINGS["size"][0] else size)))
         self.sound._load()
-        weather = weather if weather in WEATHER else None
+        # The weather names the mixes of now but never makes another set of them (0.61.3, the owner: "Siansa Beats and
+        # the Siansa app not showing the same playlist": the app's asks with the weather and its page's without got
+        # two sets). The last word the app said is kept, so a set made by anyone's ask is named the same way.
+        if weather in WEATHER:
+            self._weather[user] = weather
+        weather = self._weather.get(user)
         key = (user, tz, server, ordinal, slot_part, slot_days, spot and (round(spot[0], 1), round(spot[1], 1)),
-               sun and sun["light"], size, self._grown(user), mix_settings.signature(chosen), self._times_again(user, ordinal), weather)
+               sun and sun["light"], size, self._grown(user), mix_settings.signature(chosen), self._times_again(user, ordinal))
         with self._lock:
             kept = self._kept.get(key)
         if kept is None:
@@ -589,6 +595,8 @@ class Mixes:
                             self._names[(user, day, m["id"], m["signature"])] = names[m["id"]]
                 if names:
                     _log.info("The AI named %d of %d mixes for %s", len(names), len(wanted), user or "nobody")
+                else:  # said, so a page with only the mixes' own names can be told apart from the AI being off
+                    _log.info("The AI gave no names that could be used for %d mixes for %s; they keep their own", len(wanted), user or "nobody")
             finally:
                 with self._lock:
                     self._naming.discard(token)

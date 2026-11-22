@@ -118,6 +118,13 @@ app's Home each mix is in: For now, Made for you, and More of you (On repeat, Re
 together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
 anyway gives way to the mix's own name from its sound (with a number if that's taken too).
 
+**The same mixes on the app and the page (0.61.3).** The app's asks said the weather and the page's didn't, and the
+weather was part of which set of mixes was kept, so each got its own set ("Grey-sky Drum n Bass" on the phone,
+"Sunday Drum n Bass" on the page). The weather now only names a set: the word the app said last is kept, and whoever
+asks gets the same mixes with the same names. And the AI's names are no longer refused for being ones it gave before
+(it's asked not to, which is enough): that left a whole morning's mixes with their own names. When it gives none that
+can be used, the log says so.
+
 **AI names that suit the moment, and no artists (0.61.2).** With *Names and lines from the AI service* on, the AI names
 For now and Made for you: creative names that suit the music, never a mood word and a genre, never an artist (Artist
 radios are for that; a name with one of its own artists is left out), none given in the last two weeks. For now's
