@@ -21,6 +21,10 @@ SETTINGS = {
     "repeat": (True, "on", None, None, "More of you: On repeat"),
     "rediscover": (True, "on", None, None, "More of you: Rediscover"),
     "new": (True, "on", None, None, "More of you: New for you"),
+    # Where they go on Home (0.62, the owner: "I don't like the idea of always separating More of you and Made for you";
+    # "allow choosing how many cards it sends to Siansa").
+    "together": (False, "on", None, None, "All in one row on Home, in For now's place: For now's first, then Made for you's, then More of you's"),
+    "together_count": (6, "number", 1, 20, "How many cards that one row has, at most"),
     # What's in each.
     "size": (40, "number", 10, 100, "Songs in a mix"),
     "familiar": (40, "number", 0, 100, "Songs you know, in %: the rest are new to you"),

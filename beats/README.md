@@ -118,6 +118,11 @@ app's Home each mix is in: For now, Made for you, and More of you (On repeat, Re
 together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
 anyway gives way to the mix's own name from its sound (with a number if that's taken too).
 
+**All the mixes in one row (0.62.0).** Mixes › settings has a new part, *On Siansa's Home*: **All in one row** sends
+For now's, Made for you's and More of you's mixes as one row, in For now's place on Home (the other two rows then stay
+away), and **How many cards** says how many it has at most (6 unless changed). Off, the three rows are as before.
+Which mixes are made and how many of each is still under *Which mixes*.
+
 **A name says a genre only when it's true (0.61.5).** A mix is songs that sound alike, whatever their genre: that's
 the point. But its name said the genre with the most songs in it, even at well under half ("Clear-sky Drum n Bass" with
 hip hop, dubstep and house in it). Now a name or line says a genre only when six in ten of the mix's songs are in it by
