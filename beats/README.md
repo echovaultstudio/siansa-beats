@@ -123,6 +123,13 @@ For now's, Made for you's and More of you's mixes as one row, in For now's place
 away), and **How many cards** says how many it has at most (6 unless changed). Off, the three rows are as before.
 Which mixes are made and how many of each is still under *Which mixes*.
 
+**Mix settings on a page of their own (0.63.0).** The settings left the foot of the Mixes page: **Mix settings**, at
+its top, opens their own page. Every setting is still there, in three parts of one line each: *Mixes* (For now, Made
+for you), *Your sound* (On repeat, Rediscover, New for you) and *For all mixes* (What's in a mix, Leave out, Made
+around, In Siansa). A mix's line has its switch and says AUTO while it's as it comes, TUNED once something of it is
+changed; a tap opens its choices under it, with **Back to automatic** for that line alone. Nothing about the settings
+themselves or `/api/v1/mixes/settings` changed.
+
 **A name says a genre only when it's true (0.61.5).** A mix is songs that sound alike, whatever their genre: that's
 the point. But its name said the genre with the most songs in it, even at well under half ("Clear-sky Drum n Bass" with
 hip hop, dubstep and house in it). Now a name or line says a genre only when six in ten of the mix's songs are in it by

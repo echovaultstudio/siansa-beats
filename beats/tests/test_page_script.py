@@ -75,6 +75,24 @@ if __name__ == "__main__":
 
 
 class PageDownloadsTest(unittest.TestCase):
+    def test_mix_settings_have_a_page_of_their_own_with_a_place_for_every_setting(self):
+        """0.63 (the owner, 22 Nov: "mix settings shouldn't be hidden at the bottom of the page"; "their own page and be
+        100% organised"): the settings are a page, opened from the top of Mixes, and every setting Siansa Beats has is
+        placed in one of its lines, so none is left under More."""
+        from beats import mix_settings
+        page = open(PAGE, encoding="utf-8").read()
+        self.assertIn('<section data-view="mixsettings">', page)
+        mixes = page[page.index('<section data-view="mixes">'):page.index('<section data-view="mixsettings">')]
+        self.assertIn('href="#mixsettings"', mixes)
+        self.assertNotIn('id="mx-set-groups"', mixes)
+        parts = page[page.index("var MX_PARTS = ["):page.index("var MX_WORDS")]
+        placed = set(re.findall(r'on: "(\w+)"', parts))
+        for names in re.findall(r"more: \[(.*?)\]", parts):
+            placed |= set(re.findall(r'"(\w+)"', names))
+        self.assertEqual(set(mix_settings.SETTINGS) - placed, set())
+        self.assertEqual(placed - set(mix_settings.SETTINGS), set())
+        self.assertEqual(re.findall(r'^  \["([^"]+)"', parts, re.M), ["Mixes", "Your sound", "For all mixes"])
+
     def test_downloads_are_plain_links(self):
         """0.50.2 (the owner, 16 Nov: "it should just stream the download until completion"): every Download button is
         a plain link the browser downloads as it comes, as Beats streams it; the page doesn't fetch it whole first."""
