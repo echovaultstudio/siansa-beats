@@ -128,6 +128,17 @@ class Library(unittest.TestCase):
 
 
 class TheMixes(Library):
+    def test_asks_with_and_without_the_weather_get_the_same_mixes(self):
+        """0.61.3, the owner: "Siansa Beats and the Siansa app not showing the same playlist" (the app said the weather,
+        the page didn't, and each got its own set). The weather the app said last names the set whoever asks."""
+        rainy = self.make(weather="rain")
+        page = self.make()
+        self.assertEqual([m["name"] for sh in page["shelves"] for m in sh["mixes"]],
+                         [m["name"] for sh in rainy["shelves"] for m in sh["mixes"]])
+        self.assertEqual([[x["id"] for x in m["songs"]] for m in page["shelves"][0]["mixes"]],
+                         [[x["id"] for x in m["songs"]] for m in rainy["shelves"][0]["mixes"]])
+        self.assertTrue(page["shelves"][0]["mixes"][0]["name"].startswith("Rainy"))
+
     def test_with_no_listening_they_come_from_the_library_the_calm_ones_first_in_the_dark(self):
         got = self.make()
         self.assertEqual((got["part"], got["days"], got["basis"], got["listens"], got["songs"]), ("early", "weekdays", "library", 0, 180))

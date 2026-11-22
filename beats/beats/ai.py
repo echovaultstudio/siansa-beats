@@ -232,8 +232,10 @@ class Ai:
             _log.warning("The mixes weren't named by the AI: %s", e)
             return {}
         self.last_error = None
+        # The names it's asked not to give are said, not refused (0.61.3): refusing every one that came back left the mixes
+        # of a whole morning with their own names. A name another mix on the page has now is still refused where it's used.
         return clean_names(text, [d["id"] for d in described], moments={d["id"] for d in described if d.get("moment")},
-                           artists={d["id"]: d.get("artists") or [] for d in described}, taken=taken)
+                           artists={d["id"]: d.get("artists") or [] for d in described})
 
 
 # The app's prompt for a plan (its MixGenerator.SYSTEM_PROMPT, moved here in 0.57): the same answers it read before.
