@@ -981,7 +981,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
         <details class="how"><summary>How these are made</summary>
           <p class="sub">Siansa Beats looks at when you play what. The week is cut in ten parts: early morning, morning, afternoon, evening and night, on weekdays and at the weekend. The songs you play in a part fall into a few kinds that sound alike, and each kind is a mix: some of your own songs, and around them songs that sound like them and that you haven't played for a while. A recent listen counts for more, and so does one from this time of year in earlier years.</p>
           <p class="sub">The sun is worked out from the date and your time zone's city: no weather service is asked. In the dark the calmer mixes come first. A mix is named by its sound, never by the weather, and stays the same all day.</p>
-          <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. Skips aren't counted: the app sends finished listens only.</p>
+          <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. A song you skip before it counts as a listen isn't one. The app tells Siansa Beats about it (Siansa Beats 0.64 and an app that sends skips): each skip halves what that song's listens count for, a skipped song doesn't come back as a new find for a while, and a skip fades as a listen does. Made around › Songs you skip count for less switches this off.</p>
           <p class="sub">The next part of the day's mixes are made ten minutes before it starts, so the app finds them ready. With an AI service set up in Setup, each mix of a kind of music gets a name and a short line from it.</p>
         </details>
       </div>
@@ -2438,8 +2438,8 @@ var MX_PARTS = [
     {key: "in", name: "What's in a mix", more: ["size", "familiar", "per_artist"], note: (v) => `${v.size} songs · ${v.familiar}% you know · ${v.per_artist} by one artist`},
     {key: "out", name: "Leave out", more: ["fresh_days", "leave_genres", "leave_artists"],
       note: (v) => [v.fresh_days ? `Played in the last ${v.fresh_days} days` : "", v.leave_genres.length ? plural(v.leave_genres.length, "genre", "genres") : "", v.leave_artists.length ? plural(v.leave_artists.length, "artist", "artists") : ""].filter(Boolean).join(" · ") || "Nothing"},
-    {key: "around", name: "Made around", more: ["time_of_day", "weekend_apart", "daylight", "season", "half_life"],
-      note: (v) => [v.time_of_day ? "Time of day" : "", v.weekend_apart ? "weekends" : "", v.daylight ? "daylight" : "", v.season ? "season" : ""].filter(Boolean).join(" · ") || "Your listening alone"},
+    {key: "around", name: "Made around", more: ["time_of_day", "weekend_apart", "daylight", "season", "skips", "half_life"],
+      note: (v) => [v.time_of_day ? "Time of day" : "", v.weekend_apart ? "weekends" : "", v.daylight ? "daylight" : "", v.season ? "season" : "", v.skips ? "skips" : ""].filter(Boolean).join(" · ") || "Your listening alone"},
     {key: "siansa", name: "In Siansa", more: ["together", "together_count", "ai_names"], keep: true,
       note: (v) => `${v.together ? `One row of ${v.together_count}` : "Each group its own row"} · ${v.ai_names ? "names from AI" : "Siansa Beats' own names"}`},
   ]],
@@ -2448,7 +2448,7 @@ var MX_PARTS = [
 var MX_WORDS = {now_count: "How many", daily_count: "How many", repeat_days: "Looks back … days", forgotten_days: "Not played for … days",
   size: "Songs in a mix", familiar: "Songs you know, in %", per_artist: "By one artist, at most", fresh_days: "Songs played in the last … days",
   leave_genres: "Genres", leave_artists: "Artists", time_of_day: "The part of the day you listen in", weekend_apart: "Weekends apart from weekdays",
-  daylight: "Calmer when it's dark outside", season: "This time of year counts more", half_life: "Listening counts half after … days",
+  daylight: "Calmer when it's dark outside", season: "This time of year counts more", skips: "Songs you skip count for less", half_life: "Listening counts half after … days",
   together: "All in one row on Home", together_count: "Cards in that row, at most", ai_names: "Names and lines from the AI service"};
 var mxSettings = null;  // var: read by refreshMixes, which may run before this line
 var mxOpen = new Set();  // the lines open on the page

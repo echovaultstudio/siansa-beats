@@ -1452,6 +1452,89 @@
         }
       }
     },
+    "/api/v1/skips": {
+      "post": {
+        "summary": "Songs a listener left before they counted as a listen, from the app (the mixes go by them; the same skip twice is kept once)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Server"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "skips"
+                ],
+                "properties": {
+                  "user": {
+                    "type": "string",
+                    "description": "The listener: the name the app scrobbles as (the music server's user name)"
+                  },
+                  "skips": {
+                    "type": "array",
+                    "maxItems": 500,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "at"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "The music server's id of the song"
+                        },
+                        "at": {
+                          "type": "integer",
+                          "description": "When it started, seconds since 1970"
+                        },
+                        "heard": {
+                          "type": "integer",
+                          "description": "Seconds of it heard"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "How many were kept, were here already, or had no date, artist or title",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kept": {
+                      "type": "integer"
+                    },
+                    "known": {
+                      "type": "integer"
+                    },
+                    "skipped": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Something was missing or wrong: {\"error\": why}"
+          },
+          "401": {
+            "description": "The password or API key is needed"
+          }
+        }
+      }
+    },
     "/api/v1/listens/now": {
       "post": {
         "summary": "What's playing now for a listener",

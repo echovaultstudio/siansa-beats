@@ -123,6 +123,13 @@ For now's, Made for you's and More of you's mixes as one row, in For now's place
 away), and **How many cards** says how many it has at most (6 unless changed). Off, the three rows are as before.
 Which mixes are made and how many of each is still under *Which mixes*.
 
+**Skips count (0.64.0).** The app tells Siansa Beats which songs were left before they counted as a listen
+(`POST /api/v1/skips`: `{"user", "skips": [{"id", "at", "heard"}]}`; `features.scrobbling.skips` says it's taken). Only
+the song and the time are kept. In the mixes a skip weighs 1 on its day and fades as a listen does (half after the
+listener's half-life): each whole skip halves what that song's listens weigh, and a song skipped lately isn't brought as
+a new find, in a mix's new songs or in New for you. **Mix settings › Made around › Songs you skip count for less**
+switches it off. Removing a listener's whole history removes their skips.
+
 **Mix settings on a page of their own (0.63.0).** The settings left the foot of the Mixes page: **Mix settings**, at
 its top, opens their own page. Every setting is still there, in three parts of one line each: *Mixes* (For now, Made
 for you), *Your sound* (On repeat, Rediscover, New for you) and *For all mixes* (What's in a mix, Leave out, Made

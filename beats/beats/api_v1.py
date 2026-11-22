@@ -12,6 +12,7 @@ that would break that is v2, next to v1. The full description is ``openapi.json`
     GET  /api/v1/songs/styles/again?ids=  hears up to 10 songs' styles again, on the GPU and the CPU: {"gpu", "cpu"} each
     GET  /api/v1/songs/families?ids=   CLAP's view of up to 20 songs' genre families, and their styles weighed by it (a look, nothing kept)
     POST /api/v1/listens               finished listens of a listener: {"user", "listens": [{"id", "at", "artist", …}]}
+    POST /api/v1/skips                 songs left before they counted as a listen: {"user", "skips": [{"id", "at", "heard"}]}
     POST /api/v1/listens/now           what's playing now: {"user", "artist", "title", "album", "album_artist", "duration"}
     POST /api/v1/loves                 a heart given or taken back: {"user", "artist", "title", "loved"}, on to Last.fm
     GET  /api/v1/listens/top?user=&kind=&from=&to=&limit=   a listener's most listened songs, artists or albums
@@ -115,7 +116,8 @@ def capabilities(app, server=None):
             # AI set up here (POST /api/v1/plan). While it's available the app uses no AI of its own.
             "plans": {"available": app.ai.ready},
             "scrobbling": {"available": True, "listens": kept["listens"], "most_at_once": listens_module.MOST_AT_ONCE,
-                           "totals": True},  # /api/v1/listens/totals (0.33)
+                           "totals": True,  # /api/v1/listens/totals (0.33)
+                           "skips": True},  # POST /api/v1/skips (0.64): songs left before they counted, for the mixes
         },
         "limits": {"profile_ids": MAX_IDS, "genre_songs": None, "genre_ids": MAX_IDS},
     }
@@ -318,6 +320,13 @@ def post(handler, path, body, server=None):
             return handler._error(HTTPStatus.BAD_REQUEST, f"at most {listens_module.MOST_AT_ONCE} listens at a time") or True
         answer = handler.app.listens.add(body.get("user"), rows, "siansa", server or handler.app.servers.default_id)
         return handler._json(answer) or True
+    if path == "/api/v1/skips":  # songs left before they counted as a listen, from the app (0.64): the mixes go by them
+        rows = body.get("skips")
+        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+            return handler._error(HTTPStatus.BAD_REQUEST, 'skips needed: [{"id", "at", "heard"}]') or True
+        if len(rows) > listens_module.MOST_AT_ONCE:
+            return handler._error(HTTPStatus.BAD_REQUEST, f"at most {listens_module.MOST_AT_ONCE} skips at a time") or True
+        return handler._json(handler.app.listens.add_skips(body.get("user"), rows, server or handler.app.servers.default_id)) or True
     if path == "/api/v1/mixes/settings":  # {"user", "settings": {name: value}}: only the ones named change (0.56)
         try:
             return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.set_mix_settings(body.get("user"), body.get("settings"))}) or True

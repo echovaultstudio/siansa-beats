@@ -281,6 +281,38 @@ class TheMixes(Library):
         for shelf in got["shelves"]:  # no two of a shelf by the same name
             self.assertEqual(len(shelf["mixes"]), len({m["name"] for m in shelf["mixes"]}))
 
+    def test_skipped_songs_stay_out_of_the_new_ones_and_count_for_less(self):
+        """0.64, the owner, 22 Nov: "skips need to be registered by Beats"; a song left early came back in New for you."""
+        self.play("rock", "2026-11-10 06:30", times=1)
+        new = lambda: {s["id"] for s in {m["id"]: m for m in self.make()["shelves"][-1]["mixes"]}["new"]["songs"]}  # noqa: E731
+        before = new()
+        left = sorted(before)[:6]
+        kept = self.listens.add_skips("max", [{"id": song, "at": at("2026-11-16 20:00"), "heard": 12} for song in left] +
+                                      [{"id": "nothing-here", "at": at("2026-11-16 20:00")}, {"id": left[0]}])
+        self.assertEqual(kept, {"kept": 6, "known": 0, "skipped": 2})
+        self.assertEqual(self.listens.add_skips("max", [{"id": left[0], "at": at("2026-11-16 20:00")}])["known"], 1)
+        self.assertEqual(self.listens.skip_count("max"), 6)
+        self.mixes._kept.clear()
+        after = new()
+        self.assertFalse(after & set(left))  # not brought as new finds again
+        self.assertTrue(after)
+        # A song's listens weigh half for each fresh skip of it; another listener's skips don't touch mine.
+        local, ordinal = self.listens._local(TZ), datetime.datetime.fromtimestamp(NOW).date().toordinal()
+        rows = {i: n for n, i in enumerate(self.sound.ids)}
+        weigh = lambda: self.mixes._played("max", NOW, None, local, ordinal)["all"][rows["rock3"]]  # noqa: E731
+        whole = weigh()
+        self.listens.add_skips("someone else", [{"id": "rock3", "at": NOW - 60}])
+        self.assertAlmostEqual(weigh(), whole)
+        self.listens.add_skips("max", [{"id": "rock3", "at": NOW - 60}])
+        self.assertAlmostEqual(weigh(), whole / 2, places=4)
+        # Switched off in the listener's settings, skips change nothing.
+        off = mix_settings.defaults() | {"skips": False}
+        self.assertAlmostEqual(self.mixes._played("max", NOW, None, local, ordinal, off)["all"][rows["rock3"]], whole)
+        # A whole history removed takes its skips with it.
+        self.listens.remove("max")
+        self.assertEqual(self.listens.skip_count("max"), 0)
+        self.assertEqual(self.listens.skip_count(), 1)
+
     def test_this_time_of_year_counts_from_earlier_years(self):
         """Piano every early morning last November, rock all spring: in November the piano is back on top."""
         self.play("piano", "2025-11-18 06:30", songs=range(26))
