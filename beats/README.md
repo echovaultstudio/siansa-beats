@@ -166,7 +166,12 @@ end (`intro_vocal_ms`, `outro_vocal_ms`), the bars from each lock to them (`intr
 counts as sung when the vocal stem is within 18 dB of the song's loud vocals, over -48 dBFS and at least 6 % of the
 music's energy there; breaths are filled and blips dropped; a bar is sung when a quarter of it is. It runs when
 nothing else is analysed, a few seconds a song on a GPU (much longer on a CPU), and lets the model go after 10
-minutes idle. **Setup › Vocals for DJ blends › Only songs with vocals** (ticked by default) separates only the songs
+minutes idle. **It's optional and off until switched on** (0.61.4): **Setup › Vocals for DJ blends › Find vocals**,
+with a warning that it takes much longer than the rest of the analysis and, once there are any, how long a song has
+taken on this machine for its vocals against the rest of its analysis (the medians of the latest 100). It's also a
+step of **Get started** on the Overview, marked optional. Switched off, nothing more is separated (a song being
+separated finishes first, and Only vocals ends); the vocals found stay in use, and DJ blends work without them.
+**Setup › Vocals for DJ blends › Only songs with vocals** (ticked by default) separates only the songs
 the voice model scores 0.3 or more as sung, and keeps the rest as instrumental without reading them; unticked, every
 song is separated (also those kept as instrumental before). Each library has a **Vocals** pill under Libraries to
 leave its songs out (a library of podcasts or DJ sets, say; 0.60.1). The Overview has a **Vocals** card like the
@@ -740,10 +745,11 @@ analysis again for every song (0.45; on the page under Libraries › **Start ove
 beats are queued; loudness, key, genres, the sound and the vocals are worked out again while what's known stays in
 use (0.46: the sound was forgotten first before). A paused service starts again.
 
-`POST /api/vocals` with `{"only_sung": bool}` sets Only songs with vocals; with `{"alone": true}` (0.60.2) the rest of
+`POST /api/vocals` with `{"on": bool}` (0.61) switches finding vocals on or off (409 without the model); with
+`{"only_sung": bool}` it sets Only songs with vocals; with `{"alone": true}` (0.60.2) the rest of
 the analysis pauses and the vocals are found now, until every song's are (409 in an image without the model);
-`{"alone": false}`, `/api/pause` and `/api/resume` end it. Its answer, like `GET /api/vocals`, has `alone`, and
-`working` has `for_seconds`.
+`{"alone": false}`, `/api/pause` and `/api/resume` end it (409 too while finding vocals is off). Its answer, like `GET /api/vocals`, has `on`, `chosen` (switched on or
+off yet), `alone`, `vocal_seconds` and `analysis_seconds`, and `working` has `for_seconds`.
 
 `GET /api/health`, `/api/status`, `/api/libraries`, `/api/songs`, `/api/songs/<id>` (with every beat),
 `/api/beats/<id>`, `/api/audio/<id>`, `/api/grids?ids=`, `/api/export.csv`, `/api/export.json`;

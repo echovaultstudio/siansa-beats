@@ -129,6 +129,7 @@ class Finder(unittest.TestCase):
         self.finder = V.Vocals(self.store, self.separator, self.download, self.grid,
                                lambda ids: {r["song_id"]: r["voice"] for r in self.store._rows("SELECT * FROM traits")},
                                lambda: False, self.tmp)
+        self.store.set_setting(V.ON_SETTING, "1")  # switched on (0.61: off until someone does)
         self.finder_decode = V.decode
         V.decode = lambda path, start, seconds: np.zeros((2, int(seconds * V.RATE)), np.float32)
         self.addCleanup(setattr, V, "decode", self.finder_decode)
@@ -234,6 +235,43 @@ class Finder(unittest.TestCase):
         while self.finder.turn() != 60:
             pass
         self.assertEqual(self.finder.status()["stepped_past"], 0)  # from the top again next time
+
+    def test_it_is_off_until_switched_on(self):
+        """0.61, the owner, 20 Nov: optional, with a warning that it's slow; off until switched on, also where vocals
+        were found before (those stay in use)."""
+        self.store.db.execute("DELETE FROM settings WHERE key = ?", (V.ON_SETTING,))
+        self.store.db.commit()
+        self.assertEqual((self.finder.on(), self.finder.chosen()), (False, False))
+        self.assertEqual(self.finder.turn(), 60)
+        self.assertEqual((self.finder.state, self.downloaded), ("switched off", []))
+        self.assertEqual(self.finder.status(fresh=True)["on"], False)
+        self.finder.set_on(True)
+        self.assertEqual((self.finder.on(), self.finder.chosen()), (True, True))
+        self.finder.turn()
+        self.assertEqual(self.downloaded, ["sung"])
+        self.finder.set_on(False)
+        self.assertEqual((self.finder.on(), self.finder.chosen()), (False, True))  # chosen: the start step is done
+        self.assertEqual(V.fields(self.store.vocals(["sung"])["sung"])["vocals"], "separated")  # still in use
+
+    def test_switching_off_ends_only_vocals_and_hands_back(self):
+        handed_back = []
+        self.finder.done_alone = lambda: handed_back.append(True)
+        self.finder.run_alone()
+        self.finder.set_on(False)
+        self.assertEqual((self.finder.alone, handed_back), (False, [True]))
+
+    def test_how_long_a_song_takes_against_the_rest_of_the_analysis(self):
+        """0.61: the warning beside the switch, in this machine's own numbers (the medians of the latest songs)."""
+        self.assertEqual(self.store.median_seconds(), {"vocal_seconds": None, "analysis_seconds": None})
+        for i, (secs, took) in enumerate(((30.0, 4.0), (50.0, 6.0), (40.0, 100.0))):
+            self.store.db.execute("INSERT INTO jobs (song_id, state, started_at, finished_at) VALUES (?, 'done', ?, ?)",
+                                  (f"t{i}", 1000.0 + i, 1000.0 + i + took))
+            self.store.save_vocals(f"t{i}", "separated", {}, V.VERSION, seconds=secs)
+        self.store.save_vocals("t9", "none", None, V.VERSION)  # instrumental: no time to count
+        self.store.db.commit()
+        self.assertEqual(self.store.median_seconds(), {"vocal_seconds": 40.0, "analysis_seconds": 6.0})
+        status = self.finder.status(fresh=True)
+        self.assertEqual((status["vocal_seconds"], status["analysis_seconds"]), (40.0, 6.0))
 
     def test_when_only_songs_it_cant_do_are_left_it_is_done(self):
         """0.61.1, the owner, 21 Nov: "beats will report looking for song even though its done" (46 to go that never

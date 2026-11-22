@@ -1647,9 +1647,17 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
                 return self._json({"doubted": doubted, **app.style_models()})
             if path == "/api/vocals":  # {"only_sung": bool}: separate only the songs the voice model calls sung (0.60)
+                if "on" in body:  # {"on": bool}: find vocals at all (0.61; off until switched on, as it's slow)
+                    if body["on"] and not app.vocals.available:
+                        return self._error(HTTPStatus.CONFLICT, "This image has no vocal separation model.")
+                    app.vocals.set_on(bool(body["on"]))
+                    app.store.event("Vocals for DJ blends: " + ("switched on: vocals are found when nothing else is analysed"
+                                                              if body["on"] else "switched off: the vocals found stay in use"))
                 if "alone" in body:  # {"alone": true}: Only vocals (0.60.2): the rest pauses until every song's vocals are found
                     if body["alone"] and not app.vocals.available:
                         return self._error(HTTPStatus.CONFLICT, "This image has no vocal separation model.")
+                    if body["alone"] and not app.vocals.on():
+                        return self._error(HTTPStatus.CONFLICT, "Switch on Find vocals first, under Setup › Vocals for DJ blends.")
                     if body["alone"]:
                         app.worker.pause(True)
                         app.store.event("Only vocals: the rest of the analysis waits until every song's vocals are found")
