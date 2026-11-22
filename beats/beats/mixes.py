@@ -108,7 +108,6 @@ SEASONS = ("Winter", "Spring", "Summer", "Autumn")  # by month, December to Febr
 MOMENTS = {"early": "Early", "morning": "Morning", "afternoon": "Afternoon", "evening": "Evening", "night": "Late-night"}
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 LOW, HIGH = 0.42, 0.58  # where low ends and high starts, as a share of the library
-KEEPS_TO = 0.5  # a mix this much in one genre keeps to it: songs not in that genre at all go
 NAMED_FOR = 0.6  # a name says a genre only when this much of the mix is in it
 AI_WAIT = 12  # seconds the app's ask waits for the AI's names of new mixes before it gets their own
 NAMES_REMEMBERED = 14  # days of the AI's names it's told not to give again
@@ -719,8 +718,8 @@ class Mixes:
                 for g in [g for g in tags.get(song_id, ()) if g["source"] == "tag"][:1]:
                     tally[g["label"]] = tally.get(g["label"], 0.0) + weight
         genres = [name for name, _ in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0]))][:3]
-        # How much of it is in its first genre (0.61.5, the owner: "Clear-sky Drum n Bass contains quite a few not drum
-        # and bass tracks"): a name only says a genre most of its songs are in.
+        # How much of it is in its first genre (0.61.5, the owner: "it's ok for songs not in the same genre to be in a
+        # mix. That's the point. But it shouldn't be named after the genre if it's a mix of songs").
         sure = round(tally[genres[0]] / sum(tally.values()), 3) if genres else 0.0
         tags = []
         traits = self.traits.of(ids) if self.traits is not None else {}
@@ -761,10 +760,10 @@ class Mixes:
         ways = ways[turn % len(ways):] + ways[:turn % len(ways)]
         name = None
         for way in ways:
-            if way == "moment" and genre:
+            if way == "moment":
                 word = next((w for w in moment if w.casefold() not in used), None)
-                if word:
-                    name = f"{word} {genre}"
+                if word:  # a mix of genres is named for the moment alone (0.61.5)
+                    name = f"{word} {genre}" if genre else f"{word} mix"
             elif way == "sound" and (sound or genre):
                 word = next((w for w in sound if w.casefold() not in used), None)
                 if word or not sound:
@@ -818,21 +817,6 @@ class Mixes:
                                        taken=have | set(taken), per_artist=per_artist)
         mine = set(mine)
         return [(row, row in mine) for row, _ in picked]
-
-    def _true(self, picked):
-        """``picked`` kept to its genre (0.61.5): when half or more of its songs are in one genre by their sound, the
-        songs that aren't in it at all go (a hip-hop song that sounds near a drum and bass mix's middle), unless too
-        few would be left. Songs whose genre isn't heard yet stay. A shorter mix, not another kind's songs."""
-        ids = [self.sound.ids[row] for row, _ in picked]
-        heard = self.store.heard_of(ids, genres_module.HEARD_MIN, genres_module.HEARD_RANK)
-        first = [heard[i][0][0] for i in ids if heard.get(i)]
-        if not first:
-            return picked
-        genre, count = max(((g, first.count(g)) for g in set(first)), key=lambda kv: (kv[1], kv[0]))
-        if count / len(first) < KEEPS_TO:
-            return picked
-        kept = [(row, own) for (row, own), i in zip(picked, ids) if not heard.get(i) or any(label == genre for label, _ in heard[i])]
-        return kept if len(kept) >= max(A_FEW, len(picked) // 2) else picked
 
     def _mix(self, mix_id, picked, why, taken, name=None, like=None, used=None, moment=None, turn=0):
         rows = [row for row, _ in picked]
@@ -924,7 +908,6 @@ class Mixes:
         mixes = []
         for n, (_, own, centre, like, reach) in enumerate(ranked[:chosen["now_count"]] if chosen["now"] else []):
             picked = fill(centre, list(map(int, own)) if weights is not None else [], stale, server, size, seed(f"now-{n}"), reach=reach)
-            picked = self._true(picked)
             if len(picked) >= A_FEW:
                 why = ("Like " + _and(like["artists"]) + ".") if like["artists"] and weights is not None else "From your library."
                 _, month, _, _, weekday, _ = local(at)
@@ -948,7 +931,7 @@ class Mixes:
         daily = self._grouped(everything, 300, k, least=min(k, len(everything) // KIND)) if len(everything) >= ENOUGH else []
         mixes = []
         for n, (own, own_w, centre, reach) in enumerate(daily if chosen["daily"] else []):
-            picked = self._true(fill(centre, list(map(int, own)), stale, server, size, seed(f"daily-{n}"), reach=reach))
+            picked = fill(centre, list(map(int, own)), stale, server, size, seed(f"daily-{n}"), reach=reach)
             if len(picked) >= A_FEW:
                 like = self._like(own[:60], own_w[:60])
                 # Named and described by the songs in it, not by the listening it grew from (0.61.5).

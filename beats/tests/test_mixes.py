@@ -128,32 +128,26 @@ class Library(unittest.TestCase):
 
 
 class TheMixes(Library):
-    def test_a_mix_mostly_of_one_genre_keeps_to_it_and_a_mixed_one_isnt_named_for_one(self):
-        """0.61.5, the owner, 22 Nov: "Clear-sky Drum n Bass contains quite a few not drum and bass tracks"."""
-        def hears(song, *genres):
-            for n, g in enumerate(genres):
-                self.store.db.execute("INSERT OR REPLACE INTO genres VALUES (?, 'sound', ?, ?)", (song, g, 0.9 - n * 0.2))
+    def test_a_mix_of_genres_isnt_named_for_one(self):
+        """0.61.5, the owner, 22 Nov: "it's ok for songs not in the same genre to be in a mix. That's the point. But it
+        shouldn't be named after the genre if it's a mix of songs" ("Clear-sky Drum n Bass" with hip hop and house)."""
+        def hears(song, genre):
+            self.store.db.execute("INSERT OR REPLACE INTO genres VALUES (?, 'sound', ?, 0.9)", (song, genre))
         self.make()  # reads the sound into memory
         rows = {i: n for n, i in enumerate(self.sound.ids)}
-        picked = [(rows[f"piano{n}"], False) for n in range(10)]
-        for n in range(7):
-            hears(f"piano{n}", "Electronic---Drum n Bass")
-        hears("piano7", "Hip Hop---Pop Rap")                               # another genre altogether: goes
-        hears("piano8", "Electronic---Dubstep", "Electronic---Drum n Bass")  # in it too, by its sound: stays
-        self.store.db.commit()                                                # piano9: not heard yet, stays
-        kept = [self.sound.ids[row] for row, _ in self.mixes._true(picked)]
-        self.assertEqual(kept, [f"piano{n}" for n in (0, 1, 2, 3, 4, 5, 6, 8, 9)])
-        # No genre has half of it: nothing goes, and its name says no genre.
-        for n, g in enumerate(("Rock---Indie", "Hip Hop---Pop Rap", "Jazz---Bop", "Electronic---House", "Folk---Folk")):
-            for k in (0, 1):
-                self.store.db.execute("DELETE FROM genres WHERE song_id = ?", (f"piano{n * 2 + k}",))
-                hears(f"piano{n * 2 + k}", g)
+        mixed = [rows[f"piano{n}"] for n in range(10)]
+        for n in range(10):  # four in ten drum and bass, the rest three other genres
+            hears(f"piano{n}", "Electronic---Drum n Bass" if n < 4 else ("Hip Hop---Pop Rap", "Electronic---House", "Electronic---Dubstep")[n % 3])
         self.store.db.commit()
-        self.assertEqual(len(self.mixes._true(picked)), 10)
-        like = self.mixes._like([row for row, _ in picked])
-        self.assertLess(like["sure"], M.NAMED_FOR)
-        name = M.Mixes._name(like, set(), set(), ["Rainy"], 0)
-        self.assertFalse(any(g in name for g in ("Indie", "Pop Rap", "Bop", "House", "Folk")), name)
+        like = self.mixes._like(mixed)
+        self.assertEqual((like["genres"][0], like["sure"]), ("Drum n Bass", 0.4))
+        name = M.Mixes._name(like, set(), set(), ["Clear-sky"], 0)
+        self.assertEqual(name, "Clear-sky mix")
+        self.assertNotIn("drum n bass", M._about(like))
+        for n in range(4, 7):  # seven in ten: it's named for it
+            hears(f"piano{n}", "Electronic---Drum n Bass")
+        self.store.db.commit()
+        self.assertEqual(M.Mixes._name(self.mixes._like(mixed), set(), set(), ["Clear-sky"], 0), "Clear-sky Drum n Bass")
 
     def test_asks_with_and_without_the_weather_get_the_same_mixes(self):
         """0.61.3, the owner: "Siansa Beats and the Siansa app not showing the same playlist" (the app said the weather,
