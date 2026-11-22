@@ -27,7 +27,8 @@ Beside the slot's mixes: the listener's all-time groups ("Made for you"), **On r
 
 A mix is the same all day: what's picked by chance is picked by the day's date, and what's made is kept until the
 part of the day, the light or the date changes (or the library or the listening grows by much: :meth:`Mixes._grown`),
-not every time a song is heard. Not counted: skips (the app sends finished listens only).
+not every time a song is heard. A skip isn't a listen (the app sends finished listens only); since 0.64 the app says
+which songs were left before they counted, and they count against a song (:data:`SKIP_OUT`, ``_played``).
 
 **Names** (0.54): with an AI service set up (:mod:`beats.ai`), the mixes of a kind of music are named by it, from
 their description only ("Velvet Undertow"); the names are kept for the day and the mix shows its sound's name until
@@ -78,6 +79,7 @@ SEASON_DAYS = 30  # a listen within this many days of today's date in an earlier
 SEASON_WEIGHT = 0.35  # …counts this much more, however old
 ENOUGH = 25  # songs a slot needs to stand on its own
 A_FEW = 8  # the fewest songs anything is made from, and the fewest a mix has
+SKIP_OUT = 0.5  # skipped this much (one skip, until it has faded by half): the song isn't brought as a new find
 SIZE = 40  # songs in a mix
 FAMILIAR = 0.4  # the share of a mix that's the listener's own songs of that group
 FRESH_DAYS = 45  # the songs around them weren't played for this long
@@ -656,7 +658,12 @@ class Mixes:
     def _played(self, user, at, server, local, ordinal, chosen=None, out=lambda row: False):
         """The listener's listens of songs whose sound is known (and that ``server`` has), by row of the sound's
         matrix: ``{"slots": {(part, days): {row: weight}}, "parts": {part: {…}}, "all": {…}, "last": {row: at},
-        "count": {row: listens}, "recent": {row: listens in the last REPEAT_DAYS days}, "listens": how many}``."""
+        "count": {row: listens}, "recent": {row: listens in the last REPEAT_DAYS days}, "listens": how many,
+        "skipped": {row: how much it was skipped}}``.
+
+        Skips (0.64, the owner, 22 Nov: "skips need to be registered"): a skip weighs 1 on the day and fades as a listen
+        does (half after ``half_life`` days). Each whole skip halves what the song's listens weigh, so a song skipped
+        as often as it's played sinks, and one skipped once in a hundred listens hardly moves."""
         chosen = chosen or mix_settings.defaults()
         half_life, repeat_days = chosen["half_life"], chosen["repeat_days"]
         index, mask = self.sound.index, self.sound._mask(server)
@@ -687,8 +694,20 @@ class Mixes:
             if r[AT] > last.get(row, 0):
                 last[row] = r[AT]
             listens += 1
+        skipped = {}
+        for song, when in (self.listens.skips(user) if user and chosen["skips"] else ()):
+            row = index.get(song)
+            if row is None or when > at:
+                continue
+            age = max(0, ordinal - local(when)[5])
+            skipped[row] = skipped.get(row, 0.0) + 0.5 ** (age / half_life)
+        for row, weight in skipped.items():
+            less = 0.5 ** weight
+            for into in (*slots.values(), *parts.values(), everything):
+                if row in into:
+                    into[row] *= less
         return {"slots": slots, "parts": parts, "all": everything, "last": last, "count": count, "recent": recent,
-                "listens": listens}
+                "listens": listens, "skipped": skipped}
 
     # ---- what a group of songs is like ----
 
@@ -875,6 +894,10 @@ class Mixes:
         mark = f"|again {again}" if again else ""
         seed = lambda what: random.Random(int(hashlib.sha256(f"{user}|{ordinal}|{what}{mark}".encode()).hexdigest()[:12], 16))  # noqa: E731
         stale = {row for row, when in played["last"].items() if at - when < chosen["fresh_days"] * 86400}
+        # A song skipped lately doesn't come back as a find around the listener's own (0.64): not as one of a mix's
+        # new songs, and not in New for you. One skip keeps it away for a half-life; skipped again, longer.
+        passed = {row for row, weight in played["skipped"].items() if weight >= SKIP_OUT}
+        stale |= passed
         weekly = "weekdays" if days == DAYS[0] else "the weekend"
         slot = played["slots"].get((part, days), {}) if chosen["weekend_apart"] else {}
         if not chosen["time_of_day"] and len(played["all"]) >= A_FEW:
@@ -966,7 +989,7 @@ class Mixes:
             if len(picked) >= A_FEW:
                 mixes.append(self._mix("rediscover", [(row, True) for row, _ in picked], f"Songs you played a lot, and not for {_span(forgotten_days)}.", taken, name="Rediscover"))
         if chosen["new"] and daily:
-            ever, fresh, each = set(played["count"]), [], max(A_FEW, size // len(daily))
+            ever, fresh, each = set(played["count"]) | passed, [], max(A_FEW, size // len(daily))
             for n, (_, _, centre, reach) in enumerate(daily):
                 fresh += fill(centre, [], ever, server, each, seed(f"new-{n}"), taken={row for row, _ in fresh}, reach=reach, familiar=0.0)
             rng = seed("new")

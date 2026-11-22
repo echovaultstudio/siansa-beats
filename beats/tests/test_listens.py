@@ -405,6 +405,15 @@ class ListeningService(Service):
             self.call("/api/v1/listens", "POST", {"user": "max", "listens": "all of them"})
         self.assertEqual(e.exception.code, 400)
         self.call("/api/v1/listens/now", "POST", {"user": "max", "artist": "House Test", "title": "Deep", "duration": 50})
+        # Songs left before they counted (0.64): kept for the mixes, and no listen.
+        self.assertTrue(caps["skips"])
+        skipped = self.call("/api/v1/skips", "POST", {"user": "max", "skips": [
+            {"id": "t140", "at": now - 50, "heard": 9}, {"id": "not-here", "at": now - 40}]})
+        self.assertEqual(skipped, {"kept": 1, "known": 0, "skipped": 1})
+        self.assertEqual(self.app.listens.skips("max"), [(self.app.store.resolve(["t140"])["t140"], now - 50)])
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            self.call("/api/v1/skips", "POST", {"user": "max", "skips": "some"})
+        self.assertEqual(e.exception.code, 400)
 
         top = self.call("/api/v1/listens/top?user=max&kind=songs")
         self.assertEqual([(t["title"], t["listens"], t["id"]) for t in top["top"]], [("Control", 2, "t140"), ("Elsewhere", 1, None)])

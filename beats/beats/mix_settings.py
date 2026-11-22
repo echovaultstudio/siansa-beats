@@ -37,6 +37,7 @@ SETTINGS = {
     "weekend_apart": (True, "on", None, None, "Weekends apart from weekdays"),
     "daylight": (True, "on", None, None, "Calmer when it's dark outside"),
     "season": (True, "on", None, None, "This time of year counts more"),
+    "skips": (True, "on", None, None, "Songs you skip count for less"),
     "half_life": (120, "number", 14, 730, "Listening counts half after … days"),
     "repeat_days": (30, "number", 7, 90, "On repeat looks back … days"),
     "forgotten_days": (180, "number", 30, 730, "Rediscover: not played for … days"),

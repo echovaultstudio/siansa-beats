@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS listens (
 );
 CREATE INDEX IF NOT EXISTS listens_by_artist ON listens (user, akey, at);
 CREATE INDEX IF NOT EXISTS listens_waiting ON listens (relayed, user) WHERE relayed = 0;
+-- 0.64: songs a listener left before they counted as a listen (the app says so); the mixes go by them
+CREATE TABLE IF NOT EXISTS skips (user TEXT NOT NULL, song_id TEXT NOT NULL, at INTEGER NOT NULL, heard INTEGER,
+    PRIMARY KEY (user, song_id, at));
 """
 
 MEMORY_MINUTES = 30  # a listener's listens stay in memory this long after the numbers were last asked for
@@ -477,6 +480,7 @@ class Listens:
             if "album_artist" not in {r[1] for r in store.db.execute("PRAGMA table_info(listens)")}:
                 store.db.execute("ALTER TABLE listens ADD COLUMN album_artist TEXT")
         self.changes = 0  # counts every change, so kept numbers know when they're old
+        self.skipped = 0  # counts every skip kept: the listening numbers don't change with one, the mixes may
         self.playing = {}  # listener -> {"artist", "title", "album", "at"}: what the app says is playing
         self.importing = {"running": False}
         self.relay_state = {}  # listener -> {"error", "at"}: the last trouble sending on to Last.fm
@@ -701,6 +705,43 @@ class Listens:
                 self._forget_kept()
         return {"kept": kept, "known": len(values) - kept, "skipped": skipped}
 
+    def add_skips(self, user, rows, server=None):
+        """Keeps ``rows`` (``{"id" (a server's id for the song), "at", "heard" (seconds of it heard)}``) as songs
+        ``user`` left before they counted as a listen (0.64, the owner, 22 Nov: "skips need to be registered"):
+        ``{"kept", "known", "skipped"}``; ``known``: already here, ``skipped``: without a date, or a song not here.
+        Only what the mixes need is kept: which song and when, not what it was called."""
+        user = self.who(user)
+        rows = [r for r in rows if isinstance(r, dict)]
+        latest, year = self.now() + 86400, datetime.datetime(FIRST_YEAR, 1, 1, tzinfo=datetime.timezone.utc).timestamp()
+        by_id = self.store.resolve([str(r["id"]) for r in rows if r.get("id")], server)
+        values = []
+        for r in rows:
+            at, song_id = r.get("at"), by_id.get(str(r.get("id")))
+            if isinstance(at, bool) or not isinstance(at, (int, float)) or not year <= at <= latest or song_id is None:
+                continue
+            try:
+                heard = max(0, int(float(r.get("heard") or 0)))
+            except (TypeError, ValueError):
+                heard = 0
+            values.append((user, song_id, int(at), heard))
+        with self.store._write():
+            before = self.store.db.execute("SELECT COUNT(*) FROM skips WHERE user=?", (user,)).fetchone()[0]
+            self.store.db.executemany("INSERT OR IGNORE INTO skips (user, song_id, at, heard) VALUES (?, ?, ?, ?)", values)
+            kept = self.store.db.execute("SELECT COUNT(*) FROM skips WHERE user=?", (user,)).fetchone()[0] - before
+        if kept:
+            self.skipped += 1
+        return {"kept": kept, "known": len(values) - kept, "skipped": len(rows) - len(values)}
+
+    def skips(self, user):
+        """``[(song id, at)]``: every song ``user`` left before it counted, oldest first."""
+        return [(r["song_id"], r["at"]) for r in self.store._rows("SELECT song_id, at FROM skips WHERE user=? ORDER BY at", (self.who(user),))]
+
+    def skip_count(self, user=None):
+        """How many skips are kept (``user``'s, or everyone's)."""
+        if user is None:
+            return self.store._rows("SELECT COUNT(*) AS n FROM skips")[0]["n"]
+        return self.store._rows("SELECT COUNT(*) AS n FROM skips WHERE user=?", (self.who(user),))[0]["n"]
+
     def _songs(self):
         """``{(artist, title) as compared: song id}`` of the songs here, to link a listen that came without an id."""
         return {(key(r["artist"]), key(r["title"])): r["id"]
@@ -776,6 +817,8 @@ class Listens:
         with self.store._write():
             moved = self.store.db.execute("UPDATE OR IGNORE listens SET user=? WHERE user=?", (new, old)).rowcount
             self.store.db.execute("DELETE FROM listens WHERE user=?", (old,))  # the ones new had already
+            self.store.db.execute("UPDATE OR IGNORE skips SET user=? WHERE user=?", (new, old))
+            self.store.db.execute("DELETE FROM skips WHERE user=?", (old,))
         relays = dict(self._relays())
         if old in relays:
             mine = relays.pop(old)
@@ -859,6 +902,7 @@ class Listens:
                 gone = self.store.db.execute("DELETE FROM listens WHERE user=? AND source=?", (user, source)).rowcount
             else:
                 gone = self.store.db.execute("DELETE FROM listens WHERE user=?", (user,)).rowcount
+                self.store.db.execute("DELETE FROM skips WHERE user=?", (user,))  # the whole history: its skips too
         if gone:
             self.changes += 1
             self._forget_kept()
