@@ -118,6 +118,12 @@ app's Home each mix is in: For now, Made for you, and More of you (On repeat, Re
 together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
 anyway gives way to the mix's own name from its sound (with a number if that's taken too).
 
+**A name says a genre only when it's true (0.61.5).** A mix is songs that sound alike, whatever their genre: that's
+the point. But its name said the genre with the most songs in it, even at well under half ("Clear-sky Drum n Bass" with
+hip hop, dubstep and house in it). Now a name or line says a genre only when six in ten of the mix's songs are in it by
+their sound; otherwise it's named for its feel or the moment alone ("Clear-sky mix"). The songs in a mix are as before.
+Made for you's mixes are named by the songs in them, not by the listening they grew from.
+
 **The same mixes on the app and the page (0.61.3).** The app's asks said the weather and the page's didn't, and the
 weather was part of which set of mixes was kept, so each got its own set ("Grey-sky Drum n Bass" on the phone,
 "Sunday Drum n Bass" on the page). The weather now only names a set: the word the app said last is kept, and whoever

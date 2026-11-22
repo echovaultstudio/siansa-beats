@@ -1,4 +1,4 @@
 """Siansa Beats: Beat This! beat and downbeat tracking for the chosen libraries of your music servers (Navidrome, Emby,
 Jellyfin), for Siansa Dev's DJ blends."""
 
-__version__ = "0.61.4"
+__version__ = "0.61.5"

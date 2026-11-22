@@ -128,6 +128,27 @@ class Library(unittest.TestCase):
 
 
 class TheMixes(Library):
+    def test_a_mix_of_genres_isnt_named_for_one(self):
+        """0.61.5, the owner, 22 Nov: "it's ok for songs not in the same genre to be in a mix. That's the point. But it
+        shouldn't be named after the genre if it's a mix of songs" ("Clear-sky Drum n Bass" with hip hop and house)."""
+        def hears(song, genre):
+            self.store.db.execute("INSERT OR REPLACE INTO genres VALUES (?, 'sound', ?, 0.9)", (song, genre))
+        self.make()  # reads the sound into memory
+        rows = {i: n for n, i in enumerate(self.sound.ids)}
+        mixed = [rows[f"piano{n}"] for n in range(10)]
+        for n in range(10):  # four in ten drum and bass, the rest three other genres
+            hears(f"piano{n}", "Electronic---Drum n Bass" if n < 4 else ("Hip Hop---Pop Rap", "Electronic---House", "Electronic---Dubstep")[n % 3])
+        self.store.db.commit()
+        like = self.mixes._like(mixed)
+        self.assertEqual((like["genres"][0], like["sure"]), ("Drum n Bass", 0.4))
+        name = M.Mixes._name(like, set(), set(), ["Clear-sky"], 0)
+        self.assertEqual(name, "Clear-sky mix")
+        self.assertNotIn("drum n bass", M._about(like))
+        for n in range(4, 7):  # seven in ten: it's named for it
+            hears(f"piano{n}", "Electronic---Drum n Bass")
+        self.store.db.commit()
+        self.assertEqual(M.Mixes._name(self.mixes._like(mixed), set(), set(), ["Clear-sky"], 0), "Clear-sky Drum n Bass")
+
     def test_asks_with_and_without_the_weather_get_the_same_mixes(self):
         """0.61.3, the owner: "Siansa Beats and the Siansa app not showing the same playlist" (the app said the weather,
         the page didn't, and each got its own set). The weather the app said last names the set whoever asks."""
