@@ -110,8 +110,18 @@ class TheService(unittest.TestCase):
                                   {"id": "now-2", "genres": ["Pop"], "energy": "high-energy", "mood": "bright", "artists": ["B"], "tags": []}])
         self.assertEqual(got, {"now-1": {"name": "Velvet Undertow", "about": "Hazy synths, slow pulse"}})
         sent = self.fake.sent[0][2]["messages"]
-        self.assertIn("never weather", sent[0]["content"])
+        self.assertIn("never says weather", sent[0]["content"])
+        self.assertIn("no artist or song names", sent[0]["content"])
         self.assertIn('"genres": ["Ambient"]', sent[1]["content"])
+        # Names its other mixes have are said, so none comes back (0.60.5).
+        self.ai.name_mixes([{"id": "now-3"}], taken=["On repeat", "Night Drive"])
+        self.assertIn("Night Drive, On repeat", self.fake.sent[-1][2]["messages"][1]["content"])
+        # 0.61.2: a mix for right now may say the moment it's given; one with its own artist in its name is left out.
+        self.fake.reply = '{"now-1": {"name": "Rainy Saturday Static"}, "now-2": {"name": "Rainy Days"}, "now-3": {"name": "Loathe Forever"}}'
+        got = self.ai.name_mixes([{"id": "now-1", "moment": {"weather": "rain", "day": "Saturday"}}, {"id": "now-2"},
+                                  {"id": "now-3", "artists": ["Loathe"]}])
+        self.assertEqual(got, {"now-1": {"name": "Rainy Saturday Static"}})
+        self.assertIn('"moment": {"weather": "rain"', self.fake.sent[-1][2]["messages"][1]["content"])
         self.fake.fail = urllib.error.URLError("down")
         self.assertEqual(self.ai.name_mixes([{"id": "now-1"}]), {})
         self.assertIn("can't be reached", self.ai.settings()["error"])

@@ -113,6 +113,44 @@ as they come, the mixes are made as before. After a change, **Make the mixes aga
 app's Mix settings) makes them again now, a new pick from the same songs and settings, as many times as wanted that day
 (0.60.4; `POST /api/v1/mixes/again` with the `user`; a new day starts afresh).
 
+**Names that match the app, and never the same twice (0.60.5).** The switches on the Mixes page say which row of the
+app's Home each mix is in: For now, Made for you, and More of you (On repeat, Rediscover, New for you). No two mixes shown
+together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
+anyway gives way to the mix's own name from its sound (with a number if that's taken too).
+
+**The same mixes on the app and the page (0.61.3).** The app's asks said the weather and the page's didn't, and the
+weather was part of which set of mixes was kept, so each got its own set ("Grey-sky Drum n Bass" on the phone,
+"Sunday Drum n Bass" on the page). The weather now only names a set: the word the app said last is kept, and whoever
+asks gets the same mixes with the same names. And the AI's names are no longer refused for being ones it gave before
+(it's asked not to, which is enough): that left a whole morning's mixes with their own names. When it gives none that
+can be used, the log says so.
+
+**AI names that suit the moment, and no artists (0.61.2).** With *Names and lines from the AI service* on, the AI names
+For now and Made for you: creative names that suit the music, never a mood word and a genre, never an artist (Artist
+radios are for that; a name with one of its own artists is left out), none given in the last two weeks. For now's
+mixes tell it what right now is like (the part of the day, the day, the light, the season and the weather when the app
+sends it), which their names may draw on; Made for you's never say it. The app's ask waits up to 12 seconds for new
+mixes' AI names, so they show at once instead of the next time. With it off, the mixes' own names never name artists
+either: for the moment ("Rainy Folk") or for the sound ("Smoky Alternative Rock"). On repeat, Rediscover and New for you
+keep their names.
+
+**Vocals done is done (0.61.1).** Songs whose vocals can't be found yet (no voice score, or no beats here) kept the
+Overview saying "looking for the next song…" and "46 to go" when every other song was done. They're now counted apart
+("✓ all done · 46 can't be done yet"), the Now card doesn't show Vocals for them, and it looks again every ten minutes.
+
+**Names with more to them (0.61.0).** A page no longer says "Hushed" four times. Each mix's name takes a first word
+none of the page's other names have, from a bigger choice of words for its sound ("Smoky", "Restless", "Kinetic"…),
+and a row takes turns: named for the moment or for its sound (artists left out since 0.61.2). The mixes
+of now, which are made again when the part of the day, the light or the weather changes, can say the moment: the
+weather when the app sends it (`weather=rain`, one word, never where you are; only when its Weather is on), the dark,
+a Friday or the weekend's day, the part of the day or the season ("Rainy Folk", "Dark-morning Metalcore", "Sunday
+Piano"). The mixes for all day never do. Names from the AI service are as before.
+
+**As many mixes as you ask for (0.60.6).** For now looked for at most four groups, whatever its count said, and kinds of
+music that sound alike were joined to fewer mixes than asked. Now For now and Made for you make as many as their counts
+say, where you've played songs enough (about 40 a mix): kinds that sound alike stay apart, and the biggest is halved if
+need be.
+
 **The app's plans, by the AI here (0.57).** The Siansa app asks the AI set up on Setup for its own playlists too: the
 title, sound search, line and sound words to steer by of its vibes, Today's mix, Flow's words and the mood radios
 (`POST /api/v1/plan` with the app's `brief`; `features.plans` in the capabilities says whether it can). The app then
@@ -128,7 +166,7 @@ end (`intro_vocal_ms`, `outro_vocal_ms`), the bars from each lock to them (`intr
 counts as sung when the vocal stem is within 18 dB of the song's loud vocals, over -48 dBFS and at least 6 % of the
 music's energy there; breaths are filled and blips dropped; a bar is sung when a quarter of it is. It runs when
 nothing else is analysed, a few seconds a song on a GPU (much longer on a CPU), and lets the model go after 10
-minutes idle. **It's optional and off until switched on** (0.61): **Setup › Vocals for DJ blends › Find vocals**,
+minutes idle. **It's optional and off until switched on** (0.61.4): **Setup › Vocals for DJ blends › Find vocals**,
 with a warning that it takes much longer than the rest of the analysis and, once there are any, how long a song has
 taken on this machine for its vocals against the rest of its analysis (the medians of the latest 100). It's also a
 step of **Get started** on the Overview, marked optional. Switched off, nothing more is separated (a song being

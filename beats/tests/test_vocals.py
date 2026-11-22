@@ -273,6 +273,27 @@ class Finder(unittest.TestCase):
         status = self.finder.status(fresh=True)
         self.assertEqual((status["vocal_seconds"], status["analysis_seconds"]), (40.0, 6.0))
 
+    def test_when_only_songs_it_cant_do_are_left_it_is_done(self):
+        """0.61.1, the owner, 21 Nov: "beats will report looking for song even though its done" (46 to go that never
+        go). A whole round over the list with none done: all done, those counted apart, and a longer rest."""
+        while self.finder.turn() not in (60, V.STUCK_REST):
+            pass
+        for i in range(3):
+            self.store.db.execute("INSERT INTO jobs (song_id, state, finished_at) VALUES (?, 'done', 9)", (f"new{i}",))
+            self.store.db.execute("INSERT INTO traits VALUES (?, 0.9)", (f"new{i}",))
+        self.store.db.commit()
+        self.finder.grid = lambda song_id: None if song_id.startswith("new") else self.grid(song_id)
+        self.finder._moved = 0
+        rests = [self.finder.turn(), self.finder.turn()]
+        self.assertEqual(rests[-1], V.STUCK_REST)
+        status = self.finder.status(fresh=True)
+        # All done: every song still waiting by the counts (these, and one with no voice score) can't be yet, and the
+        # page takes them off what's to go.
+        self.assertEqual(status["state"], "all done")
+        self.assertEqual(status["stuck"], status["waiting"])
+        self.finder.turn()  # looking again later: still counted apart, so the page doesn't say it's looking
+        self.assertEqual(self.finder.status()["stuck"], 3)
+
     def test_it_says_when_it_waits_for_the_rest(self):
         self.finder.busy = lambda: True
         self.finder.turn()

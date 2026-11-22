@@ -3409,8 +3409,10 @@ function kindsOf(s) {
     {id: "vocals", href: "#setup", name: "Vocals", what: "Where someone sings, bar by bar, at each end of a song: so DJ blends never lay two voices over each other.",
       by: vo.available ? `<b>Hybrid Demucs</b>${where}` : "<b>None</b>: this image has no vocal separation model",
       done: (vo.separated || 0) + (vo.none || 0), total: vo.available ? (vo.separated || 0) + (vo.none || 0) + (vo.waiting || 0) + (vo.failed || 0) : null,
-      failed: vo.failed || 0, busy: 0, now: vo.working ? "separating a song now" : "", left: vo.waiting || 0, off: !vo.available,
-      // Optional (0.61): off until switched on under Setup, as it's slow.
+      // Songs a whole round couldn't do (0.61.1): not "to go", the rest being done.
+      failed: vo.failed || 0, busy: 0, now: vo.working ? "separating a song now" : "", left: Math.max(0, (vo.waiting || 0) - (vo.stuck || 0)),
+      stuck: vo.stuck || 0, off: !vo.available,
+      // Optional (0.61.4): off until switched on under Setup, as it's slow.
       switchedOff: vo.available && vo.on === false && !vo.working,
       // Waiting for the rest: it only runs when nothing else is analysed, unless Only vocals.
       // Waiting for the rest, as the finder says (0.60.3), not guessed from the other counts.
@@ -3454,7 +3456,7 @@ function drawTiles(s) {
       <div class="for">${esc(k.what)}</div>
       <div class="meter" aria-hidden="true"><span class="done" style="width:${w(k.done)}"></span><span class="failed" style="width:${w(k.failed)}"></span><span class="busy" style="width:${w(k.busy)}"></span></div>
       <div class="by">Measured by ${k.by}</div>
-      <div class="foot"><span>${state}${k.failed ? ` · ${num(k.failed)} failed` : ""}</span></div></div>`;
+      <div class="foot"><span>${state}${k.stuck ? ` · ${num(k.stuck)} can't be done yet` : ""}${k.failed ? ` · ${num(k.failed)} failed` : ""}</span></div></div>`;
   }).join("");
 }
 // One kind of analysis again for every song: under Libraries › Start over (0.46, the owner: not a tap away on the
@@ -3535,7 +3537,9 @@ function nowWork(s, total, queued) {
   if (st.current) return {kind: "Genres", what: who(st.current), step: "hearing its styles", done: st.done || 0, total: st.total || 0};
   if (tr.available && (tr.total || 0) > (tr.scored || 0)) return {kind: "Voice and mood", what: "Scoring songs", step: "from the sound already heard", done: tr.scored || 0, total: tr.total || 0};
   const vDone = (v.separated || 0) + (v.none || 0), vAll = vDone + (v.waiting || 0) + (v.failed || 0);
-  if (v.available && (v.working || ((v.on || v.alone) && (v.alone || (v.waiting || 0) > 0)))) {
+  // Not while it's switched off (0.61.4), nor while every song left is one it can't do yet (0.61.1, the owner:
+  // "looking for song even though it's done").
+  if (v.available && (v.working || v.alone || (v.on && (v.waiting || 0) > (v.stuck || 0) && v.state !== "all done"))) {
     const what = v.working ? who(v.working) : v.alone ? "Only vocals" : "Vocals";
     const step = v.working ? `${v.working.step || "finding its vocals"} for ${fmt(v.working.for_seconds, 0)} s` :
       v.state === "waits for the rest of the analysis" ? "waits for the rest of the analysis" :

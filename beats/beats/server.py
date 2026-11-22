@@ -461,14 +461,14 @@ class App:
         user = self.listens.who(user or self.default_listener())
         return {"user": user, "times": self.mixes.again(user, tz=tz or self._listening_zone)}
 
-    def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None):
+    def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None, weather=None):
         """The mixes made for ``user`` (:meth:`beats.mixes.Mixes.make`; the listener Listening shows first without
         one) from ``server``'s songs, on the clock of ``tz`` (the one Listening last used without one). With
         ``"listeners"``: who they can be made for."""
         if not user:
             user = self.default_listener()
         answer = self.mixes.make(user, tz or self._listening_zone, at, self.only(server or self.servers.default_id),
-                                 lat, lon, part, days, size or mixes_module.SIZE)
+                                 lat, lon, part, days, size or mixes_module.SIZE, weather)
         return {"listeners": self.mixes.listeners(), "parts": [{"key": key, "said": name, "hours": mixes_module.hours(key)}
                                                                for key, name, _, _ in mixes_module.PARTS], **answer}
 
