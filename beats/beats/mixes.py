@@ -157,6 +157,17 @@ def moment_words(part, weekday, month, light=None, weather=None, south=False):
     return words
 
 
+def one_row(shelves, chosen):
+    """``shelves`` as the listener chose to have them on Home (0.62): as they are, or all their mixes in one row in
+    For now's place (its key, so the app shows it there and its other two rows stay away), no more than they asked
+    for. The mixes are the same ones either way: their ids, names and keys don't change."""
+    if not chosen.get("together") or not shelves:
+        return shelves
+    mixes = [m for shelf in shelves for m in shelf["mixes"]][:chosen["together_count"]]
+    first = next((s for s in shelves if s["key"] == "now"), shelves[0])
+    return [dict(first, key="now", title="Your mixes", mixes=mixes)] if mixes else []
+
+
 def days_of(weekday):
     """"weekdays" or "weekend" for a day of the week (0 Monday … 6 Sunday)."""
     return DAYS[1] if weekday >= 5 else DAYS[0]
@@ -456,6 +467,7 @@ class Mixes:
                 mixes.append({k: v for k, v in m.items() if k != "signature"} |
                              {"sound_name": m["name"], "sound_about": m["about"], "key": key, "name": name, "about": about, "named": named})
             shelves.append(dict(shelf, mixes=mixes))
+        shelves = one_row(shelves, self.settings(user))
         return {k: v for k, v in kept.items() if k != "day"} | {"shelves": shelves}
 
     # ---- the listener's choices ----

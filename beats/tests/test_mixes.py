@@ -128,6 +128,21 @@ class Library(unittest.TestCase):
 
 
 class TheMixes(Library):
+    def test_all_in_one_row_when_the_listener_wants_them_together(self):
+        """0.62, the owner, 22 Nov: "allow choosing how many cards it sends to Siansa… I don't like the idea of always
+        separating More of you and Made for you"."""
+        shelves = [{"key": "now", "title": "Your evening", "note": "n", "mixes": [{"id": "now-1"}, {"id": "now-2"}]},
+                   {"key": "daily", "title": "Made for you", "note": "", "mixes": [{"id": "daily-1"}, {"id": "daily-2"}]},
+                   {"key": "more", "title": "More of you", "note": "", "mixes": [{"id": "repeat"}, {"id": "new"}]}]
+        chosen = mix_settings.defaults()
+        self.assertEqual(M.one_row(shelves, chosen), shelves)  # apart, as before, until chosen
+        one = M.one_row(shelves, chosen | {"together": True, "together_count": 5})
+        self.assertEqual([(s["key"], s["title"]) for s in one], [("now", "Your mixes")])
+        self.assertEqual([m["id"] for m in one[0]["mixes"]], ["now-1", "now-2", "daily-1", "daily-2", "repeat"])
+        # With For now switched off, the row is still in For now's place.
+        self.assertEqual(M.one_row(shelves[1:], chosen | {"together": True})[0]["key"], "now")
+        self.assertEqual(M.one_row([], chosen | {"together": True}), [])
+
     def test_a_mix_of_genres_isnt_named_for_one(self):
         """0.61.5, the owner, 22 Nov: "it's ok for songs not in the same genre to be in a mix. That's the point. But it
         shouldn't be named after the genre if it's a mix of songs" ("Clear-sky Drum n Bass" with hip hop and house)."""
