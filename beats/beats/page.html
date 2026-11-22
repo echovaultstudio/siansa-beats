@@ -484,10 +484,34 @@ canvas { width: 100%; display: block; border-radius: 12px; background: var(--rai
 .fact .k { font-size: 0.75rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
 .fact .v { font-size: 1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
 label.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 0.875rem; color: var(--muted); }
-.mx-set h4 { margin: 16px 0 8px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.mx-set .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 0.875rem; }
-.mx-set .row input[type=number] { width: 5.5em; }
-.mx-set .row input[type=text] { flex: 1; min-width: 0; max-width: 60%; }
+.mx-set-open { float: right; margin-left: 12px; }
+.mx-set { max-width: 44rem; }
+.mx-set h4 { margin: 24px 0 2px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); }
+.mx-set h4 + .sub { font-size: 0.75rem; color: var(--faint); margin-bottom: 8px; }
+.mx-set h4 + .mx-part { margin-top: 8px; }
+.mx-part { background: var(--raised); border: 1px solid var(--line); border-radius: 16px; padding: 0 16px; }
+.mx-line { border-bottom: 1px solid var(--line); }
+.mx-line:last-child { border-bottom: 0; }
+.mx-line-head { display: flex; align-items: center; gap: 12px; min-height: 58px; }
+.mx-line-name { display: block; flex: 1; min-width: 0; padding: 8px 0; border-radius: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; }
+.mx-line-name b { font-size: 0.9375rem; font-weight: 500; }
+.mx-line-name span.note { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+.mx-tag { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; border: 1px solid var(--line-strong); color: var(--faint); border-radius: 8px; padding: 1px 6px; margin-left: 8px; vertical-align: 1px; }
+.mx-tag.tuned { border-color: var(--amber); color: var(--amber-text); }
+.mx-line-more { flex: none; width: 32px; height: 32px; border-radius: 50%; background: none; border: 0; color: var(--faint); font-size: 1.125rem; transition: transform 0.15s ease; }
+.mx-line.open .mx-line-more { transform: rotate(90deg); color: var(--amber-text); }
+.mx-line-body { display: none; padding: 0 0 12px; }
+.mx-line.open .mx-line-body { display: block; }
+.mx-line-body .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; font-size: 0.875rem; color: var(--muted); }
+.mx-line-body .row input[type=number] { width: 5.5em; font: inherit; font-size: 0.875rem; border-radius: 999px; padding: 8px 12px; border: 1px solid var(--line-strong); background: var(--raised-2); color: var(--text); }
+.mx-line-body .row input[type=text] { flex: 1; min-width: 0; max-width: 60%; }
+.mx-line-body .btn { margin-top: 8px; }
+.mx-switch { appearance: none; -webkit-appearance: none; flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--raised-2); border: 1px solid var(--line-strong); position: relative; margin: 0; transition: background 0.15s; }
+.mx-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--faint); transition: left 0.15s; }
+.mx-switch:checked { background: var(--amber); border-color: var(--amber); }
+.mx-switch:checked::after { left: 20px; background: var(--on-amber); }
+.mx-switch:focus-visible, .mx-line-name:focus-visible, .mx-line-more:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.mx-set-foot { margin-top: 24px; max-width: 44rem; }
 .banner { border: 1px solid var(--bad); color: var(--bad); border-radius: 12px; padding: 12px 16px; display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
 .banner[hidden], .btn[hidden] { display: none; }
 [hidden] { display: none !important; }  /* a button's or a card's own display would show it all the same */
@@ -937,6 +961,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
     <section data-view="mixes">
       <div class="tm-hero">
         <div class="tm-kicker">Made for you</div>
+        <a class="btn mx-set-open" href="#mixsettings" id="mx-set-open">Mix settings</a>
         <h2 id="mx-title">Mixes</h2>
         <p class="sub" id="mx-note" role="status">Loading…</p>
         <p class="sub" id="mx-based"></p>
@@ -960,25 +985,22 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <p class="sub">The next part of the day's mixes are made ten minutes before it starts, so the app finds them ready. With an AI service set up in Setup, each mix of a kind of music gets a name and a short line from it.</p>
         </details>
       </div>
-      <!-- What goes into the mixes (0.56): every choice the mixes used to make by themselves, for the listener shown.
-           The app's Settings › Connections › Siansa Beats › Mixes changes the same (/api/v1/mixes/settings). -->
-      <div class="card" id="mx-settings">
-        <h3>What goes into your mixes</h3>
-        <p class="sub">For the listener above. The Siansa app changes the same. After a change, make the mixes again to see them now.</p>
-        <div id="mx-set-groups" class="mx-set"></div>
-        <div class="controls" style="margin-top:12px">
-          <label class="sub" for="mx-keep">Keep mixes for</label>
-          <select id="mx-keep" title="How long a mix stays playable after it was made, from the app's recent plays">
-            <option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="90">90 days</option>
-          </select>
-          <span class="sub" id="mx-keep-note" role="status"></span>
-        </div>
-        <div class="controls" style="margin-top:12px">
-          <button type="button" class="btn" id="mx-set-reset">As they come</button>
-          <!-- After a change (0.60.4, the owner): the mixes made again now, picked anew, not only at the next ask. -->
-          <button type="button" class="btn primary" id="mx-again" hidden title="Makes the listener's mixes again now, a new pick from the same songs">Make the mixes again</button>
-          <span class="sub" id="mx-set-note" role="status"></span>
-        </div>
+    </section>
+
+    <!-- Mix settings (0.63, the owner: "mix settings shouldn't be hidden at the bottom of the page"; "their own page
+         and be 100% organised and not bloated and easy to understand"): a page of its own (#mixsettings), every choice
+         the mixes make by themselves, for the listener shown on Mixes. One line each: a tap opens its choices under
+         it. The app's Settings › Connections › Siansa Beats › Mixes changes the same (/api/v1/mixes/settings). -->
+    <section data-view="mixsettings">
+      <div class="page-head"><button type="button" id="mx-set-back">‹ Mixes</button><h2>Mix settings</h2>
+        <p class="sub">Siansa Beats makes your mixes by itself, from what you play, the time of day, the season and the light outside. Change only what you want.</p>
+        <p class="sub" id="mx-set-who"></p></div>
+      <div id="mx-set-groups" class="mx-set"></div>
+      <div class="controls mx-set-foot">
+        <!-- The mixes made again now, picked anew, not only at the next ask (0.60.4, the owner). -->
+        <button type="button" class="btn primary" id="mx-again" title="Makes the listener's mixes again now, a new pick from the same songs">Make the mixes again</button>
+        <button type="button" class="btn" id="mx-set-reset" title="Every setting back to how it came">All back to automatic</button>
+        <span class="sub" id="mx-set-note" role="status"></span>
       </div>
     </section>
 
@@ -2271,7 +2293,7 @@ window.addEventListener("scroll", () => { toTop.hidden = window.scrollY < window
 // ---- pages ----
 // One page at a time, chosen in the side menu (tabs on a phone) and kept in the address (#songs, #song=<id>), so Back
 // and a bookmark work.
-const VIEWS = ["overview", "libraries", "songs", "listening", "mixes", "mix", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
+const VIEWS = ["overview", "libraries", "songs", "listening", "mixes", "mix", "mixsettings", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
 let currentView = null;
 function showView(view, keepHash) {
   if (!VIEWS.includes(view)) view = "overview";
@@ -2300,6 +2322,12 @@ function showView(view, keepHash) {
     document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
     $("page-name").textContent = "Mixes · " + (mx.open || "Mix");
     document.title = `${mx.open || "Mix"} · Siansa Beats`;
+  }
+  if (view === "mixsettings") {  // part of Mixes: its menu entry stays marked
+    document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
+    $("page-name").textContent = "Mixes · Settings";
+    document.title = "Mix settings · Siansa Beats";
+    if (!mx.data) refreshMixes(); else if (!mxSettings) loadMixSettings();
   }
   if (view === "artist") {  // part of Listening: its menu entry stays marked
     document.querySelector('.nav [data-view="listening"]')?.setAttribute("aria-current", "page");
@@ -2348,9 +2376,7 @@ function drawMixes(d) {
   const now = d.shelves.find((s) => s.key === "now");
   $("mx-note").textContent = now ? now.note : "";
   $("mx-based").textContent = d.based;
-  const keep = $("mx-keep");
-  if (![...keep.options].some((o) => +o.value === d.keep_days)) keep.add(new Option(`${d.keep_days} days`, d.keep_days));
-  keep.value = String(d.keep_days);
+  if (mxSettings) drawMixSettings();  // how long mixes are kept is shown there
   const users = d.listeners || [];
   $("mx-who").hidden = users.length < 2;
   $("mx-user").innerHTML = users.map((u) => `<option value="${esc(u)}"${u === d.user ? " selected" : ""}>${esc(u || "No name")}</option>`).join("");
@@ -2395,33 +2421,98 @@ $("mx-parts").addEventListener("click", (e) => {
 $("mx-days").addEventListener("click", (e) => { const b = e.target.closest("button[data-days]"); if (b) { mx.days = b.dataset.days; refreshMixes(); } });
 $("mx-user").addEventListener("change", () => { mx.user = $("mx-user").value; refreshMixes(); });
 $("mx-back").addEventListener("click", () => { location.hash = "#mixes"; });
-// What goes into the mixes (0.56): drawn from what Siansa Beats says each setting is, so a new one shows by itself.
-var MX_GROUPS = [
-  ["Which mixes", ["now", "now_count", "daily", "daily_count", "repeat", "rediscover", "new"]],
-  ["On Siansa's Home", ["together", "together_count"]],
-  ["What's in each", ["size", "familiar", "per_artist", "fresh_days", "leave_genres", "leave_artists"]],
-  ["What they're made from", ["time_of_day", "weekend_apart", "daylight", "season", "half_life", "repeat_days", "forgotten_days"]],
-  ["Names", ["ai_names"]],
+// Mix settings (0.63): a page of its own, in parts, one line each. A line is a mix (with its switch and whether it's as
+// it comes, AUTO, or changed, TUNED) or a part of what every mix shares; its choices open under it. Drawn from what
+// Siansa Beats says each setting is, so a new one shows by itself (under More) until it's given a place here.
+var MX_PARTS = [
+  ["Mixes", "Made for the moment", [
+    {key: "now", name: "For now", on: "now", more: ["now_count"], note: (v) => `${plural(v.now_count, "mix", "mixes")} · for this part of the day`},
+    {key: "daily", name: "Made for you", on: "daily", more: ["daily_count"], note: (v) => `${plural(v.daily_count, "mix", "mixes")} · the kinds of music you play most`},
+  ]],
+  ["Your sound", "From your own listening", [
+    {key: "repeat", name: "On repeat", on: "repeat", more: ["repeat_days"], note: (v) => `Your most played · the last ${v.repeat_days} days`},
+    {key: "rediscover", name: "Rediscover", on: "rediscover", more: ["forgotten_days"], note: (v) => `Old favourites · not played for ${v.forgotten_days} days`},
+    {key: "new", name: "New for you", on: "new", more: [], note: () => "Fresh finds near your taste"},
+  ]],
+  ["For all mixes", "", [
+    {key: "in", name: "What's in a mix", more: ["size", "familiar", "per_artist"], note: (v) => `${v.size} songs · ${v.familiar}% you know · ${v.per_artist} by one artist`},
+    {key: "out", name: "Leave out", more: ["fresh_days", "leave_genres", "leave_artists"],
+      note: (v) => [v.fresh_days ? `Played in the last ${v.fresh_days} days` : "", v.leave_genres.length ? plural(v.leave_genres.length, "genre", "genres") : "", v.leave_artists.length ? plural(v.leave_artists.length, "artist", "artists") : ""].filter(Boolean).join(" · ") || "Nothing"},
+    {key: "around", name: "Made around", more: ["time_of_day", "weekend_apart", "daylight", "season", "half_life"],
+      note: (v) => [v.time_of_day ? "Time of day" : "", v.weekend_apart ? "weekends" : "", v.daylight ? "daylight" : "", v.season ? "season" : ""].filter(Boolean).join(" · ") || "Your listening alone"},
+    {key: "siansa", name: "In Siansa", more: ["together", "together_count", "ai_names"], keep: true,
+      note: (v) => `${v.together ? `One row of ${v.together_count}` : "Each group its own row"} · ${v.ai_names ? "names from AI" : "Siansa Beats' own names"}`},
+  ]],
 ];
+// A setting's few words under its line (its line says the rest); without one here, Siansa Beats' own words for it.
+var MX_WORDS = {now_count: "How many", daily_count: "How many", repeat_days: "Looks back … days", forgotten_days: "Not played for … days",
+  size: "Songs in a mix", familiar: "Songs you know, in %", per_artist: "By one artist, at most", fresh_days: "Songs played in the last … days",
+  leave_genres: "Genres", leave_artists: "Artists", time_of_day: "The part of the day you listen in", weekend_apart: "Weekends apart from weekdays",
+  daylight: "Calmer when it's dark outside", season: "This time of year counts more", half_life: "Listening counts half after … days",
+  together: "All in one row on Home", together_count: "Cards in that row, at most", ai_names: "Names and lines from the AI service"};
 var mxSettings = null;  // var: read by refreshMixes, which may run before this line
+var mxOpen = new Set();  // the lines open on the page
+function plural(n, one, many) { return `${n} ${n === 1 ? one : many}`; }
+// Whether any of a line's settings isn't as it comes.
+function mxTuned(line, d, by) {
+  const same = (a, b) => Array.isArray(a) ? a.length === b.length && a.every((x, i) => x === b[i]) : a === b;
+  return line.more.filter((n) => by[n]).some((n) => !same(d.settings[n], by[n].default));
+}
 async function loadMixSettings() {
   const user = mx.data ? mx.data.user : "";
   try { mxSettings = await api(`api/mixes/settings?user=${encodeURIComponent(user || "")}`); }
   catch (e) { $("mx-set-note").textContent = e.message; return; }
   drawMixSettings();
 }
+function mxSettingRow(x, v) {
+  const id = `mxs-${x.name}`, words = esc(MX_WORDS[x.name] || x.label);
+  if (x.kind === "on") return `<label class="row" for="${id}"><span>${words}</span><input type="checkbox" class="mx-switch" id="${id}" data-set="${x.name}" ${v ? "checked" : ""}></label>`;
+  if (x.kind === "number") return `<label class="row" for="${id}"><span>${words}</span><input type="number" id="${id}" data-set="${x.name}" min="${x.low}" max="${x.high}" value="${v}"></label>`;
+  return `<label class="row" for="${id}"><span>${words}</span><input type="text" id="${id}" data-set="${x.name}" value="${esc(v.join(", "))}" placeholder="Names, separated by commas"></label>`;
+}
 function drawMixSettings() {
   const d = mxSettings, by = Object.fromEntries(d.described.map((x) => [x.name, x]));
-  const listed = new Set(MX_GROUPS.flatMap(([, names]) => names));
-  const groups = MX_GROUPS.concat([["More", d.described.map((x) => x.name).filter((n) => !listed.has(n))]]);
-  $("mx-set-groups").innerHTML = groups.filter(([, names]) => names.some((n) => by[n])).map(([title, names]) =>
-    `<h4>${esc(title)}</h4>` + names.filter((n) => by[n]).map((n) => {
-      const x = by[n], v = d.settings[n], id = `mxs-${n}`;
-      if (x.kind === "on") return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="checkbox" id="${id}" data-set="${n}" ${v ? "checked" : ""}></label>`;
-      if (x.kind === "number") return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="number" id="${id}" data-set="${n}" min="${x.low}" max="${x.high}" value="${v}"></label>`;
-      return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="text" id="${id}" data-set="${n}" value="${esc(v.join(", "))}" placeholder="Names, separated by commas"></label>`;
-    }).join("")).join("");
+  $("mx-set-who").textContent = d.user ? `For ${d.user}. The Siansa app changes the same.` : "The Siansa app changes the same.";
+  const placed = new Set(MX_PARTS.flatMap(([, , lines]) => lines.flatMap((l) => [l.on, ...l.more])));
+  const rest = d.described.map((x) => x.name).filter((n) => !placed.has(n));
+  const parts = MX_PARTS.concat(rest.length ? [["More", "", [{key: "more", name: "More", more: rest, note: () => plural(rest.length, "setting", "settings")}]]] : []);
+  $("mx-set-groups").innerHTML = parts.map(([title, sub, lines]) => {
+    const drawn = lines.filter((l) => (l.on && by[l.on]) || l.more.some((n) => by[n])).map((l) => {
+      const more = l.more.filter((n) => by[n]), tuned = mxTuned(l, d, by), open = mxOpen.has(l.key);
+      const tag = l.on ? `<span class="mx-tag${tuned ? " tuned" : ""}">${tuned ? "TUNED" : "AUTO"}</span>` : "";
+      const body = more.map((n) => mxSettingRow(by[n], d.settings[n])).join("") + (l.keep ? MX_KEEP : "") +
+        (tuned ? `<button type="button" class="btn" data-auto="${l.key}">Back to automatic</button>` : "");
+      const can = more.length || l.keep;
+      return `<div class="mx-line${open && can ? " open" : ""}" data-line="${l.key}"><div class="mx-line-head">` +
+        `<${can ? `button type="button" data-open="${l.key}" aria-expanded="${open}"` : "div"} class="mx-line-name"><b>${esc(l.name)}</b>${tag}<span class="note">${esc(l.note(d.settings))}</span></${can ? "button" : "div"}>` +
+        (l.on && by[l.on] ? `<input type="checkbox" class="mx-switch" data-set="${l.on}" aria-label="${esc(l.name)}" ${d.settings[l.on] ? "checked" : ""}>` : "") +
+        (can ? `<button type="button" class="mx-line-more" data-open="${l.key}" aria-label="${open ? "Close" : "Open"} ${esc(l.name)}">›</button>` : `<span class="mx-line-more" aria-hidden="true"></span>`) +
+        `</div>${can ? `<div class="mx-line-body">${body}</div>` : ""}</div>`;
+    }).join("");
+    return drawn ? `<h4>${esc(title)}</h4>${sub ? `<p class="sub">${esc(sub)}</p>` : ""}<div class="mx-part">${drawn}</div>` : "";
+  }).join("");
+  const kept = $("mx-keep"), days = mx.data && mx.data.keep_days;
+  if (kept && days) {
+    if (![...kept.options].some((o) => +o.value === days)) kept.add(new Option(`${days} days`, days));
+    kept.value = String(days);
+  }
 }
+// How long a mix given out stays playable (for everyone: Siansa Beats' own setting, not a listener's).
+var MX_KEEP = `<label class="row" for="mx-keep"><span>Keep a mix playable for</span><select id="mx-keep" title="How long a mix stays playable after it was made, from the app's recent plays">` +
+  [1, 3, 7, 14, 30, 90].map((n) => `<option value="${n}">${n} day${n === 1 ? "" : "s"}</option>`).join("") + `</select></label><p class="sub" id="mx-keep-note" role="status"></p>`;
+$("mx-set-groups").addEventListener("click", (e) => {
+  const opener = e.target.closest("[data-open]"), auto = e.target.closest("[data-auto]");
+  if (opener) {
+    const key = opener.dataset.open;
+    if (mxOpen.has(key)) mxOpen.delete(key); else mxOpen.add(key);
+    drawMixSettings();
+  } else if (auto && mxSettings) {  // that line's settings back to how they came
+    const line = MX_PARTS.flatMap(([, , lines]) => lines).find((l) => l.key === auto.dataset.auto);
+    const by = Object.fromEntries(mxSettings.described.map((x) => [x.name, x]));
+    if (line) saveMixSettings(Object.fromEntries(line.more.filter((n) => by[n]).map((n) => [n, by[n].default])));
+  }
+});
+$("mx-set-back").addEventListener("click", () => { location.hash = "#mixes"; });
 $("mx-set-groups").addEventListener("change", async (e) => {
   const el = e.target.closest("[data-set]");
   if (!el || !mxSettings) return;
@@ -2439,7 +2530,6 @@ async function saveMixSettings(changes) {
     mxSettings = await api("api/mixes/settings", {method: "POST", body: JSON.stringify({user: mxSettings.user, settings: changes})});
     drawMixSettings();
     $("mx-set-note").textContent = "Saved. Make the mixes again to see them now.";
-    $("mx-again").hidden = false;
     refreshMixes();
   } catch (err) { $("mx-set-note").textContent = err.message; }
 }
@@ -2454,9 +2544,10 @@ $("mx-again").addEventListener("click", async () => {
   } catch (err) { $("mx-set-note").textContent = err.message; }
   $("mx-again").disabled = false;
 });
-$("mx-keep").addEventListener("change", async () => {
+$("mx-set-groups").addEventListener("change", async (e) => {
+  if (e.target.id !== "mx-keep") return;
   $("mx-keep-note").textContent = "Saving…";
-  try { const got = await api("api/mixes/keep", {method: "POST", body: JSON.stringify({days: +$("mx-keep").value})}); $("mx-keep-note").textContent = `Kept ${got.keep_days} days`; }
+  try { const got = await api("api/mixes/keep", {method: "POST", body: JSON.stringify({days: +$("mx-keep").value})}); if (mx.data) mx.data.keep_days = got.keep_days; $("mx-keep-note").textContent = `Kept ${got.keep_days} days`; }
   catch (e) { $("mx-keep-note").textContent = e.message; }
 });
 
