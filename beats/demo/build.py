@@ -2,10 +2,10 @@
 """Builds the demo of Siansa Beats' page: the real page, with made-up music and no server behind it.
 
 The real service runs here for a moment on a made-up library (demo/library.py), with stand-ins for the models, as the
-tests run it. Every answer the page can ask for is recorded, and the page is written out as one file that answers
-itself from those (demo/shim.js). So the demo is always the page of this version, and nothing in it is anyone's.
+tests run it. Every answer the page can ask for is recorded, and the page is written out with a script in front of
+it that answers from those (demo/shim.js). So the demo is always the page of this version, and nothing in it is anyone's.
 
-    python3 demo/build.py <out folder>            writes <out>/index.html
+    python3 demo/build.py <out folder> [name]     writes <name>.html and its three scripts there (name: beats-demo)
     python3 demo/build.py --serve [port]          the made-up service itself, to look at (default 8091)
 """
 
@@ -378,8 +378,13 @@ def tidy(answers, vocals, address):
     return renamed(answers)
 
 
-def write(out, answers, details, at):
-    """The demo, in ``out``: ``index.html`` (the page, answering itself) and ``songs.json`` (each song's own page)."""
+def write(out, answers, details, at, name="beats-demo"):
+    """The demo, in ``out``, as four plain files side by side, so a website with strict rules can serve it (no script
+    in the page itself, no folders): ``<name>.html`` (the page), ``<name>.js`` (the answers and demo/shim.js),
+    ``<name>-page.js`` (the page's own script) and ``<name>-songs.js`` (each song's own page, fetched when one is
+    first opened). Each is linked by its content's hash, so a new demo is never a cached old one."""
+    import hashlib
+
     from beats import __version__
 
     with open(os.path.join(HERE, "..", "beats", "page.html"), encoding="utf-8") as f:
@@ -394,25 +399,63 @@ def write(out, answers, details, at):
     if page.count(AUDIO) != 1:
         raise SystemExit("The page's player isn't as the demo knows it: update AUDIO in demo/build.py")
     page = page.replace(AUDIO, "player.src = window.demoAudio(id);")
-    if page.count("<script>") != 1:
-        raise SystemExit("The page has more than its one script: the demo has to go before the first")
-    data = json.dumps({"at": int(at * 1000), "version": __version__, "answers": answers}, separators=(",", ":")).replace("</", "<\\/")
-    head = ('<meta name="robots" content="noindex">\n<script type="application/json" id="demo-data">' + data + "</script>\n<script>\n"
-            + shim + "\n</script>\n")
-    page = page.replace("<script>", head + "<script>", 1)
+    if page.count("<script>") != 1 or page.count("</script>") != 1:
+        raise SystemExit("The page has more than its one script: the demo takes exactly one out")
+    start, end = page.index("<script>"), page.index("</script>")
+    own = page[start + len("<script>"):end]
+    files = {
+        f"{name}-songs.js": "window.demoSongs = " + json.dumps(details, separators=(",", ":")) + ";\n",
+        f"{name}-page.js": own,
+    }
+    version = lambda text: hashlib.sha256(text.encode()).hexdigest()[:8]  # noqa: E731
+    data = json.dumps({"at": int(at * 1000), "version": __version__, "answers": answers,
+                       "songs": f"{name}-songs.js?v={version(files[f'{name}-songs.js'])}"}, separators=(",", ":"))
+    files[f"{name}.js"] = "window.demoData = " + data + ";\n" + shim
+    tags = "".join(f'<script src="{file}?v={version(files[file])}"></script>\n' for file in (f"{name}.js", f"{name}-page.js"))
+    files[f"{name}.html"] = (page[:start] + tags + page[end + len("</script>"):]).replace(
+        "<title>Siansa Beats</title>", '<title>Siansa Beats demo</title>\n<meta name="robots" content="noindex">', 1)
     os.makedirs(out, exist_ok=True)
-    with open(os.path.join(out, "index.html"), "w", encoding="utf-8") as f:
-        f.write(page)
-    with open(os.path.join(out, "songs.json"), "w", encoding="utf-8") as f:
-        json.dump(details, f, separators=(",", ":"))
-    return {name: os.path.getsize(os.path.join(out, name)) for name in ("index.html", "songs.json")}
+    for file, text in files.items():
+        with open(os.path.join(out, file), "w", encoding="utf-8") as f:
+            f.write(text)
+    return {file: len(text.encode()) for file, text in files.items()}
+
+
+# Every address the page names, and what the demo does with it (tests/test_demo.py holds the page to this list: a new
+# address has to be taught to demo/shim.js, then named here).
+ADDRESSES = {
+    # answered from what the made-up service said
+    "answered": {"api/status", "api/libraries", "api/bad-blends", "api/analysis/checks", "api/clean/preview", "api/mixes/settings",
+                 "api/ai", "api/listens/import", "api/genres", "api/vocals", "api/style/models", "api/loudness", "api/voice",
+                 "api/servers", "api/log", "api/songs", "api/songs/", "api/listens", "api/listens/profile", "api/listens/artist",
+                 "api/mixes", "api/voice/songs", "api/v1/similar/"},
+    # made in the browser: pictures drawn, a sound for each song
+    "made": {"api/art/", "api/audio/"},
+    # a switch or a number, kept until the page is closed
+    "kept": {"api/mixes/keep", "api/mixes/again", "api/log/level", "api/pause", "api/resume", "api/listens/memory", "api/signout"},
+    # needs a real service: the demo says so, and changes nothing
+    "not here": {"api/", "api/access/key", "api/access/password", "api/ai/test", "api/analyse-again", "api/analyse-all",
+                 "api/analysis/start", "api/bad-blends/", "api/clean", "api/genres/about/fetch", "api/libraries/",
+                 "api/libraries/read", "api/listens/lastfm", "api/listens/remove", "api/listens/rename", "api/servers/",
+                 "api/servers/test", "api/style/model",
+                 # files to download, and the API's own description
+                 "api/bad-blends/export", "api/debug", "api/export.csv", "api/export.json", "api/failed/export",
+                 "api/log/download", "api/v1/capabilities", "api/v1/openapi.json"},
+}
+
+
+def named(page):
+    """The addresses ``page`` (the page's source) names."""
+    import re
+
+    return set(re.findall(r'["`](api/[A-Za-z0-9_./-]*)', page))
 
 
 AUDIO = 'player.src = "api/audio/" + encodeURIComponent(id);'
 ART = "function artUrl(kind, song, size) { return `api/art/${kind}/${encodeURIComponent(song)}?size=${size}`; }"
 
 
-def build(out):
+def build(out, name="beats-demo"):
     folder = tempfile.mkdtemp(prefix="beats-demo-")
     app, server, base, fake, songs = start(folder)
     try:
@@ -423,7 +466,7 @@ def build(out):
         app.config.secrets_left = []  # the stand-in's settings are no one's to tidy
         answers, details = record(base, app, songs)
         fresh = app.vocals.status(fresh=True)
-        return write(out, tidy(answers, {k: fresh[k] for k in ("separated", "none", "failed", "waiting")}, fake.url), details, at)
+        return write(out, tidy(answers, {k: fresh[k] for k in ("separated", "none", "failed", "waiting")}, fake.url), details, at, name)
     finally:
         app.worker.stop()
         server.shutdown()
@@ -441,4 +484,4 @@ if __name__ == "__main__":
         while True:
             time.sleep(60)
     else:
-        print(build(sys.argv[1] if len(sys.argv) > 1 else "demo-out"))
+        print(build(sys.argv[1] if len(sys.argv) > 1 else "demo-out", *sys.argv[2:3]))

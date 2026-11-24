@@ -2,7 +2,7 @@
 // questions as ever; they're answered here from what the real service said of a made-up library when the demo was
 // built. Nothing leaves the browser, and nothing changed here is kept: a reload starts again.
 (() => {
-  const data = JSON.parse(document.getElementById("demo-data").textContent);
+  const data = window.demoData;
   const answers = data.answers;
   const misses = window.demoMisses = [];  // what the page asked that the demo can't answer: the build's check reads it
   const NOT_HERE = "This is the demo, with made-up music: that needs a real Siansa Beats. Nothing was changed.";
@@ -96,10 +96,16 @@
     return (playing = URL.createObjectURL(new Blob([wav], {type: "audio/wav"})));
   };
 
-  // ---- each song's own page: one more file, asked for the first time a song is opened ----
+  // ---- each song's own page: one more file, fetched the first time a song is opened ----
   const realFetch = window.fetch.bind(window);
   let details = null;
-  const songPages = () => details || (details = realFetch("songs.json").then((r) => r.json()));
+  const songPages = () => details || (details = new Promise((done, failed) => {
+    const script = document.createElement("script");
+    script.src = data.songs;
+    script.onload = () => done(window.demoSongs);
+    script.onerror = () => { details = null; failed(new Error("The demo's songs couldn't be fetched; try again.")); };
+    document.head.appendChild(script);
+  }));
 
   // ---- what's changed since the page was opened, for as long as it's open ----
   let mixesTurn = 0;
@@ -190,13 +196,18 @@
     if (window.banner) window.banner("This is the demo, with made-up music: there's no file to download here.");
   }, true);
 
+  // Where a website's rules don't let a made-up sound play, say so instead of staying silent.
+  document.addEventListener("securitypolicyviolation", (e) => {
+    if (/^media-src/.test(e.violatedDirective || "") && window.banner) window.banner("Songs can't be played in the demo on this website yet.");
+  });
+
   // ---- the line that says what this is ----
   document.addEventListener("DOMContentLoaded", () => {
     const note = document.createElement("div");
     note.id = "demo-note";
     note.setAttribute("role", "note");
     note.innerHTML = '<b>Demo</b><span>Made-up music and listening. Nothing here is real, and nothing you change is kept.</span>' +
-      '<a href="https://siansa.app/beats">Get Siansa Beats</a><button type="button" aria-label="Hide this note">×</button>';
+      '<a href="/beats">Get Siansa Beats</a><button type="button" aria-label="Hide this note">×</button>';
     const style = document.createElement("style");
     style.textContent = "#demo-note{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:1000;display:flex;gap:10px;align-items:center;" +
       "max-width:calc(100vw - 24px);padding:8px 10px 8px 14px;border-radius:999px;background:#12161c;color:#f4f6f8;font:500 13px/1.3 system-ui,sans-serif;" +

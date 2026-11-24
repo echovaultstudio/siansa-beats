@@ -628,6 +628,21 @@ On the server, after setting it up:
    and the rest follow. A song that fails says why in its row and in Activity, and the queue goes on.
 4. Open Control (or another song you know): play it with clicks on, and check the clicks sit on the beat.
 
+### The demo of the page
+
+`demo/build.py` makes a demo of Siansa Beats' page: the real page, with made-up music and no service behind it, for
+the website (siansa.app/beats-demo). It runs the service for a moment on a made-up library (`demo/library.py`: 24
+invented artists, their albums and songs, and two years of made-up listening) with stand-ins for the models, as the
+tests do, records every answer the page can ask for, and writes the page out with `demo/shim.js` in front of it, which
+answers from those. Pictures are drawn and each song gets a sound made in the browser, at its tempo and in its key.
+A switch or a number changed in the demo is kept until the page is closed; what needs a real service says so.
+
+    python3 demo/build.py <out folder>      # beats-demo.html and its three scripts, as plain files
+    python3 demo/build.py --serve 8091      # the made-up service itself, to look at
+
+A new address in the page has to be taught to `demo/shim.js` and named in `ADDRESSES` (`demo/build.py`):
+`tests/test_demo.py` fails until it is, and the Checks workflow builds the demo on every change.
+
 ## What it can't do yet
 
 - **Bars in 3/4.** In the first test run, Beat This! read every test song's tempo exactly (140, 174, 122, 128 and
