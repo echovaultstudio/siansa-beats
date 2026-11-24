@@ -40,3 +40,14 @@ jobs:
           pip install --quiet numpy==2.4.6 scipy==1.16.3 av==17.1.0 Flask==3.1.3
           (cd plugins/SiansaAnalysis && python3 -m unittest discover -s tests)
           (cd plugins/SiansaBeats && python3 -m unittest discover -s tests)
+
+      # The demo of the page (beats/demo): the real service on made-up music, every answer recorded, the page written
+      # out to answer itself. Built here so a change to the page that breaks it is seen; the website builds its own
+      # from main (siansa.app/beats-demo).
+      - name: The page's demo builds
+        run: |
+          cd beats
+          pip install --quiet -r demo/requirements.txt
+          python3 tests/test_demo.py
+          python3 demo/build.py "$RUNNER_TEMP/beats-demo" | tail -1
+          test -s "$RUNNER_TEMP/beats-demo/beats-demo.html"
