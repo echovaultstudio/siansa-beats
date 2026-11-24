@@ -47,6 +47,7 @@ jobs:
       - name: The page's demo builds
         run: |
           cd beats
+          pip install --quiet -r demo/requirements.txt
           python3 tests/test_demo.py
           python3 demo/build.py "$RUNNER_TEMP/beats-demo" | tail -1
           test -s "$RUNNER_TEMP/beats-demo/beats-demo.html"

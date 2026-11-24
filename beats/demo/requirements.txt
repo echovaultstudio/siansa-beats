@@ -1,0 +1,3 @@
+# What demo/build.py needs: the service without its models (as the tests run it).
+numpy==1.26.4
+cryptography==43.0.3

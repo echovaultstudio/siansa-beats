@@ -637,6 +637,7 @@ tests do, records every answer the page can ask for, and writes the page out wit
 answers from those. Pictures are drawn and each song gets a sound made in the browser, at its tempo and in its key.
 A switch or a number changed in the demo is kept until the page is closed; what needs a real service says so.
 
+    pip install -r demo/requirements.txt    # numpy and cryptography: no models
     python3 demo/build.py <out folder>      # beats-demo.html and its three scripts, as plain files
     python3 demo/build.py --serve 8091      # the made-up service itself, to look at
 
