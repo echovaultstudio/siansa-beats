@@ -313,6 +313,23 @@ class TheMixes(Library):
         self.assertEqual(self.listens.skip_count("max"), 0)
         self.assertEqual(self.listens.skip_count(), 1)
 
+    def test_songs_played_in_the_leave_out_days_are_in_no_mix_but_on_repeat(self):
+        """0.64.1, the owner, 24 Nov: "Colours was last played yesterday and is in a mix today"."""
+        self.play("rock", "2026-09-01 06:30", songs=range(26))
+        self.play("rock", "2026-11-15 06:30", songs=range(6))  # six of them again, two days ago
+        lately = {f"rock{n}" for n in range(6)}
+        made = self.make()["shelves"]
+        for shelf in made:
+            for mix in shelf["mixes"]:
+                if mix["id"] not in ("repeat", "rediscover"):
+                    self.assertFalse(lately & {s["id"] for s in mix["songs"]}, mix["id"])
+        # The older ones are still the listener's own in them.
+        self.assertTrue(any(s["own"] for s in made[0]["mixes"][0]["songs"]))
+        # Set to no days, they come back.
+        self.mixes.set_settings("max", {"fresh_days": 0})
+        again = self.make()["shelves"]
+        self.assertTrue(lately & {s["id"] for shelf in again[:2] for m in shelf["mixes"] for s in m["songs"]})
+
     def test_this_time_of_year_counts_from_earlier_years(self):
         """Piano every early morning last November, rock all spring: in November the piano is back on top."""
         self.play("piano", "2025-11-18 06:30", songs=range(26))

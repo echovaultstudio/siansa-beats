@@ -130,6 +130,12 @@ listener's half-life): each whole skip halves what that song's listens weigh, an
 a new find, in a mix's new songs or in New for you. **Mix settings › Made around › Songs you skip count for less**
 switches it off. Removing a listener's whole history removes their skips.
 
+**Leave out really leaves out (0.64.1).** *Mix settings › Leave out › Songs played in the last … days* only kept those
+songs from a mix's new songs: one played yesterday still came back as one of the listener's own. For now's and Made
+for you's mixes now leave them out altogether, so a mix has fewer songs the listener knows and more around them. Only
+a mix that would come out short (a small library, played all through) takes some, the longest unplayed first. On
+repeat is what's played lately and keeps them; set to 0 days, nothing is left out.
+
 **Mix settings on a page of their own (0.63.0).** The settings left the foot of the Mixes page: **Mix settings**, at
 its top, opens their own page. Every setting is still there, in three parts of one line each: *Mixes* (For now, Made
 for you), *Your sound* (On repeat, Rediscover, New for you) and *For all mixes* (What's in a mix, Leave out, Made
