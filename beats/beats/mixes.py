@@ -818,16 +818,20 @@ class Mixes:
     # ---- a mix's songs ----
 
     def _fill(self, centre, own, stale, server, size, rng, taken=(), familiar=FAMILIAR, reach=None, per_artist=PER_ARTIST,
-              out=lambda row: False):
+              out=lambda row: False, lately={}):
         """Up to ``size`` songs around ``centre``: ``familiar`` of them from ``own`` (the listener's rows of this
-        group, the heaviest first), the rest the nearest songs not in ``stale`` (played lately), in turns, none
-        further off than ``reach`` (a mix is of one kind: a small library gives a shorter mix, not another kind's
-        songs); ``[(row, own)]``."""
+        group, the heaviest first), the rest the nearest songs not in ``stale`` (played or skipped lately), in turns,
+        none further off than ``reach`` (a mix is of one kind: a small library gives a shorter mix, not another
+        kind's songs); ``[(row, own)]``. The songs in ``lately`` (``{row: when}``, played in the listener's "leave
+        out" days) aren't taken from ``own`` either (0.64.1): the mix then has fewer the listener knows and more
+        around them, and only a mix that would come out short takes some, the longest unplayed first."""
         near = self.sound.near(centre, server, wanted=min(len(self.sound.ids), size * 8 + 50))
         if reach is not None:
             near = [f for f in near if f[1] <= reach]
         near = [f for f in near if not out(f[0])]
         own = [row for row in own if not out(row)]
+        waiting = sorted((row for row in own if row in lately), key=lambda row: (lately[row], row))
+        own = [row for row in own if row not in lately]
         wanted = min(len(own), round(size * familiar))
         pool = list(own[:wanted * 2])
         mine = sorted(rng.sample(pool, wanted), key=pool.index) if wanted else []
@@ -847,6 +851,15 @@ class Mixes:
             picked += self.sound._pick([f for f in near if f[0] not in have and f[0] not in avoid], size - len(picked),
                                        taken=have | set(taken), per_artist=per_artist)
         mine = set(mine)
+        if len(picked) < size and waiting:  # a library too small to do without them: the longest unplayed first
+            have = {row for row, _ in picked}
+            short = size - len(picked)
+            oldest = [row for row in waiting if row not in have and row not in taken][:short * 3]
+            some = sorted(rng.sample(oldest, min(len(oldest), short)), key=oldest.index)  # another few each day
+            more = self.sound._pick([(row, distance.get(row, 1.0 - float(self.sound.matrix[row] @ centre))) for row in some],
+                                    short, taken=have | set(taken), per_artist=per_artist)
+            picked += more
+            mine |= {row for row, _ in more}
         return [(row, row in mine) for row, _ in picked]
 
     def _mix(self, mix_id, picked, why, taken, name=None, like=None, used=None, moment=None, turn=0):
@@ -889,11 +902,15 @@ class Mixes:
         repeat_days, forgotten_days = chosen["repeat_days"], chosen["forgotten_days"]
         if not chosen["daylight"]:  # the light outside isn't to count: as if it were always light
             sun = None
-        fill = lambda *a, **k: self._fill(*a, familiar=k.pop("familiar", familiar), per_artist=per_artist, out=out, **k)  # noqa: E731
+        fill = lambda *a, **k: self._fill(*a, familiar=k.pop("familiar", familiar), per_artist=per_artist, out=out, lately=lately, **k)  # noqa: E731
         # Made again by hand (0.60.4): another pick from the same songs, as many times as asked.
         mark = f"|again {again}" if again else ""
         seed = lambda what: random.Random(int(hashlib.sha256(f"{user}|{ordinal}|{what}{mark}".encode()).hexdigest()[:12], 16))  # noqa: E731
         stale = {row for row, when in played["last"].items() if at - when < chosen["fresh_days"] * 86400}
+        # Left out of For now and Made for you altogether (0.64.1, the owner, 24 Nov: "Colours was last played
+        # yesterday and is in a mix today"): they were only kept from a mix's new songs, and came back as one of the
+        # listener's own. Only a mix that would come out short takes some. On repeat is what's played lately: it keeps them.
+        lately = {row: played["last"][row] for row in stale}
         # A song skipped lately doesn't come back as a find around the listener's own (0.64): not as one of a mix's
         # new songs, and not in New for you. One skip keeps it away for a half-life; skipped again, longer.
         passed = {row for row, weight in played["skipped"].items() if weight >= SKIP_OUT}
