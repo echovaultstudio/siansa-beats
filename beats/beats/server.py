@@ -212,7 +212,7 @@ def _remove(path):
 
 
 # What can be analysed again by itself (0.45, the owner, 14 Nov), as the page names it.
-AGAIN = {"beats": "Beats", "loudness": "Loudness and key", "sound": "Sound", "genres": "Genres"}
+AGAIN = {"beats": "Beats", "loudness": "Loudness and key", "sound": "Sound", "genres": "Genres", "vocals": "Vocals"}
 
 
 class App:
@@ -256,6 +256,16 @@ class App:
         self.traits = Traits(config.models_dir, self.store, config.threads)
         self.worker = Worker(self.store, self.servers, self.tracker, decode or analyser.decode,
                              config.data_dir, config.model, measure, self.style, sound, self.hearer)
+        # Where each song's vocals are at its ends (0.60, beats.vocals): separated when nothing else is being done.
+        from .vocals import Separator, Vocals
+
+        self.vocals = Vocals(self.store, Separator(config.models_dir, config.device, config.threads), self.worker.download,
+                             self.vocal_grid, lambda ids: {k: v["voice"] for k, v in self.traits.of(ids).items()},
+                             # Only vocals (0.60.2): the rest is paused, and only a song still being worked on waits.
+                             lambda: self.worker.busy() or (not self.vocals.alone and (bool(self.store.counts().get("queued"))
+                                                                                       or self.worker.paused)),
+                             config.data_dir, voice_known=lambda: self.traits.available)
+        self.vocals.done_alone = lambda: self.worker.pause(False)
         self.started = time.time()
         # Answers the page and the app ask for often, kept ready: the genre list and the styles' counts change with
         # each song heard (the page asks every 2 s).
@@ -289,6 +299,23 @@ class App:
         self.art = Art(self.store, self.servers, config.data_dir)
 
 
+    def vocal_grid(self, song_id):
+        """``(downbeats, intro lock, outro lock, duration)`` in seconds of a song with its beats found (its steady
+        grid's bars, as the app blends on them), for :mod:`beats.vocals`; None before its beats are found, False when
+        they are but have no steady bars (0.60.3)."""
+        full = self.store.result(song_id, self.config.model, with_beats=True)
+        if not full:
+            return None
+        steady = self.steady_grid(full)
+        if not steady or len(steady.get("downbeats") or []) < 2:
+            return False
+        kept = self.store.ends([song_id], self.config.model).get(song_id) or {}
+        song = self.store.song(song_id) or {}
+        downs = steady["downbeats"]
+        duration = float(song.get("duration") or 0) or downs[-1] + 2.0
+        lock = lambda ms: ms / 1000.0 if ms is not None else None  # noqa: E731
+        return downs, lock(kept.get("intro_lock_ms")), lock(kept.get("outro_lock_ms")), duration
+
     def mind_memory_every_minute(self):
         """Every minute from the start: the models nobody has needed for a while are let go (:meth:`mind_memory`)."""
         def loop():
@@ -307,6 +334,8 @@ class App:
             if self.words.unload_if_idle():
                 memory.trim()
             self.worker.let_models_go_if_idle()
+            if self.vocals.let_go_if_idle():
+                memory.trim()
             if self.arousal.catch_up():  # songs heard since the last minute
                 memory.trim()
             if self.traits.catch_up():
@@ -364,6 +393,17 @@ class App:
         answer["new_artists"] = [pictured(r, cover=False, face=True) for r in answer["new_artists"]]
         return answer
 
+    def listening_profile(self, user=None, tz=None):
+        """My listening profile (0.59): how a listener listens over all their history, the artists with their
+        pictures."""
+        if user is None:
+            user = self.default_listener()
+        found = dict(self.listens.profile(user, tz))
+        face = lambda r: dict(r, face=self.art.song_for("artist", r.get("song"), r.get("artist")))  # noqa: E731
+        found["artists"] = [face(r) for r in found["artists"]]
+        found["bubbles"] = [face(r) for r in found["bubbles"]]
+        return found
+
     def listening_artist(self, user, name, tz=None):
         """One artist's page in ``user``'s listening, with the pictures each row shows; None when never listened to."""
         if user is None:  # opened straight from its address: the same person Listening shows first
@@ -416,14 +456,19 @@ class App:
         self.mixes.set_settings(who, given)
         return self.mix_settings_of(who)
 
-    def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None):
+    def mixes_again(self, user=None, tz=None):
+        """``user``'s mixes made again now, picked anew (0.60.4): ``{"user", "times"}`` (how many times today)."""
+        user = self.listens.who(user or self.default_listener())
+        return {"user": user, "times": self.mixes.again(user, tz=tz or self._listening_zone)}
+
+    def mixes_for(self, user=None, tz=None, at=None, server=None, lat=None, lon=None, part=None, days=None, size=None, weather=None):
         """The mixes made for ``user`` (:meth:`beats.mixes.Mixes.make`; the listener Listening shows first without
         one) from ``server``'s songs, on the clock of ``tz`` (the one Listening last used without one). With
         ``"listeners"``: who they can be made for."""
         if not user:
             user = self.default_listener()
         answer = self.mixes.make(user, tz or self._listening_zone, at, self.only(server or self.servers.default_id),
-                                 lat, lon, part, days, size or mixes_module.SIZE)
+                                 lat, lon, part, days, size or mixes_module.SIZE, weather)
         return {"listeners": self.mixes.listeners(), "parts": [{"key": key, "said": name, "hours": mixes_module.hours(key)}
                                                                for key, name, _, _ in mixes_module.PARTS], **answer}
 
@@ -835,6 +880,8 @@ class App:
             "sound": sound,
             # Voice and mood (0.52): how many of the songs with a sound are scored, for the Overview's card.
             "traits": {k: voice[k] for k in ("available", "total", "scored")},
+            # Where the vocals are (0.60): the Overview's bar for it.
+            "vocals": timed("vocals", self.vocals.status),
             "libraries": {"chosen": self.store.setting(folders_key(server)) or [],
                           "read_at": self.store.setting("library_read_at")},
             # The server these numbers are of, and all of them (for the page's switch).
@@ -1443,6 +1490,8 @@ class Handler(BaseHTTPRequestHandler):
                                                 part=(query.get("part") or [None])[0], days=(query.get("days") or [None])[0]))
             if path == "/api/listens/import":
                 return self._json(dict(app.listens.importing))
+            if path == "/api/listens/profile":  # how a listener listens, all time (0.59): ?user=&tz=
+                return self._json(app.listening_profile((query.get("user") or [None])[0], (query.get("tz") or [None])[0]))
             if path == "/api/listens/artist":  # one artist in a listener's history: its own page
                 name = (query.get("name") or [""])[0].strip()
                 if not name:
@@ -1477,6 +1526,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.genre_songs(name, limit, server))
             if path == "/api/loudness":
                 return self._json(app.loudness_report(server))
+            if path == "/api/vocals":  # where the vocals are, for DJ blends (0.60): the finder's numbers and its setting
+                return self._json(app.vocals.status(fresh=True))
             if path == "/api/voice":  # the Voice and mood page (0.52)
                 return self._json(app.voice(server))
             if path == "/api/voice/songs":  # the songs of one of its lines: ?line=&order=&limit=&offset=
@@ -1595,6 +1646,29 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
                 return self._json({"doubted": doubted, **app.style_models()})
+            if path == "/api/vocals":  # {"only_sung": bool}: separate only the songs the voice model calls sung (0.60)
+                if "on" in body:  # {"on": bool}: find vocals at all (0.61; off until switched on, as it's slow)
+                    if body["on"] and not app.vocals.available:
+                        return self._error(HTTPStatus.CONFLICT, "This image has no vocal separation model.")
+                    app.vocals.set_on(bool(body["on"]))
+                    app.store.event("Vocals for DJ blends: " + ("switched on: vocals are found when nothing else is analysed"
+                                                              if body["on"] else "switched off: the vocals found stay in use"))
+                if "alone" in body:  # {"alone": true}: Only vocals (0.60.2): the rest pauses until every song's vocals are found
+                    if body["alone"] and not app.vocals.available:
+                        return self._error(HTTPStatus.CONFLICT, "This image has no vocal separation model.")
+                    if body["alone"] and not app.vocals.on():
+                        return self._error(HTTPStatus.CONFLICT, "Switch on Find vocals first, under Setup › Vocals for DJ blends.")
+                    if body["alone"]:
+                        app.worker.pause(True)
+                        app.store.event("Only vocals: the rest of the analysis waits until every song's vocals are found")
+                    app.vocals.run_alone(bool(body["alone"]))
+                    if not body["alone"]:
+                        app.worker.pause(False)
+                if "only_sung" in body:
+                    app.vocals.set_only_sung(bool(body.get("only_sung")))
+                    app.store.event("Vocals for DJ blends: " + ("only songs with vocals are separated" if body.get("only_sung")
+                                                              else "every song is separated"))
+                return self._json(app.vocals.status(fresh=True))
             if path == "/api/ai":  # the AI service that names the mixes (0.54): {on, provider, address, model, key}
                 from .ai import AiError
                 try:
@@ -1606,6 +1680,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(app.set_mix_settings(body.get("user"), body.get("settings")))
                 except ValueError as e:
                     return self._error(HTTPStatus.BAD_REQUEST, str(e))
+            if path == "/api/mixes/again":  # {"user"}: their mixes made again now, picked anew (0.60.4)
+                return self._json(app.mixes_again(body.get("user"), body.get("tz")))
             if path == "/api/mixes/keep":  # {"days"}: how long the mixes given out are kept (0.55)
                 try:
                     return self._json({"keep_days": app.mixes.set_keep_days(body.get("days"))})
@@ -1699,6 +1775,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(HTTPStatus.BAD_REQUEST, "what needed: " + ", ".join(AGAIN))
                 if what == "beats":
                     songs = sum(app.store.queue(song_id, force=True) for song_id in app.store.song_ids())
+                elif what == "vocals":
+                    songs = app.store.vocals_again()
+                    app.vocals.wake()
                 else:
                     songs = {"loudness": app.store.measure_again, "sound": app.store.sound_again, "genres": app.store.styles_again}[what]()
                 app.store.event(f"{AGAIN[what]} again for every song: {songs} songs")
@@ -1714,6 +1793,7 @@ class Handler(BaseHTTPRequestHandler):
                 app.store.event("Debug details on: the log says every step" if name == "debug" else "Debug details off")
                 return self._json({"level": name})
             if path in ("/api/pause", "/api/resume"):
+                app.vocals.run_alone(False)  # Pause stops Only vocals too; Carry on brings the rest back
                 app.worker.pause(path == "/api/pause")
                 return self._json({"paused": app.worker.paused})
             m = re.fullmatch(r"/api/songs/([^/]+)/marks", path)
@@ -1914,6 +1994,7 @@ def main():
         log.set_level(chosen)
     _log.info("Log level %s (%s)", log.level(), "chosen on the page" if chosen else "LOG_LEVEL")
     app.worker.start()
+    app.vocals.start()
     app.about.start()
     app.mind_memory_every_minute()
     app.relay_now_and_then()

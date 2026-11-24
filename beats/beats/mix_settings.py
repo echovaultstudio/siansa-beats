@@ -14,13 +14,17 @@ KEY = "mix_settings:"
 # "number" a whole number from low to high, "words" a list of names (genres, artists) to leave out.
 SETTINGS = {
     # Which mixes are made.
-    "now": (True, "on", None, None, "For now: mixes for this part of the day"),
+    "now": (True, "on", None, None, "For now: mixes for this part of the day (Home's For now)"),
     "now_count": (4, "number", 1, 6, "How many For now mixes"),
-    "daily": (True, "on", None, None, "Made for you: the kinds of music you play most"),
+    "daily": (True, "on", None, None, "Made for you: the kinds of music you play most (Home's Made for you)"),
     "daily_count": (5, "number", 1, 8, "How many Made for you mixes"),
-    "repeat": (True, "on", None, None, "On repeat"),
-    "rediscover": (True, "on", None, None, "Rediscover"),
-    "new": (True, "on", None, None, "New for you"),
+    "repeat": (True, "on", None, None, "More of you: On repeat"),
+    "rediscover": (True, "on", None, None, "More of you: Rediscover"),
+    "new": (True, "on", None, None, "More of you: New for you"),
+    # Where they go on Home (0.62, the owner: "I don't like the idea of always separating More of you and Made for you";
+    # "allow choosing how many cards it sends to Siansa").
+    "together": (False, "on", None, None, "All in one row on Home, in For now's place: For now's first, then Made for you's, then More of you's"),
+    "together_count": (6, "number", 1, 20, "How many cards that one row has, at most"),
     # What's in each.
     "size": (40, "number", 10, 100, "Songs in a mix"),
     "familiar": (40, "number", 0, 100, "Songs you know, in %: the rest are new to you"),
@@ -33,6 +37,7 @@ SETTINGS = {
     "weekend_apart": (True, "on", None, None, "Weekends apart from weekdays"),
     "daylight": (True, "on", None, None, "Calmer when it's dark outside"),
     "season": (True, "on", None, None, "This time of year counts more"),
+    "skips": (True, "on", None, None, "Songs you skip count for less"),
     "half_life": (120, "number", 14, 730, "Listening counts half after … days"),
     "repeat_days": (30, "number", 7, 90, "On repeat looks back … days"),
     "forgotten_days": (180, "number", 30, 730, "Rediscover: not played for … days"),

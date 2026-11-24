@@ -12,6 +12,7 @@ that would break that is v2, next to v1. The full description is ``openapi.json`
     GET  /api/v1/songs/styles/again?ids=  hears up to 10 songs' styles again, on the GPU and the CPU: {"gpu", "cpu"} each
     GET  /api/v1/songs/families?ids=   CLAP's view of up to 20 songs' genre families, and their styles weighed by it (a look, nothing kept)
     POST /api/v1/listens               finished listens of a listener: {"user", "listens": [{"id", "at", "artist", …}]}
+    POST /api/v1/skips                 songs left before they counted as a listen: {"user", "skips": [{"id", "at", "heard"}]}
     POST /api/v1/listens/now           what's playing now: {"user", "artist", "title", "album", "album_artist", "duration"}
     POST /api/v1/loves                 a heart given or taken back: {"user", "artist", "title", "loved"}, on to Last.fm
     GET  /api/v1/listens/top?user=&kind=&from=&to=&limit=   a listener's most listened songs, artists or albums
@@ -56,12 +57,18 @@ def capabilities(app, server=None):
     """What this Siansa Beats can answer and how far it is (for ``server``'s songs): the app decides from it what to
     offer (a DJ mix needs beat grids; the genres need the style model)."""
     server = server or app.servers.default_id
-    only = app.only(server)
-    counts = app.store.counts(only)
-    styles = app.styles_status(server)
-    measured = app.store.measure_counts(loudness.VERSION, only)
+    # The library's numbers, kept (0.58.1, the owner's debug report of 18 Nov: this answer took 3 to 6.5 s, 83 times in
+    # nine hours, counting 47,000 songs several times over while songs were analysed): worked out again at most every
+    # 30 s or when the database changed, never holding the answer up more than half a second. What's set up (the AI,
+    # the text model, the mixes' settings) is read as it is.
+    def numbers(only):
+        return {"counts": app.store.counts(only), "styles": app.styles_status(server),
+                "measured": app.store.measure_counts(loudness.VERSION, only), "sound": app.store.sound_counts(only),
+                "genres": len(app.genre_list(server)), "traits": app.traits.count(), "listens": app.listens.count()}
+
+    kept = app.kept("capabilities", server, numbers, 30, lambda: app.store.writes).get()
+    counts, styles, measured, sound = kept["counts"], kept["styles"], kept["measured"], kept["sound"]
     shown = app.servers.get(server) or {}
-    sound = app.store.sound_counts(only)
     answered = (list(SOUND_ANSWERS) if sound["sound"] else []) + (list(WORD_ANSWERS) if sound["words"] and app.words.available else [])
     return {
         "service": "siansa-beats",
@@ -80,7 +87,7 @@ def capabilities(app, server=None):
             "loudness": {"available": True, "songs": measured["measured"], "waiting": measured["waiting"],
                          "version": loudness.VERSION},
             "keys": {"available": True, "songs": measured["measured"]},
-            "genres": {"available": bool(styles.get("available")), "styles": len(app.genre_list(server)),
+            "genres": {"available": bool(styles.get("available")), "styles": kept["genres"],
                        "per_song": True},  # /api/v1/songs/genres (0.32)
             "genre_about": {"available": True, "source": "Wikipedia"},
             "bad_blends": {"available": True},
@@ -94,7 +101,7 @@ def capabilities(app, server=None):
             # Essentia's trained traits of each song (0.51): voice, whose voice, moods, danceable, MIREX moods, each 0
             # to 1, in the sound's answers as "traits", with "valence" beside "arousal". How many songs each holds for.
             # AudioMuse-AI's feelings stay in "other_features", as before.
-            "traits": {"available": app.traits.available, "names": list(traits_module.TRAITS), **app.traits.count()},
+            "traits": {"available": app.traits.available, "names": list(traits_module.TRAITS), **kept["traits"]},
             # The search by words (0.26): the songs that have the vector it needs, and whether the text model is here.
             "words": {"available": bool(sound["words"]) and app.words.available, "songs": sound["words"],
                       "steering": app.words.steers},
@@ -108,8 +115,9 @@ def capabilities(app, server=None):
             # Plans for the app's own playlists (0.57): its vibes, Today's mix, Flow's words and the mood radios, by the
             # AI set up here (POST /api/v1/plan). While it's available the app uses no AI of its own.
             "plans": {"available": app.ai.ready},
-            "scrobbling": {"available": True, "listens": app.listens.count(), "most_at_once": listens_module.MOST_AT_ONCE,
-                           "totals": True},  # /api/v1/listens/totals (0.33)
+            "scrobbling": {"available": True, "listens": kept["listens"], "most_at_once": listens_module.MOST_AT_ONCE,
+                           "totals": True,  # /api/v1/listens/totals (0.33)
+                           "skips": True},  # POST /api/v1/skips (0.64): songs left before they counted, for the mixes
         },
         "limits": {"profile_ids": MAX_IDS, "genre_songs": None, "genre_ids": MAX_IDS},
     }
@@ -124,6 +132,9 @@ def profiles(app, ids, server=None):
     here = app.store.resolve(ids, server)
     measures = app.store.measures(here.values())
     grids = app.store.ends(here.values(), app.config.model)
+    from . import vocals as vocals_module
+
+    sung = app.store.vocals(here.values())
     out, pending = [], []
     for song_id in ids:
         sound, grid = measures.get(here.get(song_id)), grids.get(here.get(song_id))
@@ -143,6 +154,11 @@ def profiles(app, ids, server=None):
         if grid is not None:
             profile.update({k: v for k, v in grid.items() if v is not None})
             profile["beat_grid"] = "siansa_beats"
+        # Where the vocals are at each end (0.60, beats.vocals): "vocals" is "separated" (with the fields) or "none"
+        # (instrumental, by the voice model); missing while not known.
+        voice = vocals_module.fields(sung.get(here.get(song_id)))
+        if voice is not None:
+            profile.update({k: v for k, v in voice.items() if v is not None})
         out.append(profile)
     return {"schema_version": SCHEMA_VERSION, "profiles": out, "pending": pending}
 
@@ -204,10 +220,14 @@ def get(handler, path, query, server=None):
         part, days = arg("part") or None, arg("days") or None
         if (part and part not in mixes_module.SUITS) or (days and days not in mixes_module.DAYS):
             return handler._error(HTTPStatus.BAD_REQUEST, "part: " + ", ".join(mixes_module.SUITS) + "; days: weekdays or weekend") or True
+        # What it's like outside, as the app read it (0.61; only when its weather is on): for the names of the mixes of now.
+        weather = arg("weather") or None
+        if weather and weather not in mixes_module.WEATHER:
+            return handler._error(HTTPStatus.BAD_REQUEST, "weather: " + ", ".join(mixes_module.WEATHER)) or True
         if not part and not days and at is None:  # asked for now: this listener's are made ahead the same way (0.54)
             app.mixes.remember(arg("user") or app.default_listener(), arg("tz") or None, lat, lon,
-                               app.only(server or app.servers.default_id), size or mixes_module.SIZE)
-        made = app.mixes_for(arg("user"), arg("tz") or None, at, server, lat, lon, part, days, size)
+                               app.only(server or app.servers.default_id), size or mixes_module.SIZE, weather)
+        made = app.mixes_for(arg("user"), arg("tz") or None, at, server, lat, lon, part, days, size, weather)
         # Each song by the id of the server the app plays from; a song that server hasn't is left out.
         named = server or app.servers.default_id
         ids = app.store.item_ids([s["id"] for shelf in made["shelves"] for m in shelf["mixes"] for s in m["songs"]], named)
@@ -300,11 +320,20 @@ def post(handler, path, body, server=None):
             return handler._error(HTTPStatus.BAD_REQUEST, f"at most {listens_module.MOST_AT_ONCE} listens at a time") or True
         answer = handler.app.listens.add(body.get("user"), rows, "siansa", server or handler.app.servers.default_id)
         return handler._json(answer) or True
+    if path == "/api/v1/skips":  # songs left before they counted as a listen, from the app (0.64): the mixes go by them
+        rows = body.get("skips")
+        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+            return handler._error(HTTPStatus.BAD_REQUEST, 'skips needed: [{"id", "at", "heard"}]') or True
+        if len(rows) > listens_module.MOST_AT_ONCE:
+            return handler._error(HTTPStatus.BAD_REQUEST, f"at most {listens_module.MOST_AT_ONCE} skips at a time") or True
+        return handler._json(handler.app.listens.add_skips(body.get("user"), rows, server or handler.app.servers.default_id)) or True
     if path == "/api/v1/mixes/settings":  # {"user", "settings": {name: value}}: only the ones named change (0.56)
         try:
             return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.set_mix_settings(body.get("user"), body.get("settings"))}) or True
         except ValueError as e:
             return handler._error(HTTPStatus.BAD_REQUEST, str(e)) or True
+    if path == "/api/v1/mixes/again":  # {"user", "tz"}: their mixes made again now, picked anew (0.60.4)
+        return handler._json({"schema_version": SCHEMA_VERSION, **handler.app.mixes_again(body.get("user"), body.get("tz"))}) or True
     if path == "/api/v1/loves":  # a heart from the app: on to Last.fm for a listener who sends listens on
         if not str(body.get("artist") or "").strip() or not str(body.get("title") or "").strip():
             return handler._error(HTTPStatus.BAD_REQUEST, "artist and title needed") or True

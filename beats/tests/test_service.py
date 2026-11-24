@@ -422,8 +422,27 @@ class ServiceTest(Service):
         self.assertFalse(self.call("/api/status")["paused"])
         self.assertIn("t140", self.app.store.without_measure(99))
         self.assertEqual(self.app.store.measure("t140")["ref_lufs"], -9.0)  # still in use until it's measured again
-        for what in ("genres", "sound"):
+        for what in ("genres", "sound", "vocals"):
             self.assertEqual(self.call("/api/analyse-again", "POST", {"what": what})["what"], what)
+        # Only vocals (0.60.2): the rest pauses while it runs, and Carry on ends it; an image without the model says so.
+        if self.app.vocals.available:
+            self.assertFalse(self.call("/api/vocals")["on"])  # off until switched on (0.61)
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/vocals", "POST", {"alone": True})
+            self.assertEqual(caught.exception.code, 409)
+            self.assertTrue(self.call("/api/vocals", "POST", {"on": True})["on"])
+            self.assertTrue(self.call("/api/vocals", "POST", {"alone": True})["alone"])
+            self.assertTrue(self.call("/api/status")["paused"])
+            self.call("/api/resume", "POST")
+            self.assertFalse(self.app.vocals.alone)
+        else:
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.call("/api/vocals", "POST", {"alone": True})
+            self.assertEqual(caught.exception.code, 409)
+        self.assertFalse(self.call("/api/status")["paused"])
+        self.assertTrue(self.call("/api/vocals", "POST", {"only_sung": True})["only_sung"])
+        off = self.call("/api/vocals", "POST", {"on": False})
+        self.assertEqual((off["on"], off["chosen"]), (False, True))
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.call("/api/analyse-again", "POST", {"what": "everything"})
         self.assertEqual(caught.exception.code, 400)
@@ -587,6 +606,17 @@ class ServiceTest(Service):
                 self.call("/api/voice/songs?" + wrong)
             self.assertEqual(caught.exception.code, 400, wrong)
 
+    def test_capabilities_keep_the_librarys_numbers(self):
+        """0.58.1: the owner's debug report, capabilities took 3 to 6.5 s counting the library each time. Asked again
+        with nothing changed, it counts nothing again."""
+        self.start()
+        real, asked = self.app.store.counts, []
+        self.app.store.counts = lambda only=None: asked.append(only) or real(only)
+        first = self.call("/api/v1/capabilities")
+        again = self.call("/api/v1/capabilities")
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(first["songs"], again["songs"])
+
     def test_plans_for_the_app(self):
         """0.57: the app asks for its playlists' plans here; without an AI set up it's told so, and plans isn't offered."""
         self.start()
@@ -631,6 +661,10 @@ class ServiceTest(Service):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self.call("/api/v1/mixes/settings", "POST", {"user": "max", "settings": {"size": "big"}})
         self.assertEqual(caught.exception.code, 400)
+        # Made again by hand (0.60.4): from the page and from the app, counted per listener and day.
+        self.assertEqual(self.call("/api/mixes/again", "POST", {"user": "max", "tz": "Europe/Helsinki"})["times"], 1)
+        got = self.call("/api/v1/mixes/again", "POST", {"user": "max", "tz": "Europe/Helsinki"})
+        self.assertEqual((got["user"], got["times"]), ("max", 2))
         self.call("/api/mixes/keep", "POST", {"days": 14})
         self.assertEqual(self.call("/api/mixes?tz=Europe/Helsinki")["keep_days"], 14)
         with self.assertRaises(urllib.error.HTTPError) as caught:
@@ -758,7 +792,7 @@ class ServiceTest(Service):
         spec = self.call("/api/v1/openapi.json")
         self.assertEqual(spec["info"]["version"], "1")
         for path in ("/api/v1/capabilities", "/api/v1/profiles", "/api/v1/genres", "/api/v1/genre", "/api/v1/genre/about",
-                     "/api/v1/bad-blends", "/api/v1/listens", "/api/v1/listens/now", "/api/v1/listens/top", "/api/v1/listens/totals", "/api/v1/loves",
+                     "/api/v1/bad-blends", "/api/v1/listens", "/api/v1/skips", "/api/v1/listens/now", "/api/v1/listens/top", "/api/v1/listens/totals", "/api/v1/loves",
                      "/api/v1/songs/genres"):
             self.assertIn(path, spec["paths"])
 

@@ -109,13 +109,106 @@ Mixes page (**What goes into your mixes**) or from the Siansa app: which shelves
 in a mix, how many of them you know, songs by one artist, how long a song you played stays out, genres and artists to
 leave out, whether the part of the day, weekends, the dark and this time of year count, how far back listening counts,
 On repeat's and Rediscover's spans, and AI names (`beats/mix_settings.py`, `GET`/`POST /api/v1/mixes/settings`). Left
-as they come, the mixes are made as before.
+as they come, the mixes are made as before. After a change, **Make the mixes again** (on the Mixes page, and in the
+app's Mix settings) makes them again now, a new pick from the same songs and settings, as many times as wanted that day
+(0.60.4; `POST /api/v1/mixes/again` with the `user`; a new day starts afresh).
+
+**Names that match the app, and never the same twice (0.60.5).** The switches on the Mixes page say which row of the
+app's Home each mix is in: For now, Made for you, and More of you (On repeat, Rediscover, New for you). No two mixes shown
+together share a name: the AI is told the names the listener's other mixes already have, and an AI name that's taken
+anyway gives way to the mix's own name from its sound (with a number if that's taken too).
+
+**All the mixes in one row (0.62.0).** Mixes › settings has a new part, *On Siansa's Home*: **All in one row** sends
+For now's, Made for you's and More of you's mixes as one row, in For now's place on Home (the other two rows then stay
+away), and **How many cards** says how many it has at most (6 unless changed). Off, the three rows are as before.
+Which mixes are made and how many of each is still under *Which mixes*.
+
+**Skips count (0.64.0).** The app tells Siansa Beats which songs were left before they counted as a listen
+(`POST /api/v1/skips`: `{"user", "skips": [{"id", "at", "heard"}]}`; `features.scrobbling.skips` says it's taken). Only
+the song and the time are kept. In the mixes a skip weighs 1 on its day and fades as a listen does (half after the
+listener's half-life): each whole skip halves what that song's listens weigh, and a song skipped lately isn't brought as
+a new find, in a mix's new songs or in New for you. **Mix settings › Made around › Songs you skip count for less**
+switches it off. Removing a listener's whole history removes their skips.
+
+**Mix settings on a page of their own (0.63.0).** The settings left the foot of the Mixes page: **Mix settings**, at
+its top, opens their own page. Every setting is still there, in three parts of one line each: *Mixes* (For now, Made
+for you), *Your sound* (On repeat, Rediscover, New for you) and *For all mixes* (What's in a mix, Leave out, Made
+around, In Siansa). A mix's line has its switch and says AUTO while it's as it comes, TUNED once something of it is
+changed; a tap opens its choices under it, with **Back to automatic** for that line alone. Nothing about the settings
+themselves or `/api/v1/mixes/settings` changed.
+
+**A name says a genre only when it's true (0.61.5).** A mix is songs that sound alike, whatever their genre: that's
+the point. But its name said the genre with the most songs in it, even at well under half ("Clear-sky Drum n Bass" with
+hip hop, dubstep and house in it). Now a name or line says a genre only when six in ten of the mix's songs are in it by
+their sound; otherwise it's named for its feel or the moment alone ("Clear-sky mix"). The songs in a mix are as before.
+Made for you's mixes are named by the songs in them, not by the listening they grew from.
+
+**The same mixes on the app and the page (0.61.3).** The app's asks said the weather and the page's didn't, and the
+weather was part of which set of mixes was kept, so each got its own set ("Grey-sky Drum n Bass" on the phone,
+"Sunday Drum n Bass" on the page). The weather now only names a set: the word the app said last is kept, and whoever
+asks gets the same mixes with the same names. And the AI's names are no longer refused for being ones it gave before
+(it's asked not to, which is enough): that left a whole morning's mixes with their own names. When it gives none that
+can be used, the log says so.
+
+**AI names that suit the moment, and no artists (0.61.2).** With *Names and lines from the AI service* on, the AI names
+For now and Made for you: creative names that suit the music, never a mood word and a genre, never an artist (Artist
+radios are for that; a name with one of its own artists is left out), none given in the last two weeks. For now's
+mixes tell it what right now is like (the part of the day, the day, the light, the season and the weather when the app
+sends it), which their names may draw on; Made for you's never say it. The app's ask waits up to 12 seconds for new
+mixes' AI names, so they show at once instead of the next time. With it off, the mixes' own names never name artists
+either: for the moment ("Rainy Folk") or for the sound ("Smoky Alternative Rock"). On repeat, Rediscover and New for you
+keep their names.
+
+**Vocals done is done (0.61.1).** Songs whose vocals can't be found yet (no voice score, or no beats here) kept the
+Overview saying "looking for the next song…" and "46 to go" when every other song was done. They're now counted apart
+("✓ all done · 46 can't be done yet"), the Now card doesn't show Vocals for them, and it looks again every ten minutes.
+
+**Names with more to them (0.61.0).** A page no longer says "Hushed" four times. Each mix's name takes a first word
+none of the page's other names have, from a bigger choice of words for its sound ("Smoky", "Restless", "Kinetic"…),
+and a row takes turns: named for the moment or for its sound (artists left out since 0.61.2). The mixes
+of now, which are made again when the part of the day, the light or the weather changes, can say the moment: the
+weather when the app sends it (`weather=rain`, one word, never where you are; only when its Weather is on), the dark,
+a Friday or the weekend's day, the part of the day or the season ("Rainy Folk", "Dark-morning Metalcore", "Sunday
+Piano"). The mixes for all day never do. Names from the AI service are as before.
+
+**As many mixes as you ask for (0.60.6).** For now looked for at most four groups, whatever its count said, and kinds of
+music that sound alike were joined to fewer mixes than asked. Now For now and Made for you make as many as their counts
+say, where you've played songs enough (about 40 a mix): kinds that sound alike stay apart, and the biggest is halved if
+need be.
 
 **The app's plans, by the AI here (0.57).** The Siansa app asks the AI set up on Setup for its own playlists too: the
 title, sound search, line and sound words to steer by of its vibes, Today's mix, Flow's words and the mood radios
 (`POST /api/v1/plan` with the app's `brief`; `features.plans` in the capabilities says whether it can). The app then
 needs no AI service of its own, and switches its own off. Only what the app writes in the brief is sent: the moment,
 the time slot or the listener's words, recent plays and the sound words the search knows, never a name.
+
+**Where the vocals are, for DJ blends (0.60).** So a blend never lets two singers be heard at once, Beats pulls
+the voice out of each song's first and last 96 seconds (the whole song when it's short) with Hybrid Demucs, and marks
+bar by bar where someone sings. The app gets, with each song's profile (`/api/v1/profiles`): `vocals`
+(`separated`, or `none` for a song the voice model calls instrumental), where the first vocals start and the last
+end (`intro_vocal_ms`, `outro_vocal_ms`), the bars from each lock to them (`intro_vocal_free_bars`,
+`outro_vocal_free_bars`), every sung stretch (`vocal_sections_ms`) and what was heard (`vocal_heard_ms`). A frame
+counts as sung when the vocal stem is within 18 dB of the song's loud vocals, over -48 dBFS and at least 6 % of the
+music's energy there; breaths are filled and blips dropped; a bar is sung when a quarter of it is. It runs when
+nothing else is analysed, a few seconds a song on a GPU (much longer on a CPU), and lets the model go after 10
+minutes idle. **It's optional and off until switched on** (0.61.4): **Setup › Vocals for DJ blends › Find vocals**,
+with a warning that it takes much longer than the rest of the analysis and, once there are any, how long a song has
+taken on this machine for its vocals against the rest of its analysis (the medians of the latest 100). It's also a
+step of **Get started** on the Overview, marked optional. Switched off, nothing more is separated (a song being
+separated finishes first, and Only vocals ends); the vocals found stay in use, and DJ blends work without them.
+**Setup › Vocals for DJ blends › Only songs with vocals** (ticked by default) separates only the songs
+the voice model scores 0.3 or more as sung, and keeps the rest as instrumental without reading them; unticked, every
+song is separated (also those kept as instrumental before). Each library has a **Vocals** pill under Libraries to
+leave its songs out (a library of podcasts or DJ sets, say; 0.60.1). The Overview has a **Vocals** card like the
+others, with the model and how many songs are done, and says in **Now** which song's vocals are being found (0.60.2).
+**Only vocals** (under Libraries, and in the Setup box) pauses the rest of the analysis and finds the vocals now; the
+rest carries on by itself once every song's vocals are found, or with **Carry on**. **Start over › Vocals again**
+finds every song's vocals again, the vocals known staying in use until each song is done. A song whose beats have no steady
+bars to mark the vocals on is kept as failed ("No steady bars to mark the vocals on"), so it doesn't hold up the rest
+(0.60.3: such songs, newest first, were asked for again every round ahead of all the others). Songs that can't be
+done yet (their beats or voice not known) are stepped past, and looked at again once the list has been gone through.
+The Overview's **Now** has one bar for whatever is being worked on: the kind of analysis and how far it is, the song
+and its step (for vocals: getting the file, separating the voice, marking the bars), or why the vocals wait.
 
 **Voice and mood on the page (0.52).** The Overview has a card for it (songs scored of the songs with a sound), and
 the menu a page: how many songs are sung by a woman, by a man or instrumental, as one bar; each mood, danceable,
@@ -181,10 +274,10 @@ Each page has its own address (`#songs`, `#loudness`…), so Back and bookmarks 
 
 | Group | Page | What's on it |
 |---|---|---|
-| Analysis | **Overview** | What's being done now, and a card for each thing analysed (beats, loudness and key, genres, sound): how far it is and what measures it; **Check what's new** reads the libraries for songs added since (nothing already analysed is touched) |
-| | **Libraries** | A row for each library: a switch to analyse it and what it gets (beats, loudness, sound, genres); Start analysis (with its checks), a progress bar for each thing measured, tidying up, and **Start over**: one kind of analysis again for every song, or all of it, each asked about first |
+| Analysis | **Overview** | What's being done now, and a card for each thing analysed (beats, loudness and key, genres, sound, voice and mood, vocals): how far it is and what measures it; **Check what's new** reads the libraries for songs added since (nothing already analysed is touched) |
+| | **Libraries** | A row for each library: a switch to analyse it and what it gets (beats, loudness, sound, genres, vocals); Start analysis (with its checks), Only vocals, a progress bar for each thing measured, tidying up, and **Start over**: one kind of analysis again for every song, or all of it, each asked about first |
 | | **Songs** | Every song (cards on a phone), and a song's page (its beats, loudness, fades, key and genres) when one is open |
-| Your listening | **Listening** | Your history: by year and month, your top artists, albums and songs, and when you listen |
+| Your listening | **Listening** | This month beside the last, how you listen over all your history (My profile), and any month or year (Time machine), with charts |
 | Used by the Siansa app | **Loudness** | How loud the songs are and how they start and end: for levelling the volume and timing fades |
 | | **Keys** | Each song's musical key: for blends in key |
 | | **Genres** | The genres heard from each song's sound, how often they agree with the tags, the genre descriptions, and every genre by songs |
@@ -254,6 +347,17 @@ production, tempo, era) a search can be steered by.
 months, with the listens, hours, artists, songs and albums of that time, the most played of each, the days or
 months as bars (press one to go there), when in the day and the week you listen, records, the artists heard for
 the first time, what's playing now and the last listens. Days and hours are your browser's clock's.
+
+**Three ways to look (0.59).** Listening opens on **This month**: its plays, hours, artists, albums, songs and new
+artists in coloured boxes beside last month's (the plays against last month's by the same day), the days as bars
+with last month's as a dashed line, the top artists, albums and songs (a small picture for each number one, then
+the next ones with a bar of their plays), a listening clock, the weekdays, genres, music by decade, who was new and
+records. **My profile** is all of your history: your top artists over time (their plays added up month by month, or
+their share), your top 40 artists as bubbles, a listening fingerprint (consistency, discovery, variety,
+concentration and replay, the last twelve months over the twelve before), when you listen by weekday and hour,
+genres over time, new artists month by month and music by decade. **Time machine** is any year or month: the same
+boxes and top lists, with a graph to choose (when, the clock, the week, genres or decades). Every chart says what's
+under the pointer. The genres are the analysis's (else the file's genre tag); the decades the files' years.
 
 - **Pictures (0.30):** the favourites of a time (top artist, album and song), the number one of each list, the
   lists' rows, what's playing and the last listens show the cover or the artist's picture. An animated cover
@@ -661,14 +765,20 @@ and measured here. New songs are measured on the way.
 
 ## The page's API
 
-`POST /api/analyse-again` with `{"what": "beats" | "loudness" | "sound" | "genres"}` does one kind of analysis again
-for every song (0.45; on the page under Libraries › **Start over** since 0.46): beats are queued; loudness, key,
-genres and the sound are worked out again while what's known stays in use (0.46: the sound was forgotten first
-before). A paused service starts again.
+`POST /api/analyse-again` with `{"what": "beats" | "loudness" | "sound" | "genres" | "vocals"}` does one kind of
+analysis again for every song (0.45; on the page under Libraries › **Start over** since 0.46; vocals since 0.60.2):
+beats are queued; loudness, key, genres, the sound and the vocals are worked out again while what's known stays in
+use (0.46: the sound was forgotten first before). A paused service starts again.
+
+`POST /api/vocals` with `{"on": bool}` (0.61) switches finding vocals on or off (409 without the model); with
+`{"only_sung": bool}` it sets Only songs with vocals; with `{"alone": true}` (0.60.2) the rest of
+the analysis pauses and the vocals are found now, until every song's are (409 in an image without the model);
+`{"alone": false}`, `/api/pause` and `/api/resume` end it (409 too while finding vocals is off). Its answer, like `GET /api/vocals`, has `on`, `chosen` (switched on or
+off yet), `alone`, `vocal_seconds` and `analysis_seconds`, and `working` has `for_seconds`.
 
 `GET /api/health`, `/api/status`, `/api/libraries`, `/api/songs`, `/api/songs/<id>` (with every beat),
 `/api/beats/<id>`, `/api/audio/<id>`, `/api/grids?ids=`, `/api/export.csv`, `/api/export.json`;
-`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/mixes?user=&tz=&part=&days=` (the Mixes page, 0.53), `/api/voice` (the Voice and mood page's numbers, 0.52), `/api/voice/songs?line=&order=&limit=&offset=` (the songs of one of its lines; order: `most`, `least` or `unsure`), `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
+`/api/bad-blends`, `/api/failed/export`, `/api/listens?user=&year=&month=&tz=`, `/api/art/cover/<song id>?size=` and `/api/art/artist/<song id>?size=` (a song's cover and its artist's picture), `/api/listens/import` (`POST`: the export file as the body, `?user=&name=`), `/api/listens/artist?user=&name=&tz=` (one artist's page), `/api/listens/profile?user=&tz=` (My profile, 0.59), `POST /api/listens/lastfm`, `POST /api/listens/remove`, `/api/genres`, `/api/genre?name=&limit=`, `/api/mixes?user=&tz=&part=&days=` (the Mixes page, 0.53), `/api/voice` (the Voice and mood page's numbers, 0.52), `/api/voice/songs?line=&order=&limit=&offset=` (the songs of one of its lines; order: `most`, `least` or `unsure`), `/api/style/models` (the style models to choose from, 0.39; `POST /api/style/model {"model"}` picks one), `/api/log?after=&limit=&level=`, `/api/log/download`, `/api/debug`, `/api/analysis/checks` (the last Start analysis report, 0.40), `/api/clean/preview` (what could be tidied away, with a token); `POST /api/analysis/start {"ids", "skips": {library: [tasks]}}` (the checks, then the ticked libraries read for new songs; tasks: `beats`, `loudness`, `sound`, `styles`), `/api/clean {"token", "groups"}`, `/api/libraries {"ids"}`, `/api/libraries/read`, `/api/bad-blends`, `/api/songs/<id>/analyse`, `/api/analyse-all`, `/api/log/level {"level"}`, `/api/pause`, `/api/resume`; `DELETE /api/songs/<id>`, `/api/bad-blends/<n>`, `/api/libraries/<id>/songs`. See
 `beats/server.py`.
 
 ## Building the image
@@ -692,4 +802,6 @@ Siansa Beats is built on other people's work, each under its own licence:
   downloads the models from that project's releases. Siansa Beats runs them itself and needs no AudioMuse-AI
   installed; it's a separate project, not affiliated with it. The answers under `/api/v1/sound/` keep the layout of
   that project's API, which the Siansa app already read.
+- **Where the vocals are:** Hybrid Demucs by Alexandre Défossez (Meta, 2021), the weights torchaudio publishes as
+  `HDEMUCS_HIGH_MUSDB_PLUS` (trained on MUSDB-HQ and 150 more songs), MIT licence.
 - **Genre descriptions:** Wikipedia (CC BY-SA), named and linked wherever one is shown.

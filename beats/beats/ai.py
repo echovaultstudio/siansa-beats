@@ -200,23 +200,31 @@ class Ai:
         _log.info("Planned \"%s\" for the app", plan["title"])
         return plan
 
-    def name_mixes(self, described):
+    def name_mixes(self, described, taken=()):
         """Names for mixes, and a short line on what's in each (0.55, the owner: "briefly describe its contents, very
         short and snappy"), from ``described`` (``[{"id", "genres", "energy", "mood", "artists", "tags"}]``):
         ``{id: {"name", "about"}}`` of those it named well (``about`` may be missing); the rest keep their own.
-        Nothing when it isn't set up or fails."""
+        Nothing when it isn't set up or fails. ``taken`` are names the listener's other mixes already have, which none
+        of these may take (0.60.5, the owner: "the mixes are often named the same")."""
         if not described or not self.ready:
             return {}
-        lines = "\n".join(json.dumps({k: d.get(k) for k in ("id", "genres", "energy", "mood", "artists", "tags")}, ensure_ascii=False)
-                          for d in described)
-        system = ("You name playlists for a music streaming app, like a good editor at a streaming service would. "
-                  "Each name is 1 to 4 words, evocative and specific to the music, in title case. No emoji, no quotes, "
-                  "no artist names, no genre name on its own, and never weather, seasons, the sun or a time of day: "
-                  "the listener hears these at any hour. Every name is different. For each, also a line on what's in it: "
-                  "3 to 7 words, snappy, about the sound and feel, no artist names, no weather or time of day "
+        lines = "\n".join(json.dumps({k: d.get(k) for k in ("id", "genres", "energy", "mood", "artists", "tags", "moment") if d.get(k) is not None},
+                                     ensure_ascii=False) for d in described)
+        system = ("You name playlists for a music streaming app, like the best editor at a streaming service would: "
+                  "creative names that suit the music and stay in the mind, like \"Velvet Undertow\", \"Grey Sky Static\" or "
+                  "\"Copper Wires\". Each is 1 to 4 words, in title case. Never the formula of a mood word and a genre "
+                  "(\"Calm Folk\", \"Hushed Metalcore\"), never a genre on its own, no artist or song names, no emoji, no "
+                  "quotes. Every name is different, and none starts with a word another one starts with. A playlist with a "
+                  "\"moment\" is for right now and may draw on it (the weather, the light, the day, the season, the part of "
+                  "the day) where that suits the music; one without a moment is heard at any hour, so its name never "
+                  "says weather, a season, the sun or a time of day. For each, also a line on what's in it: 3 to 7 words, "
+                  "snappy, about the sound and feel, no artist names, no weather or time of day "
                   '("Wiry guitars and restless drums"). Answer with JSON only: '
                   '{"<id>": {"name": "<name>", "about": "<line>"}, ...}')
         user = "The playlists (energy and mood are in words, against the listener's own library):\n" + lines
+        if taken:
+            user += "\nNames the listener's playlists have now or had lately, so use none of them or anything close: " + \
+                ", ".join(sorted(set(taken)))
         try:
             text = self.complete(system, user)
         except AiError as e:
@@ -224,7 +232,10 @@ class Ai:
             _log.warning("The mixes weren't named by the AI: %s", e)
             return {}
         self.last_error = None
-        return clean_names(text, [d["id"] for d in described])
+        # The names it's asked not to give are said, not refused (0.61.3): refusing every one that came back left the mixes
+        # of a whole morning with their own names. A name another mix on the page has now is still refused where it's used.
+        return clean_names(text, [d["id"] for d in described], moments={d["id"] for d in described if d.get("moment")},
+                           artists={d["id"]: d.get("artists") or [] for d in described})
 
 
 # The app's prompt for a plan (its MixGenerator.SYSTEM_PROMPT, moved here in 0.57): the same answers it read before.
@@ -273,10 +284,11 @@ def clean_plan(text):
     return {"title": title, "query": query, "description": tidy(found.get("description"), MOST_DESCRIPTION), "steer": steer[:3]}
 
 
-def clean_names(text, ids):
+def clean_names(text, ids, moments=(), artists=None, taken=()):
     """The names in an AI's answer that can be used, as ``{id: {"name", "about"}}``: one of ``ids`` each, short, no
-    weather or time of day, none twice; ``about`` only when it's short and has none either. A plain name for an id
-    (``{"id": "Name"}``, as before 0.55) is a name without a line."""
+    weather or time of day (unless its id is one of ``moments``, a mix for right now: 0.61.2), no artist of its own
+    (``artists``: ``{id: [names]}``), none twice or of ``taken``; ``about`` only when it's short and has none either. A
+    plain name for an id (``{"id": "Name"}``, as before 0.55) is a name without a line."""
     match = re.search(r"\{.*\}", text or "", re.S)
     try:
         found = json.loads(match.group(0)) if match else {}
@@ -289,7 +301,10 @@ def clean_names(text, ids):
     for mix_id in ids:
         given = found.get(mix_id) if isinstance(found, dict) else None
         name = tidy(given.get("name") if isinstance(given, dict) else given)
-        if not name or len(name) > MOST_NAME or BANNED.search(name) or name.casefold() in seen or not re.search(r"\w", name):
+        own = [a.casefold() for a in (artists or {}).get(mix_id, []) if a and len(a) > 2]
+        if not name or len(name) > MOST_NAME or (BANNED.search(name) and mix_id not in moments) or name.casefold() in seen \
+                or name.casefold() in {t.casefold() for t in taken} or not re.search(r"\w", name) \
+                or any(a in name.casefold() for a in own):
             continue
         seen.add(name.casefold())
         about = tidy(given.get("about")) if isinstance(given, dict) else ""

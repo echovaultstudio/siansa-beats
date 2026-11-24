@@ -1452,6 +1452,89 @@
         }
       }
     },
+    "/api/v1/skips": {
+      "post": {
+        "summary": "Songs a listener left before they counted as a listen, from the app (the mixes go by them; the same skip twice is kept once)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Server"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "skips"
+                ],
+                "properties": {
+                  "user": {
+                    "type": "string",
+                    "description": "The listener: the name the app scrobbles as (the music server's user name)"
+                  },
+                  "skips": {
+                    "type": "array",
+                    "maxItems": 500,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "at"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "The music server's id of the song"
+                        },
+                        "at": {
+                          "type": "integer",
+                          "description": "When it started, seconds since 1970"
+                        },
+                        "heard": {
+                          "type": "integer",
+                          "description": "Seconds of it heard"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "How many were kept, were here already, or had no date, artist or title",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kept": {
+                      "type": "integer"
+                    },
+                    "known": {
+                      "type": "integer"
+                    },
+                    "skipped": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Something was missing or wrong: {\"error\": why}"
+          },
+          "401": {
+            "description": "The password or API key is needed"
+          }
+        }
+      }
+    },
     "/api/v1/listens/now": {
       "post": {
         "summary": "What's playing now for a listener",
@@ -1975,6 +2058,16 @@
         }
       }
     },
+    "/api/v1/mixes/again": {
+      "post": {
+        "summary": "Makes a listener's mixes again now, picked anew from the same songs and settings (0.60.4)",
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {
+          "user": {"type": "string", "description": "The listener"},
+          "tz": {"type": "string", "description": "IANA time zone, for which day it is"}}}}}},
+        "responses": {"200": {"description": "How many times today", "content": {"application/json": {"schema": {"type": "object", "properties": {
+          "schema_version": {"type": "integer"}, "user": {"type": "string"}, "times": {"type": "integer"}}}}}}}
+      }
+    },
     "/api/v1/mixes/settings": {
       "get": {
         "summary": "What goes into a listener's mixes (0.56), each setting described",
@@ -2487,6 +2580,17 @@
             "type": "number",
             "description": "Where the beat stops well before the end (ms)"
           },
+          "vocals": {
+            "type": "string",
+            "enum": ["separated", "none"],
+            "description": "Where the vocals are (0.60): separated (the fields below are known; a missing intro_vocal_ms or outro_vocal_ms means that end has none), or none (instrumental, by the voice model, not separated). Missing while not known."
+          },
+          "intro_vocal_ms": {"type": "number", "description": "Where the first vocals start, on a bar line (ms)"},
+          "outro_vocal_ms": {"type": "number", "description": "Where the last vocals end, on a bar line (ms)"},
+          "intro_vocal_free_bars": {"type": "integer", "description": "Bars from the intro lock to the first vocals (with none in the intro, the bars heard)"},
+          "outro_vocal_free_bars": {"type": "integer", "description": "Bars from the last vocals to the outro lock (with none in the outro, the bars heard)"},
+          "vocal_sections_ms": {"type": "array", "description": "Every sung stretch heard: [from, to] ms on bar lines", "items": {"type": "array", "items": {"type": "number"}}},
+          "vocal_heard_ms": {"type": "array", "description": "The stretches that were separated: [from, to] ms", "items": {"type": "array", "items": {"type": "number"}}},
           "mix_track": {
             "type": "boolean",
             "description": "Part of a continuous mix"

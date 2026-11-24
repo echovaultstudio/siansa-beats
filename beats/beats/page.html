@@ -236,6 +236,121 @@ main > section.on { display: grid; gap: 16px; }
   .tm-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .tm-tiles .tile { padding: 12px; } .tm-tiles .tile .v { font-size: 1.125rem; } .tm-tiles .tile .s { display: none; }
 }
+/* Listening (0.59, the owner, 19 Nov: "more graph representations… similar to how lastfm does it", "more colours",
+   "images are too big on mobile"): eight colours, checked for colour blindness in both themes and always used in this
+   order; a kind of number keeps its colour across the page (artists green, albums gold, songs pink, time orange). */
+:root { --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500; --c5: #d55181; --c6: #0ca30c; --c7: #9085e9; --c8: #e66767; }
+@media (prefers-color-scheme: light) {
+  :root { --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4; --c6: #008300; --c7: #6250d6; --c8: #e34948; }
+}
+.tm-top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+.tm-top > div:first-child { min-width: 0; }
+.tm-hero .tm-who { margin-top: 0; }
+.lx-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.lx-stat { position: relative; overflow: hidden; background: var(--raised); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 12px; min-width: 0;
+  display: grid; gap: 2px; align-content: start; }
+.lx-stat::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--c); }
+.lx-stat::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 70%); pointer-events: none; }
+.lx-stat .k { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
+.lx-stat .k i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
+.lx-stat .v { font-size: 1.75rem; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.lx-stat .s { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.lx-stat .s b { font-weight: 700; color: var(--text); }
+.lx-stat svg { display: block; width: 100%; height: 26px; margin-top: 6px; }
+.lx-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lx-grid > .wide { grid-column: span 2; } .lx-grid > .full { grid-column: 1 / -1; }
+.lx-card { display: grid; gap: 12px; align-content: start; }
+.lx-card > .lx-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.lx-card > .lx-head h3 { margin: 0; display: flex; align-items: center; gap: 8px; }
+.lx-card > .lx-head h3 i { width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--amber)); flex: 0 0 auto; }
+.lx-card > .lx-head .sub { margin: 0; font-size: 0.8125rem; }
+.lx-card > .lx-head .seg, .lx-card > .lx-head .lx-pick { margin-left: auto; }
+.lx-card .note { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+.lx-chart { position: relative; min-width: 0; width: 100%; }
+.lx-chart svg { display: block; overflow: visible; }
+.lx-chart text { font: 11px var(--sans); fill: var(--faint); font-variant-numeric: tabular-nums; }
+.lx-chart text.strong { fill: var(--text); font-weight: 600; font-size: 12px; }
+.lx-chart text.mid { fill: var(--muted); }
+.lx-chart .grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+.lx-chart .hit { fill: transparent; }
+.lx-chart .hit:hover, .lx-chart .col:hover .hit { fill: color-mix(in srgb, var(--text) 6%, transparent); }
+.lx-chart .col .x { stroke: var(--line-strong); stroke-width: 1; opacity: 0; }
+.lx-chart .col:hover .x { opacity: 1; }
+.lx-chart .pick { cursor: pointer; }
+.lx-chart .mk { transition: opacity 0.12s ease; }
+.lx-chart .col:hover .mk, .lx-chart g:hover > .mk { opacity: 0.82; }
+.lx-chart .empty { padding: 24px 0; text-align: center; color: var(--muted); font-size: 0.875rem; }
+.lx-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8125rem; color: var(--muted); margin: 0; padding: 0; list-style: none; }
+.lx-legend li { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.lx-legend li i { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; background: var(--c); }
+.lx-legend li.dash i { height: 0; border-top: 2px dashed var(--faint); border-radius: 0; background: none; width: 14px; }
+.lx-legend li[data-artist]:hover { color: var(--text); }
+.lx-tip { position: fixed; z-index: 50; pointer-events: none; max-width: 260px; padding: 8px 10px; border-radius: 10px; font-size: 0.8125rem; line-height: 1.35;
+  background: var(--raised-2); color: var(--text); border: 1px solid var(--line-strong); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); font-variant-numeric: tabular-nums; }
+.lx-tip b { display: block; font-weight: 700; margin-bottom: 2px; }
+.lx-tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; background: var(--c); }
+.lx-tip span { display: block; color: var(--muted); }
+/* A top list: its number one with a small picture, then the next ones with a bar of their plays. */
+.lx-lead { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; align-items: center; padding: 10px; border-radius: 14px;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--c) 18%, transparent), transparent 80%); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
+.lx-lead .art { width: 84px; font-size: 1.5rem; border-radius: 10px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); }
+.lx-lead .art.round { border-radius: 50%; }
+.lx-lead .t { min-width: 0; display: grid; gap: 1px; }
+.lx-lead small { font-size: 0.6875rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.lx-lead b { font-size: 1.125rem; line-height: 1.2; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lx-lead span { font-size: 0.8125rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lx-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lx-list li { display: grid; grid-template-columns: 2ch 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 6px; border-radius: 10px; }
+.lx-list li:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.lx-list .rk { color: var(--faint); font-size: 0.8125rem; text-align: right; font-variant-numeric: tabular-nums; }
+.lx-list .art { width: 36px; font-size: 0.75rem; border-radius: 6px; }
+.lx-list .art.round { border-radius: 50%; }
+.lx-list .t { min-width: 0; display: grid; gap: 3px; }
+.lx-list .t b, .lx-list .t span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lx-list .t b { font-weight: 600; font-size: 0.9375rem; } .lx-list .t span { font-size: 0.75rem; color: var(--faint); }
+.lx-list .t u { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--c) 14%, transparent); text-decoration: none; }
+.lx-list .t u i { display: block; height: 100%; border-radius: 2px; background: var(--c); }
+.lx-list .n { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.8125rem; }
+.lx-more { justify-self: start; font-size: 0.8125rem; padding: 6px 12px; display: none; }
+/* Rows of names with a bar each: genres. */
+.lx-rows { display: grid; gap: 8px; }
+.lx-row { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 0.875rem; }
+.lx-row .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lx-row .nm small { display: block; font-size: 0.6875rem; color: var(--faint); }
+.lx-row .lx-bar { display: block; height: 12px; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--c) 12%, transparent); overflow: hidden; }
+.lx-row .lx-bar i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--c); }
+.lx-row .v { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.8125rem; min-width: 3ch; text-align: right; }
+.lx-ring { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; align-items: center; }
+.lx-ring svg { width: 96px; height: 96px; display: block; }
+.lx-ring .big { font-size: 1.375rem; font-weight: 750; fill: var(--text); }
+.lx-faces { display: flex; flex-wrap: wrap; gap: 6px; }
+.lx-faces .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; margin: 0; font-size: 0.8125rem; max-width: 100%; }
+.lx-faces .chip .art { width: 22px; font-size: 0.625rem; }
+.lx-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.lx-picker button { padding: 6px 12px; font-size: 0.8125rem; border-radius: 999px; }
+.lx-picker button[aria-pressed=true] { background: var(--amber); color: var(--on-amber); border-color: var(--amber); font-weight: 700; }
+.lx-travel { display: grid; gap: 4px; }
+.lx-travel .tm-strip { margin-top: 4px; }
+.tm-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 400px) { .tm-tabs button { font-size: 0.75rem; } }
+@media (max-width: 1200px) { .lx-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .lx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lx-grid > .wide { grid-column: 1 / -1; } }
+@media (max-width: 700px) {
+  .lx-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .lx-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .lx-stat { padding: 12px 12px 10px; } .lx-stat .v { font-size: 1.375rem; }
+  .lx-lead { grid-template-columns: 60px minmax(0, 1fr); gap: 12px; padding: 8px; }
+  .lx-lead .art { width: 60px; font-size: 1.125rem; }
+  .lx-lead b { font-size: 1rem; }
+  .lx-list li { grid-template-columns: 2ch 32px minmax(0, 1fr) auto; gap: 8px; padding: 5px 4px; }
+  .lx-list .art { width: 32px; }
+  .lx-list:not(.open) li:nth-child(n+5) { display: none; }
+  .lx-more { display: inline-flex; }
+  .lx-row { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr) auto; }
+  .tm-tabs { grid-template-columns: repeat(4, auto); } .tm-tabs button { font-size: 0.8125rem; padding: 8px 6px; }
+  .tm-hero h2 { font-size: clamp(1.75rem, 8vw, 2.4rem); }
+}
+.lx-stat .v.name { font-size: 1.125rem; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Phones: long lists show their first lines with "Show all" (data-cap), cards marked data-fold open and close by
    their heading, and a button goes back to the top: less scrolling, and the page's parts stay findable. */
 .cap-more { margin-top: 12px; width: 100%; }
@@ -248,6 +363,8 @@ main > section.on { display: grid; gap: 16px; }
   background: var(--raised-2); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
 .card-head { display: flex; align-items: baseline; gap: 12px; } .card-head .more { margin-left: auto; font-size: 0.875rem; }
 .kicker { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 2px; }
+.now-bar { grid-column: 1 / -1; } .now-bar .meter { height: 6px; border-radius: 999px; background: var(--raised-2); overflow: hidden; display: flex; }
+.now-bar .sub { margin-top: 6px; }
 .now { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: center; }
 .what { font-size: 1rem; font-weight: 600; }
 .step { color: var(--muted); font-size: 0.875rem; }
@@ -367,10 +484,34 @@ canvas { width: 100%; display: block; border-radius: 12px; background: var(--rai
 .fact .k { font-size: 0.75rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
 .fact .v { font-size: 1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
 label.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 0.875rem; color: var(--muted); }
-.mx-set h4 { margin: 16px 0 8px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.mx-set .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 0.875rem; }
-.mx-set .row input[type=number] { width: 5.5em; }
-.mx-set .row input[type=text] { flex: 1; min-width: 0; max-width: 60%; }
+.mx-set-open { float: right; margin-left: 12px; }
+.mx-set { max-width: 44rem; }
+.mx-set h4 { margin: 24px 0 2px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); }
+.mx-set h4 + .sub { font-size: 0.75rem; color: var(--faint); margin-bottom: 8px; }
+.mx-set h4 + .mx-part { margin-top: 8px; }
+.mx-part { background: var(--raised); border: 1px solid var(--line); border-radius: 16px; padding: 0 16px; }
+.mx-line { border-bottom: 1px solid var(--line); }
+.mx-line:last-child { border-bottom: 0; }
+.mx-line-head { display: flex; align-items: center; gap: 12px; min-height: 58px; }
+.mx-line-name { display: block; flex: 1; min-width: 0; padding: 8px 0; border-radius: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; }
+.mx-line-name b { font-size: 0.9375rem; font-weight: 500; }
+.mx-line-name span.note { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+.mx-tag { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; border: 1px solid var(--line-strong); color: var(--faint); border-radius: 8px; padding: 1px 6px; margin-left: 8px; vertical-align: 1px; }
+.mx-tag.tuned { border-color: var(--amber); color: var(--amber-text); }
+.mx-line-more { flex: none; width: 32px; height: 32px; border-radius: 50%; background: none; border: 0; color: var(--faint); font-size: 1.125rem; transition: transform 0.15s ease; }
+.mx-line.open .mx-line-more { transform: rotate(90deg); color: var(--amber-text); }
+.mx-line-body { display: none; padding: 0 0 12px; }
+.mx-line.open .mx-line-body { display: block; }
+.mx-line-body .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; font-size: 0.875rem; color: var(--muted); }
+.mx-line-body .row input[type=number] { width: 5.5em; font: inherit; font-size: 0.875rem; border-radius: 999px; padding: 8px 12px; border: 1px solid var(--line-strong); background: var(--raised-2); color: var(--text); }
+.mx-line-body .row input[type=text] { flex: 1; min-width: 0; max-width: 60%; }
+.mx-line-body .btn { margin-top: 8px; }
+.mx-switch { appearance: none; -webkit-appearance: none; flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--raised-2); border: 1px solid var(--line-strong); position: relative; margin: 0; transition: background 0.15s; }
+.mx-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--faint); transition: left 0.15s; }
+.mx-switch:checked { background: var(--amber); border-color: var(--amber); }
+.mx-switch:checked::after { left: 20px; background: var(--on-amber); }
+.mx-switch:focus-visible, .mx-line-name:focus-visible, .mx-line-more:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.mx-set-foot { margin-top: 24px; max-width: 44rem; }
 .banner { border: 1px solid var(--bad); color: var(--bad); border-radius: 12px; padding: 12px 16px; display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
 .banner[hidden], .btn[hidden] { display: none; }
 [hidden] { display: none !important; }  /* a button's or a card's own display would show it all the same */
@@ -632,10 +773,12 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <div class="step" id="now-step"></div>
         </div>
         <div class="controls"><button id="check-new" title="Reads the libraries you analyse for songs added since, and analyses those. Nothing already analysed is touched">Check what's new</button><button id="pause">Pause</button></div>
+        <!-- One bar for what's being worked on (0.60.3, the owner: what is working and what stage it is at), the card's width. -->
+        <div class="now-bar" id="now-bar" hidden><div class="meter" aria-hidden="true"><span class="done" id="now-meter"></span></div><div class="sub" id="now-count"></div></div>
       </div>
       <div class="card" id="start-card" hidden>
         <h3>Get started</h3>
-        <p class="sub">Four steps, all on this page. Nothing is ever changed on your music server.</p>
+        <p class="sub">Five steps, all on this page. Nothing is ever changed on your music server.</p>
         <ol class="steps" id="start-steps"></ol>
       </div>
       <div class="kinds" id="tiles"></div>
@@ -656,6 +799,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
         <div class="reading" id="reading" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><b id="reading-what"></b><div class="sub" id="reading-step"></div></div></div>
         <div class="controls row-gap">
           <button class="primary" id="start" title="Checks the server, the libraries, the database, the disk, the models and the page's safety, then reads the ticked libraries for new songs and analyses them">Start analysis</button>
+          <button data-vocals-alone hidden title="Pauses the rest of the analysis and finds the vocals of the songs still waiting; the rest carries on after">Only vocals</button>
           <span class="sub" id="start-note"></span>
         </div>
         <ul class="checks" id="checks" aria-label="What was checked" hidden></ul>
@@ -681,6 +825,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <button class="danger" data-again="loudness">Loudness and key again</button>
           <button class="danger" data-again="genres">Genres again</button>
           <button class="danger" data-again="sound">Sound again</button>
+          <button class="danger" data-again="vocals">Vocals again</button>
           <button class="danger" id="all-again">Analyse every song again</button>
         </div>
       </div>
@@ -816,6 +961,7 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
     <section data-view="mixes">
       <div class="tm-hero">
         <div class="tm-kicker">Made for you</div>
+        <a class="btn mx-set-open" href="#mixsettings" id="mx-set-open">Mix settings</a>
         <h2 id="mx-title">Mixes</h2>
         <p class="sub" id="mx-note" role="status">Loading…</p>
         <p class="sub" id="mx-based"></p>
@@ -835,27 +981,26 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
         <details class="how"><summary>How these are made</summary>
           <p class="sub">Siansa Beats looks at when you play what. The week is cut in ten parts: early morning, morning, afternoon, evening and night, on weekdays and at the weekend. The songs you play in a part fall into a few kinds that sound alike, and each kind is a mix: some of your own songs, and around them songs that sound like them and that you haven't played for a while. A recent listen counts for more, and so does one from this time of year in earlier years.</p>
           <p class="sub">The sun is worked out from the date and your time zone's city: no weather service is asked. In the dark the calmer mixes come first. A mix is named by its sound, never by the weather, and stays the same all day.</p>
-          <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. Skips aren't counted: the app sends finished listens only.</p>
+          <p class="sub">With too little listening in a part, it borrows from that time on other days, then from all your listening, then from your library. A song you skip before it counts as a listen isn't one. The app tells Siansa Beats about it (Siansa Beats 0.64 and an app that sends skips): each skip halves what that song's listens count for, a skipped song doesn't come back as a new find for a while, and a skip fades as a listen does. Made around › Songs you skip count for less switches this off.</p>
           <p class="sub">The next part of the day's mixes are made ten minutes before it starts, so the app finds them ready. With an AI service set up in Setup, each mix of a kind of music gets a name and a short line from it.</p>
         </details>
       </div>
-      <!-- What goes into the mixes (0.56): every choice the mixes used to make by themselves, for the listener shown.
-           The app's Settings › Connections › Siansa Beats › Mixes changes the same (/api/v1/mixes/settings). -->
-      <div class="card" id="mx-settings">
-        <h3>What goes into your mixes</h3>
-        <p class="sub">For the listener above. The Siansa app changes the same. Changes make the mixes again.</p>
-        <div id="mx-set-groups" class="mx-set"></div>
-        <div class="controls" style="margin-top:12px">
-          <label class="sub" for="mx-keep">Keep mixes for</label>
-          <select id="mx-keep" title="How long a mix stays playable after it was made, from the app's recent plays">
-            <option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="90">90 days</option>
-          </select>
-          <span class="sub" id="mx-keep-note" role="status"></span>
-        </div>
-        <div class="controls" style="margin-top:12px">
-          <button type="button" class="btn" id="mx-set-reset">As they come</button>
-          <span class="sub" id="mx-set-note" role="status"></span>
-        </div>
+    </section>
+
+    <!-- Mix settings (0.63, the owner: "mix settings shouldn't be hidden at the bottom of the page"; "their own page
+         and be 100% organised and not bloated and easy to understand"): a page of its own (#mixsettings), every choice
+         the mixes make by themselves, for the listener shown on Mixes. One line each: a tap opens its choices under
+         it. The app's Settings › Connections › Siansa Beats › Mixes changes the same (/api/v1/mixes/settings). -->
+    <section data-view="mixsettings">
+      <div class="page-head"><button type="button" id="mx-set-back">‹ Mixes</button><h2>Mix settings</h2>
+        <p class="sub">Siansa Beats makes your mixes by itself, from what you play, the time of day, the season and the light outside. Change only what you want.</p>
+        <p class="sub" id="mx-set-who"></p></div>
+      <div id="mx-set-groups" class="mx-set"></div>
+      <div class="controls mx-set-foot">
+        <!-- The mixes made again now, picked anew, not only at the next ask (0.60.4, the owner). -->
+        <button type="button" class="btn primary" id="mx-again" title="Makes the listener's mixes again now, a new pick from the same songs">Make the mixes again</button>
+        <button type="button" class="btn" id="mx-set-reset" title="Every setting back to how it came">All back to automatic</button>
+        <span class="sub" id="mx-set-note" role="status"></span>
       </div>
     </section>
 
@@ -947,56 +1092,86 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
     <!-- Listening: the history, a month or a year at a time -->
     <section data-view="listening">
       <div class="tm-hero">
-        <div class="tm-kicker">Time machine</div>
-        <h2 id="tm-label">Listening</h2>
-        <p class="sub" id="tm-sub" role="status">Loading…</p>
-        <div class="tm-who" id="tm-who" hidden>
-          <label for="tm-user" class="sub">Listener</label>
-          <select id="tm-user" title="Whose listening is shown"></select>
+        <div class="tm-top">
+          <div>
+            <div class="tm-kicker" id="tm-kicker">Listening</div>
+            <h2 id="tm-label">Listening</h2>
+            <p class="sub" id="tm-sub" role="status">Loading…</p>
+          </div>
+          <div class="tm-who" id="tm-who" hidden>
+            <label for="tm-user" class="sub">Listener</label>
+            <select id="tm-user" title="Whose listening is shown"></select>
+          </div>
         </div>
-        <div class="tm-strip" id="tm-years" role="group" aria-label="Year"></div>
-        <div class="tm-strip" id="tm-months" role="group" aria-label="Month" hidden></div>
       </div>
       <div class="card tm-now" id="tm-now" hidden><div id="tm-now-what"></div></div>
       <div class="banner warn tm-join" id="tm-join" hidden><span id="tm-join-text"></span><button type="button" class="primary" id="tm-join-go"></button></div>
-      <!-- One part at a time, chosen here (it stays in view while scrolling), so a phone never scrolls through all of it. -->
+      <!-- Three ways to look (0.59, the owner, 19 Nov): this month, how you listen over all your history, and any month
+           or year of it; then what Listening is set up with. One at a time, so a phone never scrolls through all of it. -->
       <div class="tm-tabs" role="tablist" aria-label="Part of your listening">
-        <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
-        <button type="button" role="tab" data-tab="top" aria-selected="false">Top</button>
-        <button type="button" role="tab" data-tab="when" aria-selected="false">When</button>
-        <button type="button" role="tab" data-tab="history" aria-selected="false">History</button>
+        <button type="button" role="tab" data-tab="month" aria-selected="true">This month</button>
+        <button type="button" role="tab" data-tab="profile" aria-selected="false">My profile</button>
+        <button type="button" role="tab" data-tab="machine" aria-selected="false">Time machine</button>
         <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings</button>
       </div>
       <div class="card tm-empty" id="tm-empty" hidden></div>
-      <div class="tm-panel" data-tab="overview" id="tm-body">
-        <div class="tm-podium" id="tm-podium" aria-label="Your favourites of this time"></div>
-        <div class="tiles tm-tiles" id="tm-tiles"></div>
-        <div class="card"><h3 id="tm-chart-title">When</h3><div class="tm-chart" id="tm-chart"></div><p class="sub">Press a bar to go there.</p></div>
-        <div class="card" id="tm-new-card"><h3>Heard for the first time</h3><div id="tm-new" class="tm-faces"></div></div>
-      </div>
-      <div class="tm-panel" data-tab="top" hidden>
-        <div class="card">
-          <div class="seg tm-seg" role="group" aria-label="Most played">
-            <button type="button" data-top="artists" aria-pressed="true">Artists</button>
-            <button type="button" data-top="albums" aria-pressed="false">Albums</button>
-            <button type="button" data-top="songs" aria-pressed="false">Songs</button>
-          </div>
-          <div id="tm-first"></div>
-          <ol class="tm-rank" id="tm-artists" data-cap="9" start="2"></ol>
-          <ol class="tm-rank" id="tm-albums" data-cap="9" start="2" hidden></ol>
-          <ol class="tm-rank" id="tm-songs" data-cap="9" start="2" hidden></ol>
+
+      <!-- This month: its numbers beside last month's, then what, when and how new. -->
+      <div class="tm-panel" data-tab="month">
+        <div class="lx-stats" id="lm-stats"></div>
+        <div class="lx-grid">
+          <div class="card lx-card wide" style="--c: var(--c1)"><div class="lx-head"><h3><i></i>Day by day</h3><p class="sub" id="lm-days-note"></p></div>
+            <div class="lx-chart" id="lm-days"></div><ul class="lx-legend" id="lm-days-legend"></ul></div>
+          <div class="card lx-card" style="--c: var(--c7)"><div class="lx-head"><h3><i></i>New to you</h3></div><div id="lm-new"></div></div>
+          <div class="card lx-card" style="--c: var(--c3)"><div class="lx-head"><h3><i></i>Top artists</h3></div><div id="lm-artists"></div></div>
+          <div class="card lx-card" style="--c: var(--c4)"><div class="lx-head"><h3><i></i>Top albums</h3></div><div id="lm-albums"></div></div>
+          <div class="card lx-card" style="--c: var(--c5)"><div class="lx-head"><h3><i></i>Top songs</h3></div><div id="lm-songs"></div></div>
+          <div class="card lx-card" style="--c: var(--c2)"><div class="lx-head"><h3><i></i>Listening clock</h3></div><div class="lx-chart" id="lm-clock"></div><p class="note" id="lm-clock-note"></p></div>
+          <div class="card lx-card" style="--c: var(--c2)"><div class="lx-head"><h3><i></i>Through the week</h3></div><div class="lx-chart" id="lm-week"></div><p class="note" id="lm-week-note"></p></div>
+          <div class="card lx-card" style="--c: var(--c6)"><div class="lx-head"><h3><i></i>Genres</h3></div><div id="lm-genres"></div></div>
+          <div class="card lx-card" style="--c: var(--c8)"><div class="lx-head"><h3><i></i>Music by decade</h3></div><div class="lx-chart" id="lm-decades"></div><p class="note" id="lm-decades-note"></p></div>
+          <div class="card lx-card"><div class="lx-head"><h3>Records</h3></div><dl class="tm-facts" id="lm-records"></dl></div>
+          <div class="card lx-card" id="tm-recent-card" hidden><div class="lx-head"><h3>Last listens</h3></div><ul class="tm-listens" id="tm-recent" data-cap="6"></ul></div>
         </div>
       </div>
-      <div class="tm-panel" data-tab="when" hidden>
-        <div class="tm-cols">
-          <div class="card"><h3>Around the clock</h3><div class="tm-chart small" id="tm-hours"></div><p class="sub" id="tm-hours-note"></p></div>
-          <div class="card"><h3>Through the week</h3><div class="tm-chart small" id="tm-weekdays"></div><p class="sub" id="tm-weekdays-note"></p></div>
-          <div class="card"><h3>Records</h3><dl class="tm-facts" id="tm-records"></dl></div>
+
+      <!-- My profile: how you listen, over all of your history. -->
+      <div class="tm-panel" data-tab="profile" hidden>
+        <div class="lx-stats" id="lp-stats"></div>
+        <div class="lx-grid">
+          <div class="card lx-card full"><div class="lx-head"><h3>Top artists over time</h3><p class="sub" id="lp-lines-note">Plays added up, month by month</p>
+              <div class="seg" role="group" aria-label="Show"><button type="button" data-lines="plays" aria-pressed="true">Plays</button><button type="button" data-lines="share" aria-pressed="false">Share</button></div></div>
+            <div class="lx-chart" id="lp-lines"></div><ul class="lx-legend" id="lp-lines-legend"></ul></div>
+          <div class="card lx-card wide"><div class="lx-head"><h3>Your top 40 artists</h3><p class="sub">The bigger, the more played</p></div><div class="lx-chart" id="lp-bubbles"></div></div>
+          <div class="card lx-card"><div class="lx-head"><h3>Listening fingerprint</h3></div><div class="lx-chart" id="lp-radar"></div><ul class="lx-legend" id="lp-radar-legend"></ul><p class="note" id="lp-radar-note"></p></div>
+          <div class="card lx-card wide" style="--c: var(--c1)"><div class="lx-head"><h3><i></i>When you listen</h3><p class="sub">Day of the week and hour</p></div><div class="lx-chart" id="lp-heat"></div><p class="note" id="lp-heat-note"></p></div>
+          <div class="card lx-card" style="--c: var(--c2)"><div class="lx-head"><h3><i></i>Listening clock</h3></div><div class="lx-chart" id="lp-clock"></div></div>
+          <div class="card lx-card full"><div class="lx-head"><h3>Genres over time</h3><p class="sub" id="lp-stream-note"></p></div><div class="lx-chart" id="lp-stream"></div><ul class="lx-legend" id="lp-stream-legend"></ul></div>
+          <div class="card lx-card wide" style="--c: var(--c7)"><div class="lx-head"><h3><i></i>New artists, month by month</h3></div><div class="lx-chart" id="lp-discovery"></div><p class="note" id="lp-discovery-note"></p></div>
+          <div class="card lx-card" style="--c: var(--c8)"><div class="lx-head"><h3><i></i>Music by decade</h3></div><div class="lx-chart" id="lp-decades"></div></div>
         </div>
       </div>
-      <div class="tm-panel" data-tab="history" hidden>
-        <div class="card" id="tm-recent-card" hidden><h3>Last listens</h3><ul class="tm-listens" id="tm-recent" data-cap="6"></ul></div>
+
+      <!-- Time machine: any year, or a month of it, as boxes, with a graph of your choice. -->
+      <div class="tm-panel" data-tab="machine" hidden>
+        <div class="card lx-travel">
+          <div class="tm-strip" id="tm-years" role="group" aria-label="Year"></div>
+          <div class="tm-strip" id="tm-months" role="group" aria-label="Month" hidden></div>
+        </div>
+        <div class="card tm-empty" id="lt-empty" hidden></div>
+        <div class="lx-stats" id="lt-stats"></div>
+        <div class="lx-grid" id="lt-body">
+          <div class="card lx-card full"><div class="lx-head"><h3 id="lt-graph-title">When</h3>
+              <div class="lx-picker" role="group" aria-label="Graph" id="lt-picker"></div></div>
+            <div class="lx-chart" id="lt-graph"></div><ul class="lx-legend" id="lt-graph-legend"></ul><p class="note" id="lt-graph-note"></p></div>
+          <div class="card lx-card" style="--c: var(--c3)"><div class="lx-head"><h3><i></i>Top artists</h3></div><div id="lt-artists"></div></div>
+          <div class="card lx-card" style="--c: var(--c4)"><div class="lx-head"><h3><i></i>Top albums</h3></div><div id="lt-albums"></div></div>
+          <div class="card lx-card" style="--c: var(--c5)"><div class="lx-head"><h3><i></i>Top songs</h3></div><div id="lt-songs"></div></div>
+          <div class="card lx-card" style="--c: var(--c7)"><div class="lx-head"><h3><i></i>New to you</h3></div><div id="lt-new"></div></div>
+          <div class="card lx-card wide"><div class="lx-head"><h3>Records</h3></div><dl class="tm-facts" id="lt-records"></dl></div>
+        </div>
       </div>
+
       <!-- What Listening is set up with, in one place (0.47): who the listeners are, files brought in, Last.fm. -->
       <div class="tm-panel" data-tab="settings" hidden>
         <div class="card">
@@ -1170,6 +1345,21 @@ section[data-view="trait"] th:last-child, section[data-view="trait"] td.num { te
           <li><b>After:</b> the old model's genres are gone. Going back means hearing every song again.</li>
         </ul>
       </div>
+      <!-- Where the vocals are (0.60): so a DJ blend never lets two singers be heard at once. -->
+      <div class="card" data-fold id="vocals-card">
+        <h3>Vocals for DJ blends</h3>
+        <p class="sub">Beats pulls the voice out of the first and last 1½ minutes of each song and marks, bar by bar, where someone sings. Siansa's DJ blends use it so two vocals are never heard at the same time. Without it, DJ blends still work: they just don't know where the singing is.</p>
+        <!-- Optional (0.61, the owner, 20 Nov: "with clear warning that it takes much longer"): off until switched on. -->
+        <label class="toggle"><input type="checkbox" id="vocals-on"> Find vocals</label>
+        <p class="note warn" id="vocals-warning">Slow. Pulling the voice out takes much longer than the rest of the analysis, most of all without a GPU: for a big library it can take days. It only starts a song when nothing else is being analysed, but a song added meanwhile is analysed alongside it, more slowly. Leave it off if you don't use DJ blends.<span id="vocals-times"></span></p>
+        <div id="vocals-more" hidden>
+          <label class="toggle"><input type="checkbox" id="vocals-only"> Only songs with vocals</label>
+          <p class="sub">Ticked: only songs the voice model says are sung are separated; the rest count as instrumental. Faster, but a song with only a little singing can be missed. Unticked: every song is separated.</p>
+          <p class="sub"><b style="display:inline">Only vocals</b> pauses the rest of the analysis and finds the vocals now.</p>
+          <div class="controls row-gap"><button data-vocals-alone hidden title="Pauses the rest of the analysis and finds the vocals of the songs still waiting; the rest carries on after">Only vocals</button></div>
+        </div>
+        <p class="sub" id="vocals-state" role="status"></p>
+      </div>
       <div class="card" data-fold>
         <h3>Connect the Siansa app</h3>
         <ol class="steps">
@@ -1286,26 +1476,9 @@ async function refreshStatus() {
   const done = c.done || 0, failed = c.failed || 0, queued = c.queued || 0, skipped = c.skipped || 0;
   const busy = BUSY.reduce((n, k) => n + (c[k] || 0), 0);
   drawStatus(s);
-  if (s.current) {
-    $("now-what").textContent = `${s.current.artist} – ${s.current.title}`;
-    $("now-step").textContent = `${s.current.step} for ${fmt(s.current.for_seconds)} s` +
-      (s.next ? ` · next: ${s.next.artist} – ${s.next.title} (${s.next.step})` : "");
-  } else if (s.reading && !queued) {
-    $("now-what").textContent = `Reading ${s.reading.server_name}'s libraries`;
-    $("now-step").textContent = `${s.reading.library || "Starting"}: ${s.reading.songs == null ? "asking for its songs…" : `matching its ${num(s.reading.songs)} songs with those already here…`}`;
-  } else if (s.regridding) {
-    $("now-what").textContent = "Working out songs again from their saved beats";
-    $("now-step").textContent = `${s.regridding.done} of ${s.regridding.total} (an update changed how; no model needed)`;
-  } else if (s.next) {
-    $("now-what").textContent = `${s.next.artist} – ${s.next.title}`;
-    $("now-step").textContent = `${s.next.step} for ${fmt(s.next.for_seconds)} s`;
-  } else if (s.paused) {
-    $("now-what").textContent = "Paused"; $("now-step").textContent = `${queued} waiting`;
-  } else {
-    $("now-what").textContent = total ? (queued ? "Starting the next song…" : "All done") : "No songs yet";
-    $("now-step").innerHTML = total ? "" : (libraries.some((l) => l.on) ? "Reading the libraries…" : 'Choose the libraries to analyse under <a href="#libraries">Libraries</a>.');
-  }
+  drawNow(s, total, queued);
   $("pause").textContent = s.paused ? "Carry on" : "Pause";
+  drawVocalsAlone(s.vocals);
   const failedCount = (s.counts || {}).failed || 0;
   $("export-failed").hidden = !failedCount;
   $("export-failed").textContent = `Download failed songs (${failedCount})`;
@@ -1400,11 +1573,11 @@ async function refreshLibraries() {
 const savedIds = () => libraries.filter((l) => l.on).map((l) => l.id);
 // What each ticked library gets (0.40): a library of two-hour mixes wants its loudness, not its beats. Each chip is
 // a task; a crossed-out one is left out. Kept in skips (library id → the tasks left out) until Start analysis.
-const TASKS = [["beats", "Beats", "Tempo, beats and phrases (Beat This!): what the DJ blends need. Slow on very long songs."], ["loudness", "Loudness & key", "LUFS, fades and the key: what the app levels the volume and mixes in key by."], ["sound", "Sound", "Moods, energy and what sounds alike (MusiCNN, CLAP): similar music and the search by words."], ["styles", "Genres", "The 400 Discogs styles by sound: the genre radios."]];
+const TASKS = [["beats", "Beats", "Tempo, beats and phrases (Beat This!): what the DJ blends need. Slow on very long songs."], ["loudness", "Loudness & key", "LUFS, fades and the key: what the app levels the volume and mixes in key by."], ["sound", "Sound", "Moods, energy and what sounds alike (MusiCNN, CLAP): similar music and the search by words."], ["styles", "Genres", "The 400 Discogs styles by sound: the genre radios."], ["vocals", "Vocals", "Where the vocals are, bar by bar (each song's ends separated): so DJ blends never lay two voices over each other. Slow on a CPU."]];
 let skips = null;
 const savedSkips = () => Object.fromEntries(libraries.filter((l) => l.skip && l.skip.length).map((l) => [l.id, [...l.skip]]));
 // The four things a library can get, as chips in line under (or beside) its name; short names so four fit a phone.
-const TASK_SHORT = {beats: "Beats", loudness: "Loudness", sound: "Sound", styles: "Genres"};
+const TASK_SHORT = {beats: "Beats", loudness: "Loudness", sound: "Sound", styles: "Genres", vocals: "Vocals"};
 function taskChips(l, current) {
   return `<div class="gets" role="group" aria-label="What ${esc(l.name)} gets">` + TASKS.map(([id, name, hint]) => {
     const out = (current[l.id] || []).includes(id);
@@ -1878,9 +2051,13 @@ function drawWork(s) {
   // Every thing that's measured has its bar, also when it's done (the owner, 14 Nov), so the page says what's complete.
   jobs.push(job("loudness", "Loudness & key", l.measured || 0, l.total ?? ((l.measured || 0) + (l.waiting || 0) + (l.failed || 0)), l.measuring ? who(l.measuring) : "", l.failed || 0));
   if (so.hears !== false) jobs.push(job("sound", "Sound", so.heard ?? so.sound ?? 0, so.wanted ?? so.songs ?? 0, so.hearing ? who(so.hearing) : "", (so.sources || {}).failed || 0));
+  // Where the vocals are (0.60): the songs done (separated, or instrumental by the voice model) of those with beats.
+  const v = s.vocals;
+  if (v && v.available) jobs.push(job("vocals", "Vocals", (v.separated || 0) + (v.none || 0), (v.separated || 0) + (v.none || 0) + (v.waiting || 0) + (v.failed || 0),
+    v.working ? who(v.working) : "", v.failed || 0));
   if (s.regridding) jobs.push(job("regrid", "Working out beats again", s.regridding.done, s.regridding.total, ""));
   if (st.switch && $("style-note").textContent.indexOf("…") < 0) $("style-note").innerHTML = st.switch.phase === "marking" ? `Switching to ${esc(st.switch.model_name)}: marking ${num(st.switch.songs)} songs to be heard again (${st.switch.for_seconds} s)…` : `${esc(st.switch.model_name)}: ${num(st.done || 0)} of ${num(st.switch.doubted || 0)} songs heard again so far. <a href="#libraries">Progress is under Libraries.</a>`;
-  $("work").innerHTML = jobs.join("") + (!toGo && !s.current && !st.current && !l.measuring && !so.hearing && !s.reading ? `<div class="sub">Nothing is running now. Start analysis looks for new songs; what's new is analysed as it comes. Check what's new on the Overview looks for new songs too.</div>` : "");
+  $("work").innerHTML = jobs.join("") + (!toGo && !s.current && !st.current && !l.measuring && !so.hearing && !s.reading && !(v && v.working) ? `<div class="sub">Nothing is running now. Start analysis looks for new songs; what's new is analysed as it comes. Check what's new on the Overview looks for new songs too.</div>` : "");
 }
 
 // ---- controls ----
@@ -2116,7 +2293,7 @@ window.addEventListener("scroll", () => { toTop.hidden = window.scrollY < window
 // ---- pages ----
 // One page at a time, chosen in the side menu (tabs on a phone) and kept in the address (#songs, #song=<id>), so Back
 // and a bookmark work.
-const VIEWS = ["overview", "libraries", "songs", "listening", "mixes", "mix", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
+const VIEWS = ["overview", "libraries", "songs", "listening", "mixes", "mix", "mixsettings", "artist", "loudness", "keys", "genres", "voice", "trait", "similar", "blends", "activity", "log", "setup", "report"];
 let currentView = null;
 function showView(view, keepHash) {
   if (!VIEWS.includes(view)) view = "overview";
@@ -2140,11 +2317,17 @@ function showView(view, keepHash) {
   }
   if (view === "listening") refreshListening();
   if (view === "mixes") refreshMixes();
-  if (view === "setup") refreshAi();
+  if (view === "setup") { refreshAi(); refreshVocals(); }
   if (view === "mix") {  // part of Mixes: its menu entry stays marked
     document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
     $("page-name").textContent = "Mixes · " + (mx.open || "Mix");
     document.title = `${mx.open || "Mix"} · Siansa Beats`;
+  }
+  if (view === "mixsettings") {  // part of Mixes: its menu entry stays marked
+    document.querySelector('.nav [data-view="mixes"]')?.setAttribute("aria-current", "page");
+    $("page-name").textContent = "Mixes · Settings";
+    document.title = "Mix settings · Siansa Beats";
+    if (!mx.data) refreshMixes(); else if (!mxSettings) loadMixSettings();
   }
   if (view === "artist") {  // part of Listening: its menu entry stays marked
     document.querySelector('.nav [data-view="listening"]')?.setAttribute("aria-current", "page");
@@ -2193,9 +2376,7 @@ function drawMixes(d) {
   const now = d.shelves.find((s) => s.key === "now");
   $("mx-note").textContent = now ? now.note : "";
   $("mx-based").textContent = d.based;
-  const keep = $("mx-keep");
-  if (![...keep.options].some((o) => +o.value === d.keep_days)) keep.add(new Option(`${d.keep_days} days`, d.keep_days));
-  keep.value = String(d.keep_days);
+  if (mxSettings) drawMixSettings();  // how long mixes are kept is shown there
   const users = d.listeners || [];
   $("mx-who").hidden = users.length < 2;
   $("mx-user").innerHTML = users.map((u) => `<option value="${esc(u)}"${u === d.user ? " selected" : ""}>${esc(u || "No name")}</option>`).join("");
@@ -2240,32 +2421,98 @@ $("mx-parts").addEventListener("click", (e) => {
 $("mx-days").addEventListener("click", (e) => { const b = e.target.closest("button[data-days]"); if (b) { mx.days = b.dataset.days; refreshMixes(); } });
 $("mx-user").addEventListener("change", () => { mx.user = $("mx-user").value; refreshMixes(); });
 $("mx-back").addEventListener("click", () => { location.hash = "#mixes"; });
-// What goes into the mixes (0.56): drawn from what Siansa Beats says each setting is, so a new one shows by itself.
-var MX_GROUPS = [
-  ["Which mixes", ["now", "now_count", "daily", "daily_count", "repeat", "rediscover", "new"]],
-  ["What's in each", ["size", "familiar", "per_artist", "fresh_days", "leave_genres", "leave_artists"]],
-  ["What they're made from", ["time_of_day", "weekend_apart", "daylight", "season", "half_life", "repeat_days", "forgotten_days"]],
-  ["Names", ["ai_names"]],
+// Mix settings (0.63): a page of its own, in parts, one line each. A line is a mix (with its switch and whether it's as
+// it comes, AUTO, or changed, TUNED) or a part of what every mix shares; its choices open under it. Drawn from what
+// Siansa Beats says each setting is, so a new one shows by itself (under More) until it's given a place here.
+var MX_PARTS = [
+  ["Mixes", "Made for the moment", [
+    {key: "now", name: "For now", on: "now", more: ["now_count"], note: (v) => `${plural(v.now_count, "mix", "mixes")} · for this part of the day`},
+    {key: "daily", name: "Made for you", on: "daily", more: ["daily_count"], note: (v) => `${plural(v.daily_count, "mix", "mixes")} · the kinds of music you play most`},
+  ]],
+  ["Your sound", "From your own listening", [
+    {key: "repeat", name: "On repeat", on: "repeat", more: ["repeat_days"], note: (v) => `Your most played · the last ${v.repeat_days} days`},
+    {key: "rediscover", name: "Rediscover", on: "rediscover", more: ["forgotten_days"], note: (v) => `Old favourites · not played for ${v.forgotten_days} days`},
+    {key: "new", name: "New for you", on: "new", more: [], note: () => "Fresh finds near your taste"},
+  ]],
+  ["For all mixes", "", [
+    {key: "in", name: "What's in a mix", more: ["size", "familiar", "per_artist"], note: (v) => `${v.size} songs · ${v.familiar}% you know · ${v.per_artist} by one artist`},
+    {key: "out", name: "Leave out", more: ["fresh_days", "leave_genres", "leave_artists"],
+      note: (v) => [v.fresh_days ? `Played in the last ${v.fresh_days} days` : "", v.leave_genres.length ? plural(v.leave_genres.length, "genre", "genres") : "", v.leave_artists.length ? plural(v.leave_artists.length, "artist", "artists") : ""].filter(Boolean).join(" · ") || "Nothing"},
+    {key: "around", name: "Made around", more: ["time_of_day", "weekend_apart", "daylight", "season", "skips", "half_life"],
+      note: (v) => [v.time_of_day ? "Time of day" : "", v.weekend_apart ? "weekends" : "", v.daylight ? "daylight" : "", v.season ? "season" : "", v.skips ? "skips" : ""].filter(Boolean).join(" · ") || "Your listening alone"},
+    {key: "siansa", name: "In Siansa", more: ["together", "together_count", "ai_names"], keep: true,
+      note: (v) => `${v.together ? `One row of ${v.together_count}` : "Each group its own row"} · ${v.ai_names ? "names from AI" : "Siansa Beats' own names"}`},
+  ]],
 ];
+// A setting's few words under its line (its line says the rest); without one here, Siansa Beats' own words for it.
+var MX_WORDS = {now_count: "How many", daily_count: "How many", repeat_days: "Looks back … days", forgotten_days: "Not played for … days",
+  size: "Songs in a mix", familiar: "Songs you know, in %", per_artist: "By one artist, at most", fresh_days: "Songs played in the last … days",
+  leave_genres: "Genres", leave_artists: "Artists", time_of_day: "The part of the day you listen in", weekend_apart: "Weekends apart from weekdays",
+  daylight: "Calmer when it's dark outside", season: "This time of year counts more", skips: "Songs you skip count for less", half_life: "Listening counts half after … days",
+  together: "All in one row on Home", together_count: "Cards in that row, at most", ai_names: "Names and lines from the AI service"};
 var mxSettings = null;  // var: read by refreshMixes, which may run before this line
+var mxOpen = new Set();  // the lines open on the page
+function plural(n, one, many) { return `${n} ${n === 1 ? one : many}`; }
+// Whether any of a line's settings isn't as it comes.
+function mxTuned(line, d, by) {
+  const same = (a, b) => Array.isArray(a) ? a.length === b.length && a.every((x, i) => x === b[i]) : a === b;
+  return line.more.filter((n) => by[n]).some((n) => !same(d.settings[n], by[n].default));
+}
 async function loadMixSettings() {
   const user = mx.data ? mx.data.user : "";
   try { mxSettings = await api(`api/mixes/settings?user=${encodeURIComponent(user || "")}`); }
   catch (e) { $("mx-set-note").textContent = e.message; return; }
   drawMixSettings();
 }
+function mxSettingRow(x, v) {
+  const id = `mxs-${x.name}`, words = esc(MX_WORDS[x.name] || x.label);
+  if (x.kind === "on") return `<label class="row" for="${id}"><span>${words}</span><input type="checkbox" class="mx-switch" id="${id}" data-set="${x.name}" ${v ? "checked" : ""}></label>`;
+  if (x.kind === "number") return `<label class="row" for="${id}"><span>${words}</span><input type="number" id="${id}" data-set="${x.name}" min="${x.low}" max="${x.high}" value="${v}"></label>`;
+  return `<label class="row" for="${id}"><span>${words}</span><input type="text" id="${id}" data-set="${x.name}" value="${esc(v.join(", "))}" placeholder="Names, separated by commas"></label>`;
+}
 function drawMixSettings() {
   const d = mxSettings, by = Object.fromEntries(d.described.map((x) => [x.name, x]));
-  const listed = new Set(MX_GROUPS.flatMap(([, names]) => names));
-  const groups = MX_GROUPS.concat([["More", d.described.map((x) => x.name).filter((n) => !listed.has(n))]]);
-  $("mx-set-groups").innerHTML = groups.filter(([, names]) => names.some((n) => by[n])).map(([title, names]) =>
-    `<h4>${esc(title)}</h4>` + names.filter((n) => by[n]).map((n) => {
-      const x = by[n], v = d.settings[n], id = `mxs-${n}`;
-      if (x.kind === "on") return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="checkbox" id="${id}" data-set="${n}" ${v ? "checked" : ""}></label>`;
-      if (x.kind === "number") return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="number" id="${id}" data-set="${n}" min="${x.low}" max="${x.high}" value="${v}"></label>`;
-      return `<label class="row" for="${id}"><span>${esc(x.label)}</span><input type="text" id="${id}" data-set="${n}" value="${esc(v.join(", "))}" placeholder="Names, separated by commas"></label>`;
-    }).join("")).join("");
+  $("mx-set-who").textContent = d.user ? `For ${d.user}. The Siansa app changes the same.` : "The Siansa app changes the same.";
+  const placed = new Set(MX_PARTS.flatMap(([, , lines]) => lines.flatMap((l) => [l.on, ...l.more])));
+  const rest = d.described.map((x) => x.name).filter((n) => !placed.has(n));
+  const parts = MX_PARTS.concat(rest.length ? [["More", "", [{key: "more", name: "More", more: rest, note: () => plural(rest.length, "setting", "settings")}]]] : []);
+  $("mx-set-groups").innerHTML = parts.map(([title, sub, lines]) => {
+    const drawn = lines.filter((l) => (l.on && by[l.on]) || l.more.some((n) => by[n])).map((l) => {
+      const more = l.more.filter((n) => by[n]), tuned = mxTuned(l, d, by), open = mxOpen.has(l.key);
+      const tag = l.on ? `<span class="mx-tag${tuned ? " tuned" : ""}">${tuned ? "TUNED" : "AUTO"}</span>` : "";
+      const body = more.map((n) => mxSettingRow(by[n], d.settings[n])).join("") + (l.keep ? MX_KEEP : "") +
+        (tuned ? `<button type="button" class="btn" data-auto="${l.key}">Back to automatic</button>` : "");
+      const can = more.length || l.keep;
+      return `<div class="mx-line${open && can ? " open" : ""}" data-line="${l.key}"><div class="mx-line-head">` +
+        `<${can ? `button type="button" data-open="${l.key}" aria-expanded="${open}"` : "div"} class="mx-line-name"><b>${esc(l.name)}</b>${tag}<span class="note">${esc(l.note(d.settings))}</span></${can ? "button" : "div"}>` +
+        (l.on && by[l.on] ? `<input type="checkbox" class="mx-switch" data-set="${l.on}" aria-label="${esc(l.name)}" ${d.settings[l.on] ? "checked" : ""}>` : "") +
+        (can ? `<button type="button" class="mx-line-more" data-open="${l.key}" aria-label="${open ? "Close" : "Open"} ${esc(l.name)}">›</button>` : `<span class="mx-line-more" aria-hidden="true"></span>`) +
+        `</div>${can ? `<div class="mx-line-body">${body}</div>` : ""}</div>`;
+    }).join("");
+    return drawn ? `<h4>${esc(title)}</h4>${sub ? `<p class="sub">${esc(sub)}</p>` : ""}<div class="mx-part">${drawn}</div>` : "";
+  }).join("");
+  const kept = $("mx-keep"), days = mx.data && mx.data.keep_days;
+  if (kept && days) {
+    if (![...kept.options].some((o) => +o.value === days)) kept.add(new Option(`${days} days`, days));
+    kept.value = String(days);
+  }
 }
+// How long a mix given out stays playable (for everyone: Siansa Beats' own setting, not a listener's).
+var MX_KEEP = `<label class="row" for="mx-keep"><span>Keep a mix playable for</span><select id="mx-keep" title="How long a mix stays playable after it was made, from the app's recent plays">` +
+  [1, 3, 7, 14, 30, 90].map((n) => `<option value="${n}">${n} day${n === 1 ? "" : "s"}</option>`).join("") + `</select></label><p class="sub" id="mx-keep-note" role="status"></p>`;
+$("mx-set-groups").addEventListener("click", (e) => {
+  const opener = e.target.closest("[data-open]"), auto = e.target.closest("[data-auto]");
+  if (opener) {
+    const key = opener.dataset.open;
+    if (mxOpen.has(key)) mxOpen.delete(key); else mxOpen.add(key);
+    drawMixSettings();
+  } else if (auto && mxSettings) {  // that line's settings back to how they came
+    const line = MX_PARTS.flatMap(([, , lines]) => lines).find((l) => l.key === auto.dataset.auto);
+    const by = Object.fromEntries(mxSettings.described.map((x) => [x.name, x]));
+    if (line) saveMixSettings(Object.fromEntries(line.more.filter((n) => by[n]).map((n) => [n, by[n].default])));
+  }
+});
+$("mx-set-back").addEventListener("click", () => { location.hash = "#mixes"; });
 $("mx-set-groups").addEventListener("change", async (e) => {
   const el = e.target.closest("[data-set]");
   if (!el || !mxSettings) return;
@@ -2282,13 +2529,25 @@ async function saveMixSettings(changes) {
   try {
     mxSettings = await api("api/mixes/settings", {method: "POST", body: JSON.stringify({user: mxSettings.user, settings: changes})});
     drawMixSettings();
-    $("mx-set-note").textContent = "Saved: the mixes are made again";
+    $("mx-set-note").textContent = "Saved. Make the mixes again to see them now.";
     refreshMixes();
   } catch (err) { $("mx-set-note").textContent = err.message; }
 }
-$("mx-keep").addEventListener("change", async () => {
+$("mx-again").addEventListener("click", async () => {
+  if (!mxSettings) return;
+  $("mx-again").disabled = true;
+  $("mx-set-note").textContent = "Making them again…";
+  try {
+    await api("api/mixes/again", {method: "POST", body: JSON.stringify({user: mxSettings.user})});
+    await refreshMixes();
+    $("mx-set-note").textContent = "Made again";
+  } catch (err) { $("mx-set-note").textContent = err.message; }
+  $("mx-again").disabled = false;
+});
+$("mx-set-groups").addEventListener("change", async (e) => {
+  if (e.target.id !== "mx-keep") return;
   $("mx-keep-note").textContent = "Saving…";
-  try { const got = await api("api/mixes/keep", {method: "POST", body: JSON.stringify({days: +$("mx-keep").value})}); $("mx-keep-note").textContent = `Kept ${got.keep_days} days`; }
+  try { const got = await api("api/mixes/keep", {method: "POST", body: JSON.stringify({days: +$("mx-keep").value})}); if (mx.data) mx.data.keep_days = got.keep_days; $("mx-keep-note").textContent = `Kept ${got.keep_days} days`; }
   catch (e) { $("mx-keep-note").textContent = e.message; }
 });
 
@@ -2338,9 +2597,10 @@ $("ai-test").addEventListener("click", async () => {
   catch (err) { $("ai-note").textContent = err.message; }
 });
 
-// ---- listening: the time machine ----
-// A listener's history a month or a year at a time (or all of it). The days and hours are this browser's clock's.
-const tm = {user: null, year: null, month: null, data: null, timer: null};
+// ---- listening ----
+// A listener's history: this month, how they listen over all of it (My profile), and any month or year (the Time
+// machine). The days and hours are this browser's clock's.
+const tm = {user: null, year: null, month: null, picked: false, data: null, now: null, profile: null, timer: null, graph: "when", lines: "plays"};
 const TM_ZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return ""; } })();
 const TM_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function tmHours(seconds) { const h = seconds / 3600; return h >= 100 ? num(Math.round(h)) : h >= 10 ? h.toFixed(0) : h.toFixed(1); }
@@ -2368,29 +2628,458 @@ const TM_KINDS = {
   albums: {one: "Top album", title: (r) => r.album, under: (r) => r.artist, pic: (r, size, cls) => art("cover", r.cover, r.album, size, cls, r.artist)},
   songs: {one: "Top song", title: (r) => r.title, under: (r) => r.artist, pic: (r, size, cls) => art("cover", r.cover, r.title, size, cls, r.artist)},
 };
-function tmFeature(kind, r, wide) {
-  const k = TM_KINDS[kind], under = k.under(r);
-  // An artist's card opens its page; an album's or a song's opens its list (and the list's number one, its artist's page).
-  const attrs = kind === "artists" || wide ? ` data-artist="${esc(r.artist)}" tabindex="0" style="cursor:pointer"` : "";
-  return `<${wide ? "div" : "button type=\"button\""} class="tm-feature${wide ? " wide" : ""}" data-kind="${kind}"${attrs}>${k.pic(r, 640, "")}` +
-    `<span class="txt"><small>${wide ? "Number one" : k.one}</small><b>${esc(k.title(r))}</b><i>${under ? esc(under) + " · " : ""}${num(r.listens)} plays</i></span></${wide ? "div" : "button"}>`;
+// ---- Listening's charts (0.59) ----
+// Small SVG charts drawn at their card's width (and again when it changes), each with what's under the pointer in a
+// tip. Colours: --c1…--c8, in that order, checked for colour blindness in light and dark; words stay in text colours.
+const LX = {charts: new Map()};
+const lxC = (i) => `var(--c${i % 8 + 1})`;
+const lxObserver = typeof ResizeObserver === "function" ? new ResizeObserver((entries) => {
+  for (const e of entries) {
+    const draw = LX.charts.get(e.target), w = Math.round(e.contentRect.width);
+    if (draw && w && w !== e.target.lxWidth) { e.target.lxWidth = w; draw(e.target, w); }
+  }
+}) : null;
+function lxChart(id, draw) {
+  const el = typeof id === "string" ? $(id) : id;
+  if (!LX.charts.has(el) && lxObserver) lxObserver.observe(el);
+  LX.charts.set(el, draw);
+  const w = el.clientWidth;
+  if (w) { el.lxWidth = w; draw(el, w); }
 }
-// The rows after the first (which is the picture above the list), numbered from 2.
-function tmRank(kind, rows) {
-  const k = TM_KINDS[kind], most = Math.max(1, ...rows.map((r) => r.listens));
-  $("tm-" + kind).innerHTML = rows.slice(1).map((r) => `<li style="--w:${Math.round(r.listens / most * 100)}%" data-artist="${esc(r.artist)}" tabindex="0" title="${esc(r.artist)}'s page">${k.pic(r, 96, "s" + (k.round ? " round" : ""))}` +
-    `<div class="t"><b>${esc(k.title(r))}</b>${k.under(r) ? `<span>${esc(k.under(r))}</span>` : ""}</div><span class="n">${num(r.listens)}</span></li>`).join("");
+function lxEmpty(id, text) { const el = $(id); LX.charts.delete(el); el.innerHTML = `<div class="empty">${esc(text)}</div>`; }
+// The tip: any element with data-tip shows it (HTML made here, its names escaped), by the pointer or a touch.
+const lxTip = document.createElement("div");
+lxTip.className = "lx-tip"; lxTip.hidden = true; lxTip.setAttribute("role", "tooltip");
+document.body.append(lxTip);
+function lxTipAt(e) {
+  const t = e.target.closest && e.target.closest("[data-tip]");
+  if (!t) { lxTip.hidden = true; return; }
+  if (lxTip.lxFor !== t) { lxTip.innerHTML = t.dataset.tip; lxTip.lxFor = t; }
+  lxTip.hidden = false;
+  const r = lxTip.getBoundingClientRect(), x = e.clientX + 14, y = e.clientY - r.height - 12;
+  lxTip.style.left = Math.max(8, x + r.width > innerWidth - 8 ? e.clientX - r.width - 14 : x) + "px";
+  lxTip.style.top = Math.max(8, y) + "px";
 }
-function tmFirst() {
-  const rows = tm.data ? tm.data.top[tm.top] : [];
-  $("tm-first").innerHTML = rows.length ? tmFeature(tm.top, rows[0], true) : '<p class="sub">Nothing in this time.</p>';
+document.addEventListener("pointermove", lxTipAt);
+document.addEventListener("pointerdown", lxTipAt);
+addEventListener("scroll", () => { lxTip.hidden = true; }, {passive: true});
+const lxTipHtml = (title, lines) => `<b>${esc(title)}</b>` + lines.map((l) => `<span>${l.c ? `<i style="--c:${l.c}"></i>` : ""}${esc(l.text)}</span>`).join("");
+const lxPlays = (n) => `${num(n)} ${n === 1 ? "play" : "plays"}`;
+// A bar's shape: rounded at its top only (4 px), standing on the baseline.
+function lxBar(x, base, w, top) {
+  const r = Math.min(4, w / 2, Math.max(0, base - top));
+  return `M${x},${base}V${top + r}Q${x},${top} ${x + r},${top}H${x + w - r}Q${x + w},${top} ${x + w},${top + r}V${base}Z`;
 }
-function tmTop(kind) {
-  tm.top = kind;
-  document.querySelectorAll(".tm-seg [data-top]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.top === kind)));
-  ["songs", "artists", "albums"].forEach((k) => { $("tm-" + k).hidden = k !== kind; capList($("tm-" + k)); });
-  tmFirst();
+// A line through points, smooth (Catmull-Rom as Bézier curves).
+function lxSmooth(pts) {
+  if (pts.length < 3) return "M" + pts.map((p) => p.map((v) => v.toFixed(1)).join(",")).join("L");
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    d += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)},${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)},${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
 }
+// A round number for the top grid line.
+function lxNice(most) { const p = 10 ** Math.floor(Math.log10(Math.max(1, most))), f = most / p; return ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((x) => f <= x) || 10) * p; }
+function lxGrid(w, h, padT, padB, top, left) {
+  return [0, 0.5, 1].map((f) => { const y = Math.round(padT + (h - padT - padB) * (1 - f)) + 0.5;
+    return `<line class="grid" x1="${left}" x2="${w}" y1="${y}" y2="${y}"/>` + (f && Number.isInteger(top * f) ? `<text x="0" y="${y + 4}">${num(top * f)}</text>` : ""); }).join("");
+}
+
+// Bars, one colour, with the same bars of the time before as a dashed line when there are some (o.compare).
+// o: {points: [{label, short?, value, tip?}], colour, compare?, compareName?, pick?, height?}
+function lxBars(id, o) {
+  if (!o.points.length || !o.points.some((p) => p.value) && !(o.compare || []).some(Boolean)) { lxEmpty(id, o.empty || "Nothing here yet."); return; }
+  lxChart(id, (el, w) => {
+    const h = o.height || 190, padT = 8, padB = 22, n = o.points.length;
+    const top = lxNice(Math.max(1, ...o.points.map((p) => p.value), ...(o.compare || [0])));
+    const left = String(num(top)).length * 7 + 8, inner = w - left, step = inner / n, bw = Math.max(2, Math.min(24, step * 0.66));
+    const y = (v) => padT + (h - padT - padB) * (1 - v / top), base = h - padB;
+    const room = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(inner / 34))));
+    let s = lxGrid(w, h, padT, padB, top, left);
+    o.points.forEach((p, i) => {
+      const cx = left + step * i + step / 2, before = o.compare ? o.compare[i] : null;
+      const tip = lxTipHtml(p.title || p.label, [{c: o.colour, text: lxPlays(p.value)}, ...(before != null ? [{text: `${o.compareName}: ${num(before)}`}] : []), ...(p.tip ? [{text: p.tip}] : [])]);
+      s += `<g class="col${o.pick && p.value ? " pick" : ""}" data-i="${i}" data-tip="${esc(tip)}"><rect class="hit" x="${left + step * i}" y="0" width="${step}" height="${h}"/>` +
+        (p.value ? `<path class="mk" fill="${o.colour}" d="${lxBar(cx - bw / 2, base, bw, Math.min(base - 2, y(p.value)))}"/>` : "") + "</g>";
+      const label = p.short ?? p.label;
+      if (label !== "" && i % room === 0) s += `<text x="${cx}" y="${h - 6}" text-anchor="middle">${esc(label)}</text>`;
+    });
+    if (o.compare) {
+      const pts = o.compare.map((v, i) => [left + step * i + step / 2, y(v || 0)]).slice(0, n);
+      s += `<path d="M${pts.map((p) => p.map((v) => v.toFixed(1)).join(",")).join("L")}" fill="none" stroke="var(--faint)" stroke-width="2" stroke-dasharray="4 4" stroke-linejoin="round" pointer-events="none"/>`;
+    }
+    el.innerHTML = `<svg width="${w}" height="${h}" role="img" aria-label="${esc(o.label || "")}">${s}</svg>`;
+    el.onclick = o.pick ? (e) => { const g = e.target.closest(".col.pick"); if (g) o.pick(o.points[+g.dataset.i]); } : null;
+  });
+}
+
+// Lines, one per series (o.series: [{name, colour, values}]), against o.labels; the first few named at their end.
+function lxLines(id, o) {
+  const n = o.labels.length;
+  if (!o.series.length || n < 2) { lxEmpty(id, "A second month of listening draws this."); return; }
+  lxChart(id, (el, w) => {
+    const narrow = w < 520, h = narrow ? 230 : 280, padT = 10, padB = 22, padR = narrow ? 8 : 132;
+    const top = o.share ? 100 : lxNice(Math.max(1, ...o.series.flatMap((s) => s.values)));
+    const left = (o.share ? 4 : String(num(top)).length) * 7 + 8, inner = w - left - padR;
+    const x = (i) => left + inner * i / (n - 1), y = (v) => padT + (h - padT - padB) * (1 - v / top);
+    let s = lxGrid(w - padR, h, padT, padB, top, left).replace(/<text x="0" y="([\d.]+)">([\d,.\s]+)<\/text>/g, (m, yy, v) => `<text x="0" y="${yy}">${v}${o.share ? "%" : ""}</text>`);
+    const room = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(inner / 56))));
+    o.labels.forEach((l, i) => { if (i % room === 0 || i === n - 1 && n % room === 1) s += `<text x="${x(i)}" y="${h - 6}" text-anchor="middle">${esc(l)}</text>`; });
+    o.series.slice().reverse().forEach((sr) => {
+      s += `<path d="${lxSmooth(sr.values.map((v, i) => [x(i), y(v)]))}" fill="none" stroke="${sr.colour}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      s += `<circle cx="${x(n - 1)}" cy="${y(sr.values[n - 1])}" r="4" fill="${sr.colour}" stroke="var(--raised)" stroke-width="2"/>`;
+    });
+    if (!narrow) {  // the end labels: the first five, moved apart where they'd touch
+      const ends = o.series.slice(0, 5).map((sr) => ({sr, y: y(sr.values[n - 1])})).sort((a, b) => a.y - b.y);
+      for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
+      ends.forEach((e) => { const name = e.sr.name.length > 17 ? e.sr.name.slice(0, 16) + "…" : e.sr.name;
+        s += `<text class="mid" x="${x(n - 1) + 10}" y="${e.y + 4}">${esc(name)}</text>`; });
+    }
+    const step = inner / (n - 1);
+    o.labels.forEach((l, i) => {
+      const rows = o.series.map((sr) => ({c: sr.colour, v: sr.values[i], text: `${sr.name}: ${o.share ? sr.values[i].toFixed(1) + " %" : num(sr.values[i])}`})).sort((a, b) => b.v - a.v);
+      s += `<g class="col" data-tip="${esc(lxTipHtml(o.tipTitle ? o.tipTitle(i) : l, rows))}"><line class="x" x1="${x(i)}" x2="${x(i)}" y1="${padT}" y2="${h - padB}"/>` +
+        `<rect class="hit" x="${x(i) - step / 2}" y="0" width="${step}" height="${h - padB}" style="fill:transparent"/></g>`;
+    });
+    el.innerHTML = `<svg width="${w}" height="${h}" role="img" aria-label="${esc(o.label || "")}">${s}</svg>`;
+  });
+}
+
+// A listening clock: the day's 24 hours round a dial, each hour's bar as long as its listens.
+function lxClock(id, hours, colour) {
+  if (!hours.some(Boolean)) { lxEmpty(id, "Nothing here yet."); return; }
+  lxChart(id, (el, w) => {
+    const size = Math.min(w, 280), c = size / 2, r0 = size * 0.2, r1 = size / 2 - 20, most = Math.max(...hours);
+    const at = (r, a) => [c + r * Math.cos(a), c + r * Math.sin(a)].map((v) => v.toFixed(1)).join(",");
+    let s = `<circle cx="${c}" cy="${c}" r="${r1}" fill="none" class="grid"/><circle cx="${c}" cy="${c}" r="${(r0 + r1) / 2}" fill="none" class="grid" stroke-dasharray="2 4"/>`;
+    hours.forEach((v, hr) => {
+      const a0 = (hr / 24) * 2 * Math.PI - Math.PI / 2 + 0.025, a1 = ((hr + 1) / 24) * 2 * Math.PI - Math.PI / 2 - 0.025;
+      const r = v ? r0 + Math.max(3, (r1 - r0) * v / most) : r0 + 1;
+      const tip = lxTipHtml(`${String(hr).padStart(2, "0")}:00–${String((hr + 1) % 24).padStart(2, "0")}:00`, [{c: colour, text: lxPlays(v)}]);
+      s += `<g data-tip="${esc(tip)}"><path class="hit" d="M${at(r0, a0)}L${at(r1, a0)}A${r1},${r1} 0 0 1 ${at(r1, a1)}L${at(r0, a1)}A${r0},${r0} 0 0 0 ${at(r0, a0)}Z"/>` +
+        `<path class="mk" fill="${v ? colour : "var(--line)"}" d="M${at(r0, a0)}L${at(r, a0)}A${r},${r} 0 0 1 ${at(r, a1)}L${at(r0, a1)}A${r0},${r0} 0 0 0 ${at(r0, a0)}Z"/></g>`;
+    });
+    [0, 6, 12, 18].forEach((hr) => { const a = (hr / 24) * 2 * Math.PI - Math.PI / 2, p = at(r1 + 11, a).split(",");
+      s += `<text x="${p[0]}" y="${+p[1] + 4}" text-anchor="middle">${String(hr).padStart(2, "0")}</text>`; });
+    const peak = hours.indexOf(most);
+    s += `<text class="strong" x="${c}" y="${c - 2}" text-anchor="middle">${String(peak).padStart(2, "0")}:00</text><text x="${c}" y="${c + 13}" text-anchor="middle">busiest</text>`;
+    el.innerHTML = `<svg width="${w}" height="${size}" viewBox="${(size - w) / 2} 0 ${w} ${size}" role="img" aria-label="Listens by hour">${s}</svg>`;
+  });
+}
+
+// When: the days of the week by the hours, darker for more (one colour, light to strong).
+function lxHeat(id, grid, colour) {
+  const most = Math.max(0, ...grid.flat());
+  if (!most) { lxEmpty(id, "Nothing here yet."); return; }
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], long = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
+  lxChart(id, (el, w) => {
+    const left = 34, top = 16, cell = Math.max(8, Math.floor((w - left) / 24)), h = top + cell * 7;
+    let s = "";
+    for (let hr = 0; hr < 24; hr += w < 520 ? 6 : 3) s += `<text x="${left + hr * cell + cell / 2}" y="11" text-anchor="middle">${String(hr).padStart(2, "0")}</text>`;
+    grid.forEach((row, d) => {
+      s += `<text x="0" y="${top + d * cell + cell / 2 + 4}">${days[d]}</text>`;
+      row.forEach((v, hr) => {
+        const step = v ? Math.ceil(v / most * 5) : 0;  // five steps, so the eye can tell them apart
+        const fill = step ? `color-mix(in srgb, ${colour} ${[0, 22, 40, 58, 78, 100][step]}%, var(--raised-2))` : "var(--raised-2)";
+        const tip = lxTipHtml(`${long[d]}, ${String(hr).padStart(2, "0")}:00`, [{c: colour, text: lxPlays(v)}]);
+        s += `<rect x="${left + hr * cell + 1}" y="${top + d * cell + 1}" width="${cell - 2}" height="${cell - 2}" rx="2" fill="${fill}" data-tip="${esc(tip)}"/>`;
+      });
+    });
+    el.innerHTML = `<svg width="${w}" height="${h}" role="img" aria-label="Listens by weekday and hour">${s}</svg>`;
+  });
+}
+
+// The fingerprint: five habits round a web, the last twelve months over the twelve before.
+function lxRadar(id, f) {
+  if (!f || !f.recent) { lxEmpty(id, "Listen for a while and this fills in."); return; }
+  lxChart(id, (el, w) => {
+    const size = Math.min(w, 300), c = size / 2, r = size / 2 - 44, n = f.axes.length;
+    const at = (v, i) => { const a = -Math.PI / 2 + 2 * Math.PI * i / n; return [c + r * v / 100 * Math.cos(a), c + r * v / 100 * Math.sin(a)]; };
+    let s = [25, 50, 75, 100].map((v) => `<polygon class="grid" fill="none" points="${f.axes.map((_, i) => at(v, i).join(",")).join(" ")}"/>`).join("");
+    f.axes.forEach((name, i) => { const [x, y] = at(100, i), [lx, ly] = at(124, i);
+      s += `<line class="grid" x1="${c}" y1="${c}" x2="${x}" y2="${y}"/><text class="mid" x="${lx}" y="${ly + 4}" text-anchor="${Math.abs(lx - c) < 8 ? "middle" : lx > c ? "start" : "end"}">${esc(name)}</text>`; });
+    const shape = (vals, colour, dash) => `<polygon points="${vals.map((v, i) => at(v, i).join(",")).join(" ")}" fill="${dash ? "none" : `color-mix(in srgb, ${colour} 16%, transparent)`}" stroke="${colour}" stroke-width="2" stroke-linejoin="round"${dash ? ' stroke-dasharray="5 4"' : ""}/>`;
+    if (f.before) s += shape(f.before, "var(--c2)", true);
+    s += shape(f.recent, "var(--c1)", false);
+    f.recent.forEach((v, i) => { const [x, y] = at(v, i);
+      const tip = lxTipHtml(f.axes[i], [{c: "var(--c1)", text: `Last 12 months: ${Math.round(v)}`}, ...(f.before ? [{c: "var(--c2)", text: `The 12 before: ${Math.round(f.before[i])}`}] : [])]);
+      s += `<circle cx="${x}" cy="${y}" r="4" fill="var(--c1)" stroke="var(--raised)" stroke-width="2"/><circle cx="${x}" cy="${y}" r="14" fill="transparent" data-tip="${esc(tip)}"/>`; });
+    el.innerHTML = `<svg width="${w}" height="${size}" viewBox="${(size - w) / 2} 0 ${w} ${size}" role="img" aria-label="Listening fingerprint">${s}</svg>`;
+  });
+}
+
+// Bubbles: the artists as circles as big as their plays, packed round the middle; o.colour(artist) for each.
+function lxBubbles(id, items, colour) {
+  if (!items.length) { lxEmpty(id, "Nothing here yet."); return; }
+  lxChart(id, (el, w) => {
+    const h = w < 520 ? 360 : 400, most = items[0].listens, big = Math.min(w, h) * 0.17;
+    const placed = [];
+    items.forEach((it) => {  // round the middle, inside the card; one that doesn't fit is left out (the smallest)
+      const r = Math.max(7, big * Math.sqrt(it.listens / most));
+      for (let t = 0; t < 400; t += 0.1) {
+        const x = w / 2 + 3 * t * Math.cos(t * 2.2) * (w / h), y = h / 2 + 3 * t * Math.sin(t * 2.2);
+        if (x - r < 2 || x + r > w - 2 || y - r < 2 || y + r > h - 2) continue;
+        if (!placed.some((p) => Math.hypot(p.x - x, p.y - y) < p.r + r + 3)) { placed.push({...it, x, y, r}); break; }
+      }
+    });
+    const s = placed.map((p) => {
+      const c = colour(p.artist), chars = Math.floor(p.r * 2 / 7.2), name = p.artist.length > chars ? p.artist.slice(0, Math.max(1, chars - 1)) + "…" : p.artist;
+      return `<g data-artist="${esc(p.artist)}" data-tip="${esc(lxTipHtml(p.artist, [{c, text: lxPlays(p.listens)}]))}">` +
+        `<circle class="mk" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.r.toFixed(1)}" fill="color-mix(in srgb, ${c} 26%, var(--raised))" stroke="${c}" stroke-width="2"/>` +
+        (p.r >= 20 ? `<text class="${p.r >= 34 ? "strong" : "mid"}" x="${p.x.toFixed(1)}" y="${(p.y + (p.r >= 34 ? 0 : 4)).toFixed(1)}" text-anchor="middle" pointer-events="none">${esc(name)}</text>` : "") +
+        (p.r >= 34 ? `<text x="${p.x.toFixed(1)}" y="${(p.y + 15).toFixed(1)}" text-anchor="middle" pointer-events="none">${num(p.listens)}</text>` : "") + "</g>";
+    }).join("");
+    el.innerHTML = `<svg width="${w}" height="${h}" role="img" aria-label="Top artists by plays">${s}</svg>`;
+  });
+}
+
+// A stream: each genre's listens month by month, stacked round a middle line (the thicker, the more).
+function lxStream(id, o) {
+  const n = o.labels.length;
+  if (n < 2 || !o.series.length) { lxEmpty(id, o.empty || "A second month of listening draws this."); return; }
+  lxChart(id, (el, w) => {
+    const h = w < 520 ? 220 : 260, padB = 22, padT = 6, totals = o.labels.map((_, i) => o.series.reduce((a, s) => a + s.values[i], 0));
+    const most = Math.max(1, ...totals), x = (i) => w * i / (n - 1), scale = (h - padT - padB) / most, mid = padT + (h - padT - padB) / 2;
+    let below = totals.map((t) => mid - t * scale / 2), s = "";
+    o.series.forEach((sr) => {
+      const topEdge = sr.values.map((v, i) => [x(i), below[i]]), bottom = sr.values.map((v, i) => [x(i), below[i] + v * scale]);
+      s += `<path d="${lxSmooth(topEdge)}L${lxSmooth(bottom.slice().reverse()).slice(1)}Z" fill="${sr.colour}" stroke="var(--raised)" stroke-width="1"/>`;
+      below = bottom.map((p) => p[1]);
+    });
+    const room = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(w / 64))));
+    o.labels.forEach((l, i) => {
+      if (i % room === 0) s += `<text x="${Math.min(w - 20, Math.max(20, x(i)))}" y="${h - 6}" text-anchor="middle">${esc(l)}</text>`;
+      const rows = o.series.map((sr) => ({c: sr.colour, v: sr.values[i], text: `${sr.name}: ${num(sr.values[i])}`})).filter((r) => r.v).sort((a, b) => b.v - a.v);
+      s += `<g class="col" data-tip="${esc(lxTipHtml(l, rows.length ? rows : [{text: "No genres known"}]))}"><line class="x" x1="${x(i)}" x2="${x(i)}" y1="${padT}" y2="${h - padB}"/>` +
+        `<rect x="${x(i) - w / (n - 1) / 2}" y="0" width="${w / (n - 1)}" height="${h - padB}" fill="transparent"/></g>`;
+    });
+    el.innerHTML = `<svg width="${w}" height="${h}" role="img" aria-label="Genres over time">${s}</svg>`;
+  });
+}
+
+// Names with a bar each (genres), in one colour.
+function lxRows(id, rows, colour, unit) {
+  LX.charts.delete($(id));
+  const most = Math.max(1, ...rows.map((r) => r.value));
+  $(id).innerHTML = rows.length ? `<div class="lx-rows">` + rows.map((r) => `<div class="lx-row" style="--c:${colour}" data-tip="${esc(lxTipHtml(r.name, [{c: colour, text: lxPlays(r.value)}, ...(r.share != null ? [{text: `${r.share} % of ${unit}`}] : [])]))}">` +
+    `<span class="nm">${esc(r.name)}${r.sub ? `<small>${esc(r.sub)}</small>` : ""}</span><span class="mk"><i style="width:${Math.max(2, r.value / most * 100).toFixed(1)}%"></i></span><span class="v">${num(r.value)}</span></div>`).join("") + "</div>"
+    : '<p class="note">No genres known for this music yet: they come with the analysis.</p>';
+}
+// A ring as full as a share (0 to 1).
+function lxRing(share, colour, label) {
+  const r = 38, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, share));
+  return `<svg viewBox="0 0 96 96" role="img" aria-label="${esc(label)}"><circle cx="48" cy="48" r="${r}" fill="none" stroke="color-mix(in srgb, ${colour} 16%, transparent)" stroke-width="10"/>` +
+    (f ? `<circle cx="48" cy="48" r="${r}" fill="none" stroke="${colour}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 48 48)"/>` : "") +
+    `<text class="big" x="48" y="55" text-anchor="middle" font-size="20">${Math.round(f * 100)}%</text></svg>`;
+}
+// A small row of bars in a number's box.
+function lxSpark(values, colour) {
+  const most = Math.max(1, ...values), n = values.length, w = 100, h = 26, step = w / n, bw = Math.max(1, step * 0.66);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">` + values.map((v, i) => v ?
+    `<rect x="${(i * step + (step - bw) / 2).toFixed(2)}" y="${(h - Math.max(1.5, v / most * h)).toFixed(2)}" width="${bw.toFixed(2)}" height="${Math.max(1.5, v / most * h).toFixed(2)}" rx="${Math.min(1.5, bw / 2).toFixed(2)}" fill="${colour}"/>` :
+    `<rect x="${(i * step + (step - bw) / 2).toFixed(2)}" y="${h - 1}" width="${bw.toFixed(2)}" height="1" fill="var(--line-strong)"/>`).join("") + "</svg>";
+}
+
+// A top list: its number one with a small picture, then the next ones (four on a phone, nine elsewhere) with a bar.
+function lxTop(id, kind, rows, colour) {
+  const k = TM_KINDS[kind], el = $(id);
+  if (!rows.length) { el.innerHTML = '<p class="note">Nothing in this time.</p>'; return; }
+  const first = rows[0], most = first.listens, under = k.under(first), cls = k.round ? "round" : "";
+  el.innerHTML = `<div class="lx-lead" style="--c:${colour}" data-artist="${esc(first.artist)}" tabindex="0" title="${esc(first.artist)}'s page">${k.pic(first, 300, cls)}` +
+    `<div class="t"><small>Number one</small><b>${esc(k.title(first))}</b><span>${under ? esc(under) + " · " : ""}${lxPlays(first.listens)}</span></div></div>` +
+    `<ol class="lx-list" style="--c:${colour}">` + rows.slice(1, 10).map((r, i) => `<li data-artist="${esc(r.artist)}" tabindex="0" title="${esc(r.artist)}'s page">` +
+      `<span class="rk">${i + 2}</span>${k.pic(r, 96, cls)}<div class="t"><b>${esc(k.title(r))}</b>${k.under(r) ? `<span>${esc(k.under(r))}</span>` : ""}` +
+      `<u><i style="width:${(r.listens / most * 100).toFixed(1)}%"></i></u></div><span class="n">${num(r.listens)}</span></li>`).join("") + "</ol>" +
+    (rows.length > 5 ? `<button type="button" class="lx-more">Show top ${Math.min(10, rows.length)}</button>` : "");
+  const more = el.querySelector(".lx-more");
+  if (more) more.addEventListener("click", () => {
+    const open = el.querySelector(".lx-list").classList.toggle("open");
+    more.textContent = open ? "Show top 5" : `Show top ${Math.min(10, rows.length)}`;
+  });
+}
+// The boxes of numbers: {c: colour, k: what, v: the number, s: under it (HTML made here), spark?, name?}.
+function lxStats(id, boxes) {
+  $(id).innerHTML = boxes.map((b) => `<div class="lx-stat" style="--c:${b.c}"><div class="k"><i></i>${esc(b.k)}</div>` +
+    `<div class="v${b.name ? " name" : ""}"${b.name ? ` title="${esc(b.v)}"` : ""}>${b.name ? esc(b.v) : b.v}</div><div class="s">${b.s || "&nbsp;"}</div>${b.spark || ""}</div>`).join("");
+}
+// "▲ 12% vs Oct": a number beside the same of the time before.
+function lxVs(now, before, than) {
+  if (before == null) return "";
+  if (!before) return now ? `none ${esc(than.replace(/^vs /, "in "))}` : "";
+  const p = Math.round((now - before) / before * 100);
+  return p === 0 ? `the same as ${esc(than.replace(/^vs /, ""))}` : `<b>${p > 0 ? "▲" : "▼"} ${Math.abs(p)}%</b> ${esc(than)}`;
+}
+const lxShare = (n, of) => of ? Math.round(n / of * 100) : 0;
+const TM_LONG_DAYS = {Mon: "Mondays", Tue: "Tuesdays", Wed: "Wednesdays", Thu: "Thursdays", Fri: "Fridays", Sat: "Saturdays", Sun: "Sundays"};
+
+// One period's boxes and charts: This month (prefix "lm", still going) and the Time machine's ("lt").
+function drawPeriod(p, d) {
+  const t = d.totals, before = d.previous, now = new Date();
+  const going = d.period.year === now.getFullYear() && d.period.month === now.getMonth() + 1;
+  const name = before ? (before.month ? TM_MONTHS[before.month - 1] : String(before.year)) : "";
+  const pt = before && before.totals;
+  // Still going: the plays so far against the time before's by the same day; the rest beside its whole.
+  const soFar = going && before ? before.points.slice(0, now.getDate()).reduce((a, b) => a + b, 0) : null;
+  const whole = (k, show) => pt ? (going ? `${esc(name)}: ${show(pt[k])}` : lxVs(t[k], pt[k], `vs ${name}`)) : "";
+  lxStats(p + "-stats", [
+    {c: "var(--c1)", k: "Plays", v: num(t.listens), s: going && before ? lxVs(t.listens, soFar, `vs ${name} by today`) : whole("listens", num),
+      spark: d.chart.points.length > 1 ? lxSpark(d.chart.points.map((x) => x.listens), "var(--c1)") : ""},
+    {c: "var(--c2)", k: "Hours", v: tmHours(t.seconds), s: whole("seconds", tmHours) || (t.guessed ? `${num(t.guessed)} lengths guessed` : "of music")},
+    {c: "var(--c3)", k: "Artists", v: num(t.artists), s: whole("artists", num)},
+    {c: "var(--c4)", k: "Albums", v: num(t.albums), s: whole("albums", num)},
+    {c: "var(--c5)", k: "Songs", v: num(t.songs), s: whole("songs", num) || "different ones"},
+    {c: "var(--c7)", k: "New artists", v: num(t.new_artists), s: d.period.year ? `${Math.round((d.discovery || 0) * 100)}% of plays` : "all of them, once"},
+  ]);
+  ["artists", "albums", "songs"].forEach((k, i) => lxTop(`${p}-${k}`, k, d.top[k], `var(--c${3 + i})`));
+  // New to you: how much of the time went to artists heard for the first time, and who they were.
+  const fresh = d.new_artists || [];
+  $(p + "-new").innerHTML = !d.period.year ? '<p class="note">Choose a year or a month to see who was new then.</p>' :
+    `<div class="lx-ring">${lxRing(d.discovery || 0, "var(--c7)", "Share of plays of new artists")}<p class="note"><b>${num(t.new_artists)}</b> ${t.new_artists === 1 ? "artist" : "artists"} heard for the first time, ` +
+    `${Math.round((d.discovery || 0) * 100)}% of the plays.</p></div>` +
+    (fresh.length ? `<div class="lx-faces">${fresh.map((a) => `<span class="chip" data-artist="${esc(a.artist)}" tabindex="0" title="${lxPlays(a.listens)} since">${art("artist", a.face, a.artist, 96, "xs round")}${esc(a.artist)}</span>`).join("")}</div>` : "");
+  const r = d.records, day = (iso) => new Date(iso + "T12:00:00").toLocaleDateString(undefined, {weekday: "short", day: "numeric", month: "short", year: "numeric"});
+  $(p + "-records").innerHTML = [
+    ["Busiest day", r.busiest_day ? `${day(r.busiest_day.date)} · ${num(r.busiest_day.listens)}` : "–"],
+    ["Longest run of days", r.streak ? `${num(r.streak)} in a row` : "–"],
+    ["Days with music", num(t.days)],
+    ["Plays a day", r.per_day ? `${r.per_day} on days you listened` : "–"],
+    ["First listen", r.first ? `${r.first.artist} – ${r.first.title}` : "–"],
+  ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+}
+function lxWhen(id, d, legend, pick) {
+  const unit = d.chart.unit, before = d.previous;
+  const points = d.chart.points.map((x) => ({label: x.label, value: x.listens, year: x.year, month: x.month,
+    title: unit === "day" ? `${x.label} ${TM_MONTHS[d.period.month - 1]} ${d.period.year}` : unit === "month" ? `${x.label} ${d.period.year}` : x.label,
+    short: unit === "day" && +x.label % 5 && +x.label !== 1 ? "" : x.label}));
+  const compareName = before ? (before.month ? TM_MONTHS[before.month - 1] : String(before.year)) : "";
+  lxBars(id, {points, colour: "var(--c1)", compare: before && before.totals.listens ? before.points : null, compareName, pick, label: "Plays", empty: "Nothing was played."});
+  if (legend) $(legend).innerHTML = `<li style="--c:var(--c1)"><i></i>${esc(d.period.label)}</li>` + (before && before.totals.listens ? `<li class="dash"><i></i>${esc(before.label)}</li>` : "");
+}
+function lxWeek(id, d, note) {
+  lxBars(id, {points: d.weekdays.map((w) => ({label: w.day, title: TM_LONG_DAYS[w.day], value: w.listens})), colour: "var(--c2)", height: 150, label: "Plays by weekday"});
+  const top = d.weekdays.slice().sort((a, b) => b.listens - a.listens)[0];
+  if (note) $(note).textContent = top && top.listens ? `Most on ${TM_LONG_DAYS[top.day]}.` : "";
+}
+function lxGenres(id, d, most) {
+  const g = d.genres || {known: 0, styles: []};
+  lxRows(id, g.styles.slice(0, most).map((s) => ({name: s.name, sub: s.family !== s.name ? s.family : "", value: s.listens, share: lxShare(s.listens, g.known)})),
+    "var(--c6)", "plays with a known genre");
+  if (g.known && d.totals.listens) $(id).insertAdjacentHTML("beforeend", `<p class="note">Of the ${lxShare(g.known, d.totals.listens)}% of plays whose genre Siansa Beats knows.</p>`);
+}
+function lxDecades(id, decades, note, total) {
+  lxBars(id, {points: decades.map((x) => ({label: `${String(x.decade).slice(2)}s`, title: `The ${x.decade}s`, value: x.listens})), colour: "var(--c8)", height: 160,
+    label: "Plays by decade", empty: "No years known for this music yet."});
+  const known = decades.reduce((a, x) => a + x.listens, 0);
+  if (note) $(note).textContent = known ? `By the year on each song: ${lxShare(known, total)}% of plays have one.` : "";
+}
+
+// ---- This month ----
+function drawMonth(d) {
+  drawPeriod("lm", d);
+  lxWhen("lm-days", d, "lm-days-legend", null);
+  $("lm-days-note").textContent = d.records.per_day ? `${d.records.per_day} plays a day you listened` : "";
+  lxClock("lm-clock", d.hours, "var(--c2)");
+  const peak = d.hours.indexOf(Math.max(...d.hours));
+  $("lm-clock-note").textContent = d.totals.listens ? `Most around ${String(peak).padStart(2, "0")}:00.` : "";
+  lxWeek("lm-week", d, "lm-week-note");
+  lxGenres("lm-genres", d, 8);
+  lxDecades("lm-decades", d.decades || [], "lm-decades-note", d.totals.listens);
+}
+
+// ---- My profile: all of the history ----
+function drawProfile(p) {
+  const t = p.totals;
+  if (!t.listens) return;
+  const months = p.months, busiest = months.reduce((a, m) => m.listens > a.listens ? m : a, months[0]);
+  const lately = months.slice(-36), since = new Date(t.first * 1000).toLocaleDateString(undefined, {month: "long", year: "numeric"});
+  const top = p.artists[0];
+  lxStats("lp-stats", [
+    {c: "var(--c1)", k: "Plays", v: num(t.listens), s: `since ${esc(since)}`, spark: lxSpark(months.slice(-24).map((m) => m.listens), "var(--c1)")},
+    {c: "var(--c3)", k: "Artists", v: num(t.artists), s: `${(t.artists / Math.max(1, months.length)).toFixed(1)} new a month`},
+    {c: "var(--c2)", k: "Months", v: num(t.months), s: `with music, of ${num(months.length)}`},
+    {c: "var(--c4)", k: "A month", v: num(Math.round(t.listens / Math.max(1, t.months))), s: "plays, on average"},
+    {c: "var(--c5)", k: "Busiest month", v: busiest.label, s: lxPlays(busiest.listens), name: true},
+    {c: "var(--c7)", k: "Top artist", v: top ? top.artist : "–", s: top ? lxPlays(top.listens) : "", name: true},
+  ]);
+  // Top artists over time: each one's plays added up month by month, or their share of what the eight have.
+  const colourOf = new Map(p.artists.map((a, i) => [a.artist, lxC(i)]));
+  const cumulative = p.artists.map((a) => { let sum = 0; return a.months.map((v) => (sum += v)); });
+  const share = tm.lines === "share";
+  const values = share ? cumulative.map((c) => c.map((v, i) => { const all = cumulative.reduce((x, s) => x + s[i], 0); return all ? v / all * 100 : 0; })) : cumulative;
+  lxLines("lp-lines", {labels: months.map((m) => m.label), share, label: "Top artists over time",
+    series: p.artists.map((a, i) => ({name: a.artist, colour: lxC(i), values: values[i]}))});
+  $("lp-lines-note").textContent = share ? "Each one's share of the plays of these eight, so far" : "Plays added up, month by month";
+  $("lp-lines-legend").innerHTML = p.artists.map((a, i) => `<li style="--c:${lxC(i)}" data-artist="${esc(a.artist)}" tabindex="0"><i></i>${esc(a.artist)}</li>`).join("");
+  document.querySelectorAll("[data-lines]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lines === tm.lines)));
+  // The 40 most played, as bubbles: the eight above in their colours.
+  lxBubbles("lp-bubbles", p.bubbles, (name) => colourOf.get(name) || "var(--faint)");
+  lxRadar("lp-radar", p.fingerprint);
+  const f = p.fingerprint;
+  $("lp-radar-legend").innerHTML = f && f.recent ? `<li style="--c:var(--c1)"><i></i>Last 12 months</li>` + (f.before ? `<li class="dash" style="--c:var(--c2)"><i style="border-color:var(--c2)"></i>The 12 before</li>` : "") : "";
+  $("lp-radar-note").textContent = f && f.recent ? "Consistency: days with music. Discovery: plays of artists new to you. Variety: how evenly plays spread over artists. " +
+    "Concentration: plays of your ten most played. Replay: plays of a song heard again." : "";
+  lxHeat("lp-heat", p.clock, "var(--c1)");
+  let bestD = 0, bestH = 0;
+  p.clock.forEach((row, dd) => row.forEach((v, h) => { if (v > p.clock[bestD][bestH]) { bestD = dd; bestH = h; } }));
+  $("lp-heat-note").textContent = `Most often on ${Object.values(TM_LONG_DAYS)[bestD]} around ${String(bestH).padStart(2, "0")}:00.`;
+  lxClock("lp-clock", Array.from({length: 24}, (_, h) => p.clock.reduce((a, row) => a + row[h], 0)), "var(--c2)");
+  // Genres over time (the last three years at most), the six most played and the rest.
+  const g = p.genres, gm = g.months.slice(-36), withOther = gm.some((m) => m.other);
+  const known = gm.reduce((a, m) => a + m.counts.reduce((x, y) => x + y, 0) + m.other, 0);
+  if (!known) lxEmpty("lp-stream", "Genres show here once your music has been analysed.");
+  else lxStream("lp-stream", {labels: gm.map((m) => m.label), series: [...g.names.map((n, i) => ({name: n, colour: lxC(i), values: gm.map((m) => m.counts[i])})),
+    ...(withOther ? [{name: "Other", colour: "var(--line-strong)", values: gm.map((m) => m.other)}] : [])]});
+  $("lp-stream-note").textContent = known ? (g.months.length > 36 ? "The last three years" : "Since your first listen") : "";
+  $("lp-stream-legend").innerHTML = known ? g.names.map((n, i) => `<li style="--c:${lxC(i)}" title="${esc(g.families[i])}"><i></i>${esc(n)}</li>`).join("") +
+    (withOther ? `<li style="--c:var(--line-strong)"><i></i>Other</li>` : "") : "";
+  lxBars("lp-discovery", {points: lately.map((m) => ({label: m.label.slice(0, 3), title: m.label, value: m.new_artists, year: m.year, month: m.month,
+    short: m.month === 1 ? String(m.year) : m.label.slice(0, 3)})), colour: "var(--c7)", height: 170, label: "New artists by month", pick: (x) => tmGo(x.year, x.month)});
+  const newAvg = lately.reduce((a, m) => a + m.new_artists, 0) / Math.max(1, lately.length);
+  $("lp-discovery-note").textContent = `${newAvg.toFixed(1)} new artists a month${months.length > 36 ? " over the last three years" : ""}. Press a bar to open that month.`;
+  lxDecades("lp-decades", p.decades, null, t.listens);
+}
+document.querySelectorAll("[data-lines]").forEach((b) => b.addEventListener("click", () => { tm.lines = b.dataset.lines; if (tm.profile) drawProfile(tm.profile); }));
+
+// ---- Time machine: any year or month, its boxes, and a graph of your choice ----
+const LT_GRAPHS = {when: "When", clock: "Listening clock", week: "Through the week", genres: "Genres", decades: "Music by decade"};
+function drawMachine(d) {
+  const all = d.all || {}, t = d.totals;
+  $("tm-years").innerHTML = `<button type="button" data-year="" aria-pressed="${!d.period.year}">All time</button>` +
+    (d.years || []).slice().reverse().map((y) => `<button type="button" data-year="${y.year}" aria-pressed="${d.period.year === y.year}" title="${lxPlays(y.listens)}">${y.year}</button>`).join("");
+  $("tm-years").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => tmGo(+b.dataset.year || null, null)));
+  $("tm-months").hidden = !d.period.year;
+  if (d.period.year) {
+    $("tm-months").innerHTML = `<button type="button" data-month="" aria-pressed="${!d.period.month}">Whole year</button>` +
+      TM_MONTHS.map((m, i) => `<button type="button" data-month="${i + 1}" class="${d.months[i] ? "" : "empty"}" aria-pressed="${d.period.month === i + 1}" title="${lxPlays(d.months[i])}">${m}</button>`).join("");
+    $("tm-months").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => tmGo(d.period.year, +b.dataset.month || null)));
+  }
+  $("lt-empty").hidden = !!t.listens || !all.listens;
+  $("lt-empty").textContent = `Nothing was played in ${d.period.label}.`;
+  $("lt-stats").hidden = $("lt-body").hidden = !t.listens;
+  if (!t.listens) return;
+  drawPeriod("lt", d);
+  $("lt-picker").innerHTML = Object.entries(LT_GRAPHS).map(([k, label]) => `<button type="button" data-graph="${k}" aria-pressed="${k === tm.graph}">${label}</button>`).join("");
+  $("lt-picker").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { tm.graph = b.dataset.graph; drawMachine(d); }));
+  const unit = d.chart.unit;
+  $("lt-graph-title").textContent = tm.graph === "when" ? (unit === "year" ? "Year by year" : unit === "month" ? "Month by month" : "Day by day") : LT_GRAPHS[tm.graph];
+  $("lt-graph-legend").innerHTML = "";
+  $("lt-graph-note").textContent = "";
+  const graph = $("lt-graph");
+  graph.innerHTML = "";
+  if (tm.graph === "when") {
+    lxWhen("lt-graph", d, "lt-graph-legend", unit === "year" ? (x) => tmGo(x.year, null) : unit === "month" ? (x) => tmGo(d.period.year, x.month) : null);
+    if (unit !== "day") $("lt-graph-note").textContent = `Press a bar to go to that ${unit}.`;
+  } else if (tm.graph === "clock") {
+    lxClock("lt-graph", d.hours, "var(--c2)");
+    const peak = d.hours.indexOf(Math.max(...d.hours));
+    $("lt-graph-note").textContent = `Most around ${String(peak).padStart(2, "0")}:00.`;
+  } else if (tm.graph === "week") lxWeek("lt-graph", d, "lt-graph-note");
+  else if (tm.graph === "genres") lxGenres("lt-graph", d, 10);
+  else lxDecades("lt-graph", d.decades || [], "lt-graph-note", t.listens);
+}
+
 // ---- an artist's page ----
 const ar = {name: null};
 function artistHref(name) { return "#artist=" + encodeURIComponent(name); }
@@ -2432,7 +3121,7 @@ async function openArtist(name) {
     tile("Songs", num(t.songs), "different ones") + tile("Albums", num(t.albums), "") +
     tile("Busiest year", String(d.busiest_year.year), `${num(d.busiest_year.listens)} plays`) + tile("Days", num(t.days), "with them");
   tmBars("ar-years", d.years.map((y) => ({label: String(y.year), short: d.years.length > 10 && y.year % 2 ? "" : String(y.year), listens: y.listens, year: y.year})),
-    (p) => { tm.year = p.year; tm.month = null; tmTab("overview"); location.hash = "#listening"; });
+    (p) => { tmGo(p.year, null); location.hash = "#listening"; });
   tmBars("ar-hours", d.hours.map((n, h) => ({label: `${String(h).padStart(2, "0")}:00`, short: h % 6 ? "" : String(h), listens: n})));
   const peak = d.hours.indexOf(Math.max(...d.hours));
   $("ar-hours-note").textContent = `Mostly around ${String(peak).padStart(2, "0")}:00. First heard ${when(d.first.at)} (${d.first.title}); last ${tmAgo(d.last.at)} (${d.last.title}).`;
@@ -2447,109 +3136,31 @@ async function openArtist(name) {
     `<time>${esc(tmAgo(l.at))}</time></li>`).join("");
 }
 
-// When a listen was: "5 min ago", "3 h ago", "yesterday", else the date.
-function tmAgo(at) {
-  const s = Date.now() / 1000 - at;
-  if (s < 90) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  if (s < 172800) return "yesterday";
-  return new Date(at * 1000).toLocaleDateString(undefined, {day: "numeric", month: "short", year: s > 300 * 86400 ? "numeric" : undefined});
-}
-function tmGo(year, month) { tm.year = year; tm.month = month; refreshListening(); }
-// The part shown (Overview, Top, When, History) and the top list's kind, kept in this browser.
-tm.tab = (() => { try { return localStorage.getItem("beats-tm-tab") || "overview"; } catch (e) { return "overview"; } })();
-tm.top = "artists";
-function tmTab(tab) {
-  tm.tab = tab;
-  try { localStorage.setItem("beats-tm-tab", tab); } catch (e) { /* private window */ }
-  document.querySelectorAll(".tm-tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
-  document.querySelectorAll(".tm-panel").forEach((p) => { p.hidden = p.dataset.tab !== tab || (tab !== "history" && tab !== "settings" && !(tm.data && tm.data.totals.listens)); });
-}
-document.querySelectorAll(".tm-tabs [data-tab]").forEach((b) => b.addEventListener("click", () => { tmTab(b.dataset.tab); window.scrollTo({top: 0}); }));
-document.querySelectorAll(".tm-seg [data-top]").forEach((b) => b.addEventListener("click", () => tmTop(b.dataset.top)));
-function drawListening(d) {
-  tm.data = d;
+// What every part shows: who's listening and what's playing, the listeners, and Settings.
+function drawCommon(d) {
   tm.user = d.user;
-  // Where you are, in the header too: "Listening · May 2024".
-  if (currentView === "listening") $("page-name").textContent = `Listening · ${d.all && d.all.listens ? d.period.label : ""}`.replace(/ · $/, "");
-  // What's playing, for every listener (the app's listener may not be the one shown).
   const playing = d.playing || [];
   $("tm-now").hidden = !playing.length;
   $("tm-now-what").innerHTML = playing.map((p) => `<div class="row" data-artist="${esc(p.artist)}" tabindex="0" title="${esc(p.artist)}'s page">${art("cover", p.cover, p.title, 96, "m")}<div class="t">` +
     `<div class="kicker"><span class="dot" aria-hidden="true"></span>Playing now${playing.length > 1 || p.user !== d.user ? ` · ${esc(p.user || "no name")}` : ""}</div>` +
     `<b>${esc(p.title)}</b><span>${esc(p.artist)}</span></div></div>`).join("");
   // Listens without a listener's name (a file brought in with none) beside a named listener (the app's): join them.
-  const users0 = d.users || [], blank = users0.find((u) => !u.user && u.listens), named = users0.filter((u) => u.user);
+  const users = d.users || [], blank = users.find((u) => !u.user && u.listens), named = users.filter((u) => u.user);
   $("tm-join").hidden = !(blank && named.length);
   if (blank && named.length) {
     const to = (playing.find((p) => p.user) || named[0]).user;
     $("tm-join-text").textContent = `${num(blank.listens)} listens have no listener's name (a file brought in without one). The app sends yours as ${to}.`;
     $("tm-join-go").textContent = `Make them ${to}'s`;
     $("tm-join-go").onclick = async () => {
-      try { await api("api/listens/rename", {method: "POST", body: JSON.stringify({from: "", to})}); tm.user = to; tm.year = tm.month = null; refreshListening(); }
+      try { await api("api/listens/rename", {method: "POST", body: JSON.stringify({from: "", to})}); tm.user = to; tm.year = tm.month = null; tm.picked = false; refreshListening(); }
       catch (e) { banner(e.message); }
     };
   }
-  const users = d.users || [];
   $("tm-who").hidden = users.length < 2;
   $("tm-user").innerHTML = users.map((u) => `<option value="${esc(u.user)}"${u.user === d.user ? " selected" : ""}>${esc(u.user || "(no name)")}${listenerFrom(u)} · ${num(u.listens)}</option>`).join("");
   $("tm-user-names").innerHTML = users.map((u) => `<option value="${esc(u.user)}"></option>`).join("");
-  if (!$("tm-import-user").value) $("tm-import-user").value = d.user || (users.find((u) => u.user) || {}).user || ((d.playing || []).find((p) => p.user) || {}).user || "";
-  const t = d.totals, all = d.all || {};
-  $("tm-label").textContent = all.listens ? d.period.label : "Listening";
-  $("tm-sub").textContent = !all.listens ? "No listens yet." :
-    `${num(t.listens)} listens · ${tmHours(t.seconds)} hours` + (d.period.year ? "" : ` · since ${new Date(all.first * 1000).toLocaleDateString(undefined, {year: "numeric", month: "long"})}`);
-  // The years to travel to, then the months of the chosen one.
-  $("tm-years").hidden = !all.listens;
-  $("tm-years").innerHTML = `<button type="button" data-year="" aria-pressed="${!d.period.year}">All time</button>` +
-    (d.years || []).slice().reverse().map((y) => `<button type="button" data-year="${y.year}" aria-pressed="${d.period.year === y.year}" title="${num(y.listens)} listens">${y.year}</button>`).join("");
-  $("tm-years").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => tmGo(+b.dataset.year || null, null)));
-  $("tm-months").hidden = !d.period.year;
-  if (d.period.year) {
-    $("tm-months").innerHTML = `<button type="button" data-month="" aria-pressed="${!d.period.month}">Whole year</button>` +
-      TM_MONTHS.map((m, i) => `<button type="button" data-month="${i + 1}" class="${d.months[i] ? "" : "empty"}" aria-pressed="${d.period.month === i + 1}" title="${num(d.months[i])} listens">${m}</button>`).join("");
-    $("tm-months").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => tmGo(d.period.year, +b.dataset.month || null)));
-  }
-  $("tm-empty").hidden = !!t.listens || tm.tab === "history" || tm.tab === "settings";
-  $("tm-empty").textContent = all.listens ? `Nothing was played in ${d.period.label}.` :
-    "Nothing here yet. Turn on Scrobble to Siansa Beats in the Siansa app (Settings › Scrobbling), or bring in a history under Settings.";
-  tmTab(tm.tab);
-  if (t.listens) {
-    const tile = (k, v, s) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${v}</div><div class="s sub">${esc(s || "")}</div></div>`;
-    $("tm-tiles").innerHTML = tile("Listens", num(t.listens), `${d.records.per_day} a day you listened`) +
-      tile("Hours", tmHours(t.seconds), t.guessed ? `${num(t.guessed)} songs' lengths aren't known: counted as 3½ min` : "of music") +
-      tile("Artists", num(t.artists), d.period.year ? `${num(t.new_artists)} for the first time` : "") +
-      tile("Songs", num(t.songs), "different ones") + tile("Albums", num(t.albums), "") + tile("Days", num(t.days), "with music");
-    const unit = d.chart.unit;
-    $("tm-chart-title").textContent = unit === "year" ? "Year by year" : unit === "month" ? "Month by month" : "Day by day";
-    tmBars("tm-chart", d.chart.points.map((p) => ({...p, short: unit === "day" && d.chart.points.length > 16 && +p.label % 5 && +p.label !== 1 ? "" : p.label})),
-      unit === "year" ? (p) => tmGo(p.year, null) : unit === "month" ? (p) => tmGo(d.period.year, p.month) : null);
-    ["artists", "albums", "songs"].forEach((k) => tmRank(k, d.top[k]));
-    tmFirst();
-    // The favourites of this time, a picture each: press one for its whole list.
-    $("tm-podium").innerHTML = ["artists", "albums", "songs"].filter((k) => d.top[k].length).map((k) => tmFeature(k, d.top[k][0], false)).join("");
-    $("tm-podium").querySelectorAll('.tm-feature:not([data-kind="artists"])').forEach((b) => b.addEventListener("click", () => { tmTop(b.dataset.kind); tmTab("top"); window.scrollTo({top: 0}); }));
-    // The most played artist of this time, faint behind its name.
-    const face = (d.top.artists.find((a) => a.face) || {}).face;
-    document.querySelector(".tm-hero").style.setProperty("--face", face ? `url("${artUrl("artist", face, 640)}")` : "none");
-    tmBars("tm-hours", d.hours.map((n, h) => ({label: `${String(h).padStart(2, "0")}:00`, short: h % 6 ? "" : String(h), listens: n})));
-    const peak = d.hours.indexOf(Math.max(...d.hours));
-    $("tm-hours-note").textContent = `Most around ${String(peak).padStart(2, "0")}:00.`;
-    tmBars("tm-weekdays", d.weekdays.map((w) => ({label: w.day, listens: w.listens})));
-    const day = d.weekdays.slice().sort((a, b) => b.listens - a.listens)[0];
-    $("tm-weekdays-note").textContent = `Most on ${({Mon: "Mondays", Tue: "Tuesdays", Wed: "Wednesdays", Thu: "Thursdays", Fri: "Fridays", Sat: "Saturdays", Sun: "Sundays"})[day.day]}.`;
-    const r = d.records, when = (iso) => new Date(iso + "T12:00:00").toLocaleDateString(undefined, {day: "numeric", month: "long", year: "numeric"});
-    $("tm-records").innerHTML = [
-      ["Busiest day", r.busiest_day ? `${when(r.busiest_day.date)} · ${num(r.busiest_day.listens)}` : "–"],
-      ["Longest run of days", r.streak ? `${num(r.streak)} in a row` : "–"],
-      ["First listen", r.first ? `${r.first.artist} – ${r.first.title}` : "–"],
-      ["", r.first ? new Date(r.first.at * 1000).toLocaleString(undefined, {dateStyle: "medium", timeStyle: "short"}) : ""],
-    ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
-    $("tm-new-card").hidden = !d.period.year || !(d.new_artists || []).length;
-    $("tm-new").innerHTML = (d.new_artists || []).map((a) => `<span class="chip" data-artist="${esc(a.artist)}" tabindex="0" title="${num(a.listens)} listens since: ${esc(a.artist)}'s page">${art("artist", a.face, a.artist, 96, "xs round")}${esc(a.artist)}</span>`).join("");
-  }
-  $("tm-recent-card").hidden = !(d.recent || []).length;  // History: always there, also in a month with nothing
+  if (!$("tm-import-user").value) $("tm-import-user").value = d.user || (users.find((u) => u.user) || {}).user || (playing.find((p) => p.user) || {}).user || "";
+  $("tm-recent-card").hidden = !(d.recent || []).length;
   $("tm-recent").innerHTML = (d.recent || []).map((l) => `<li data-artist="${esc(l.artist)}" tabindex="0">${art("cover", l.cover, l.title, 96, "s")}<div class="t"><b>${esc(l.title)}</b><span>${esc(l.artist)}</span></div>` +
     `<time>${esc(tmAgo(l.at))}</time></li>`).join("");
   drawPeople(users);
@@ -2566,6 +3177,62 @@ function drawListening(d) {
       (lf.turned_away ? `, ${num(lf.turned_away)} not taken (too old, or turned away)` : "") + (lf.error ? `. ${lf.error}` : ".")
     : `Send ${d.user ? d.user + "'s" : "this listener's"} new listens on to a Last.fm account, as they come in. Listens from a file aren't sent.`;
 }
+// The big heading: what the part shown is about, with its most played artist faint behind.
+function drawHero() {
+  const d = tm.now, all = (d && d.all) || {}, tab = tm.tab;
+  const shown = tab === "machine" ? tm.data : tab === "profile" ? null : d;
+  let kicker = "Listening", label = "Listening", sub = "Loading…", face = null;
+  if (d && !all.listens) sub = "No listens yet.";
+  else if (tab === "month" && d) {
+    kicker = "This month"; label = d.period.label;
+    sub = `${lxPlays(d.totals.listens)} · ${tmHours(d.totals.seconds)} hours so far`;
+  } else if (tab === "profile") {
+    kicker = "My listening profile"; label = "How you listen";
+    const p = tm.profile;
+    sub = p && p.totals.listens ? `${lxPlays(p.totals.listens)} since ${new Date(p.totals.first * 1000).toLocaleDateString(undefined, {month: "long", year: "numeric"})}` : "Loading…";
+    face = p && (p.artists.find((a) => a.face) || {}).face;
+  } else if (tab === "machine") {
+    kicker = "Time machine"; label = tm.data ? tm.data.period.label : "Time machine";
+    sub = tm.data ? (tm.data.totals.listens ? `${lxPlays(tm.data.totals.listens)} · ${tmHours(tm.data.totals.seconds)} hours` : "Nothing played") +
+      (tm.data.period.year ? "" : ` · since ${new Date(all.first * 1000).toLocaleDateString(undefined, {year: "numeric", month: "long"})}`) : "Loading…";
+  } else if (tab === "settings") { kicker = "Listening"; label = "Settings"; sub = "Listeners, memory, histories and Last.fm"; }
+  if (shown && shown.top) face = (shown.top.artists.find((a) => a.face) || {}).face;
+  $("tm-kicker").textContent = kicker;
+  $("tm-label").textContent = label;
+  $("tm-sub").textContent = sub;
+  if (currentView === "listening") $("page-name").textContent = `Listening · ${label}`;
+  document.querySelector(".tm-hero").style.setProperty("--face", face ? `url("${artUrl("artist", face, 640)}")` : "none");
+}
+function drawShown() {
+  const all = (tm.now && tm.now.all) || {}, nothing = tm.now && !all.listens;
+  $("tm-empty").hidden = !nothing || tm.tab === "settings";
+  $("tm-empty").textContent = "Nothing here yet. Turn on Scrobble to Siansa Beats in the Siansa app (Settings › Scrobbling), or bring in a history under Settings.";
+  document.querySelectorAll(".tm-panel").forEach((p) => { p.hidden = p.dataset.tab !== tm.tab || (nothing && tm.tab !== "settings"); });
+  document.querySelectorAll(".tm-tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tm.tab)));
+  drawHero();
+}
+
+// When a listen was: "5 min ago", "3 h ago", "yesterday", else the date.
+function tmAgo(at) {
+  const s = Date.now() / 1000 - at;
+  if (s < 90) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 172800) return "yesterday";
+  return new Date(at * 1000).toLocaleDateString(undefined, {day: "numeric", month: "short", year: s > 300 * 86400 ? "numeric" : undefined});
+}
+// Travelling: a year (month null) or a month of it, or all time (both null), in the Time machine.
+function tmGo(year, month) { tm.year = year; tm.month = month; tm.picked = true; if (tm.tab !== "machine") tmTab("machine"); else refreshListening(); window.scrollTo({top: 0}); }
+// The part shown, kept in this browser (an old one's name, from before 0.59, opens This month).
+tm.tab = (() => { try { const kept = localStorage.getItem("beats-tm-tab"); return ["month", "profile", "machine", "settings"].includes(kept) ? kept : "month"; } catch (e) { return "month"; } })();
+function tmTab(tab) {
+  tm.tab = tab;
+  try { localStorage.setItem("beats-tm-tab", tab); } catch (e) { /* private window */ }
+  document.querySelectorAll(".tm-tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  drawShown();
+  if (currentView === "listening") refreshListening();
+}
+document.querySelectorAll(".tm-tabs [data-tab]").forEach((b) => b.addEventListener("click", () => { tmTab(b.dataset.tab); window.scrollTo({top: 0}); }));
 // Settings › Listeners: who has a history here, and joining two that are one person's (the owner, 15 Nov: "max"
 // from a file and "Max" from the app, both theirs).
 function drawPeople(users) {
@@ -2600,16 +3267,41 @@ function drawImport(state) {
   }, 1000);
 }
 async function refreshListening() {
-  const q = new URLSearchParams();
-  if (tm.user != null) q.set("user", tm.user);
-  if (tm.year) q.set("year", tm.year);
-  if (tm.month) q.set("month", tm.month);
-  if (TM_ZONE) q.set("tz", TM_ZONE);
-  try { drawListening(await api("api/listens?" + q)); }
-  catch (e) { $("tm-sub").textContent = e.message; }
+  clearTimeout(tm.refresh);
+  const seq = tm.seq = (tm.seq || 0) + 1, now = new Date();
+  const base = () => { const q = new URLSearchParams(); if (tm.user != null) q.set("user", tm.user); if (TM_ZONE) q.set("tz", TM_ZONE); return q; };
+  try {
+    // This month always: it says who's listening, what's playing and the last listens, for every part.
+    const q = base();
+    q.set("year", now.getFullYear()); q.set("month", now.getMonth() + 1);
+    const d = await api("api/listens?" + q);
+    if (seq !== tm.seq) return;  // a newer refresh (another listener, another part) is on its way
+    tm.now = d;
+    drawCommon(d);
+    const has = d.all && d.all.listens, key = JSON.stringify([d.user, d.totals, d.chart, d.top, d.genres]);
+    if (has && key !== tm.nowKey) { tm.nowKey = key; drawMonth(d); }
+    if (has && tm.tab === "machine") {
+      if (!tm.picked) { const back = new Date(now.getFullYear(), now.getMonth() - 1, 1); tm.year = back.getFullYear(); tm.month = back.getMonth() + 1; }
+      const m = base();
+      if (tm.year) m.set("year", tm.year);
+      if (tm.month) m.set("month", tm.month);
+      const got = await api("api/listens?" + m);
+      if (seq !== tm.seq) return;
+      const k = JSON.stringify([got.user, got.period, got.totals, got.top, got.genres]);
+      tm.data = got;
+      if (k !== tm.dataKey) { tm.dataKey = k; drawMachine(got); }
+    }
+    if (has && tm.tab === "profile") {
+      const p = await api("api/listens/profile?" + base());
+      if (seq !== tm.seq) return;
+      const k = JSON.stringify([p.user, p.totals, p.months.length && p.months[p.months.length - 1]]);
+      tm.profile = p;
+      if (k !== tm.profileKey) { tm.profileKey = k; drawProfile(p); }
+    }
+    drawShown();
+  } catch (e) { $("tm-sub").textContent = e.message; }
   // Kept up to date while it's on screen: what's playing and the last listens change with every song (the owner,
   // 11 Nov: the page still showed the song from when it was opened). The numbers are kept ready, so this is cheap.
-  clearTimeout(tm.refresh);
   if (currentView === "listening" && !document.hidden) tm.refresh = setTimeout(refreshListening, 15000);
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden && currentView === "listening") refreshListening(); });
@@ -2617,7 +3309,7 @@ $("tm-memory").addEventListener("change", async () => {
   try { await api("api/listens/memory", {method: "POST", body: JSON.stringify({minutes: +$("tm-memory").value})}); refreshListening(); }
   catch (e) { banner(e.message); }
 });
-$("tm-user").addEventListener("change", () => { tm.user = $("tm-user").value; tm.year = tm.month = null; $("tm-import-user").value = tm.user; refreshListening(); });
+$("tm-user").addEventListener("change", () => { tm.user = $("tm-user").value; tm.year = tm.month = null; tm.picked = false; $("tm-import-user").value = tm.user; refreshListening(); });
 $("tm-import").addEventListener("submit", async (e) => {
   e.preventDefault();
   const file = $("tm-file").files[0];
@@ -2637,7 +3329,7 @@ $("tm-remove").addEventListener("click", async () => {
   const names = {all: "all of them", siansa: "those from the Siansa app", koito: "those from Koito's export", lastfm: "those from Last.fm's export", listenbrainz: "those from ListenBrainz's export"};
   const source = (prompt(`Remove which listens of ${tm.user || "this listener"}? Type one of: all, siansa, koito, lastfm, listenbrainz`) || "").trim().toLowerCase();
   if (!names[source] || !confirm(`Remove ${names[source]} for ${tm.user || "this listener"}? This can't be undone.`)) return;
-  try { await api("api/listens/remove", {method: "POST", body: JSON.stringify({user: tm.user || "", source})}); tm.year = tm.month = null; refreshListening(); }
+  try { await api("api/listens/remove", {method: "POST", body: JSON.stringify({user: tm.user || "", source})}); tm.year = tm.month = null; tm.picked = false; refreshListening(); }
   catch (e) { banner(e.message); }
 });
 $("tm-lastfm").addEventListener("submit", async (e) => {
@@ -2778,7 +3470,7 @@ function tile(href, k, v, of, s, meter) {
 function kindsOf(s) {
   const c = s.counts || {}, total = (c.songs || 0) - (c.skipped || 0), done = c.done || 0, failed = c.failed || 0;
   const waiting = (c.queued || 0) + BUSY.reduce((n, k) => n + (c[k] || 0), 0);
-  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0, tr = s.traits || {};
+  const l = s.loudness || {}, st = s.styles || {}, so = s.sound || {}, soFailed = (so.sources || {}).failed || 0, tr = s.traits || {}, vo = s.vocals || {};
   const where = s.device_name && s.device_name !== "CPU" ? ` on the GPU` : "";
   return [
     {id: "beats", href: "#songs", name: "Beats", what: "Tempo, every beat and the phrases: what DJ blends are laid on.",
@@ -2804,6 +3496,19 @@ function kindsOf(s) {
       by: tr.available ? "<b>Essentia's trained models</b>" : "<b>None</b>: this image has no voice and mood models",
       done: tr.scored || 0, total: tr.available ? tr.total || 0 : null, failed: 0, busy: 0,
       now: (tr.total || 0) > (tr.scored || 0) ? "scoring songs now" : "", left: Math.max(0, (tr.total || 0) - (tr.scored || 0)), off: !tr.available},
+    // 0.60.2 (the owner, 19 Nov: not on the Overview): of the songs with their beats found, how many have their vocals
+    // found (separated, or instrumental by the voice model). It runs when the rest is done, or alone with Only vocals.
+    {id: "vocals", href: "#setup", name: "Vocals", what: "Where someone sings, bar by bar, at each end of a song: so DJ blends never lay two voices over each other.",
+      by: vo.available ? `<b>Hybrid Demucs</b>${where}` : "<b>None</b>: this image has no vocal separation model",
+      done: (vo.separated || 0) + (vo.none || 0), total: vo.available ? (vo.separated || 0) + (vo.none || 0) + (vo.waiting || 0) + (vo.failed || 0) : null,
+      // Songs a whole round couldn't do (0.61.1): not "to go", the rest being done.
+      failed: vo.failed || 0, busy: 0, now: vo.working ? "separating a song now" : "", left: Math.max(0, (vo.waiting || 0) - (vo.stuck || 0)),
+      stuck: vo.stuck || 0, off: !vo.available,
+      // Optional (0.61.4): off until switched on under Setup, as it's slow.
+      switchedOff: vo.available && vo.on === false && !vo.working,
+      // Waiting for the rest: it only runs when nothing else is analysed, unless Only vocals.
+      // Waiting for the rest, as the finder says (0.60.3), not guessed from the other counts.
+      waits: !vo.working && (vo.waiting || 0) > 0 && vo.state === "waits for the rest of the analysis"},
   ];
 }
 const AGAIN_ASK = {
@@ -2811,6 +3516,7 @@ const AGAIN_ASK = {
   loudness: "Measure the loudness and key of every song again? What's known now stays in use until each song is measured.",
   genres: "Hear every song's genres again? The genres known now stay in use until each song is heard.",
   sound: "Hear the sound of every song again? For a big library that takes many hours. The sound known now stays in use until each song is heard.",
+  vocals: "Find the vocals of every song again? On a CPU that takes days for a big library. The vocals known now stay in use until each song is done.",
 };
 // A new install's way in (the owner, 14 Nov: setting up must be plain): shown until a music server is added and a
 // library is switched on, each step with where to do it and a tick once it's done.
@@ -2820,10 +3526,15 @@ function drawStart(s) {
   // The genre model, chosen at setup (0.58): asked before the first analysis; an install that heard songs has one.
   const picked = styleModels ? !!styleModels.picked : true;
   $("start-card").hidden = server && libs && songs && picked;
+  const vx = s.vocals || vocals;  // the vocals finder: switched on or off yet (0.61)
   const step = (done, title, text) => `<li data-done="${done}"><div><b>${title}</b><p class="sub">${text}</p></div></li>`;
   $("start-steps").innerHTML = [
     step(server, "Add your music server", server ? "Done." : 'Under <a href="#setup">Setup › Music servers</a>: its address, user name and password, as you sign in to Siansa. Navidrome, Emby and Jellyfin work.'),
     step(picked, "Choose the genre model", picked ? "Done." : 'Under <a href="#setup">Setup › Genre model</a>: Discogs-EffNet is quick on any machine; MAEST is more accurate but slow without a GPU. Each says what it\'s good at and what to watch out for.'),
+    // Optional (0.61, the owner, 20 Nov): done once switched on or off; it doesn't keep this card up.
+    step(!!(vx && (vx.chosen || !vx.available)), "Find vocals? (optional, slow)", vx && !vx.available ? "Not in this image." :
+      vx && vx.chosen ? (vx.on ? "Switched on." : "Left off.") :
+      'Under <a href="#setup">Setup › Vocals for DJ blends</a>: so DJ blends never lay two voices over each other. <b style="display:inline">It takes much longer than the rest of the analysis</b>, most of all without a GPU. Leave it off if you don\'t use DJ blends.'),
     step(libs && songs, "Choose what to analyse", libs && songs ? "Done." : 'Under <a href="#libraries">Libraries</a>: switch on the libraries you want and press <b style="display:inline">Start analysis</b>. Try one small library first; a song takes a few seconds on a GPU and much longer on a CPU.'),
     step(false, "Connect the Siansa app", 'In the app: Settings › Connections › Siansa Beats, with the address and key shown under <a href="#setup">Setup › Connect the Siansa app</a>. A password for this page is set there too, under Access.'),
   ].join("");
@@ -2831,12 +3542,13 @@ function drawStart(s) {
 function drawTiles(s) {
   $("tiles").innerHTML = kindsOf(s).map((k) => {
     const w = (n) => k.total ? `${Math.max(0, Math.min(100, 100 * n / k.total))}%` : "0";
-    const state = k.off ? "not in this image" : s.paused && k.left && k.id !== "voice" ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
+    const alone = k.id === "vocals" && (s.vocals || {}).alone;
+    const state = k.off ? "not in this image" : k.switchedOff ? `switched off · <a href="#setup">switch on under Setup</a>` : s.paused && k.left && k.id !== "voice" && !alone ? `paused · ${num(k.left)} to go` : k.now ? `${k.now} · ${num(k.left)} to go` : k.waits ? `waits for the rest · ${num(k.left)} to go` : k.left ? `${num(k.left)} to go` : k.total ? `<span class="ok">✓ all done</span>` : "no songs yet";
     return `<div class="kind"><div class="top"><a href="${k.href}">${esc(k.name)}</a><span class="n">${k.total == null ? "–" : `${num(k.done)} <small>of ${num(k.total)}</small>`}</span></div>
       <div class="for">${esc(k.what)}</div>
       <div class="meter" aria-hidden="true"><span class="done" style="width:${w(k.done)}"></span><span class="failed" style="width:${w(k.failed)}"></span><span class="busy" style="width:${w(k.busy)}"></span></div>
       <div class="by">Measured by ${k.by}</div>
-      <div class="foot"><span>${state}${k.failed ? ` · ${num(k.failed)} failed` : ""}</span></div></div>`;
+      <div class="foot"><span>${state}${k.stuck ? ` · ${num(k.stuck)} can't be done yet` : ""}${k.failed ? ` · ${num(k.failed)} failed` : ""}</span></div></div>`;
   }).join("");
 }
 // One kind of analysis again for every song: under Libraries › Start over (0.46, the owner: not a tap away on the
@@ -2877,6 +3589,106 @@ function drawSetup(s) {
 
 // ---- the style model to hear genres with (0.39) ----
 let styleModels = null;
+// Vocals for DJ blends (0.60): the box and how far it is; whether it's switched on (0.61), for the Get started step.
+let vocals = null;
+async function refreshVocals() {
+  let v;
+  try { v = await api("api/vocals"); } catch (e) { $("vocals-state").textContent = e.message; return; }
+  vocals = v;
+  if (document.activeElement !== $("vocals-only")) $("vocals-only").checked = v.only_sung;
+  if (document.activeElement !== $("vocals-on")) $("vocals-on").checked = !!v.on;
+  $("vocals-on").disabled = !v.available;
+  $("vocals-more").hidden = !v.on || !v.available;
+  // The warning in this machine's own numbers, once there are any: the median of the latest songs.
+  $("vocals-times").textContent = v.vocal_seconds && v.analysis_seconds ?
+    ` On this machine a song has taken about ${fmt(v.vocal_seconds, 0)} s for its vocals, against ${fmt(v.analysis_seconds, 0)} s for the rest of its analysis.` :
+    v.vocal_seconds ? ` On this machine a song has taken about ${fmt(v.vocal_seconds, 0)} s for its vocals.` : "";
+  const done = v.separated + v.none, all = done + v.waiting + v.failed;
+  $("vocals-state").textContent = !v.available ? "Not in this image: the vocal separation model is missing." :
+    !v.on ? (done ? `Switched off. The vocals of ${num(done)} songs found before stay in use.` : "Switched off.") :
+    `${num(done)} of ${num(all)} songs done: ${num(v.separated)} separated, ${num(v.none)} instrumental` +
+    (v.failed ? `, ${num(v.failed)} couldn't be read` : "") +
+    (v.working ? `. Now: ${v.working.artist} – ${v.working.title}` : v.waiting ? `. ${num(v.waiting)} waiting` : "") +
+    (v.alone ? ". Only vocals: the rest of the analysis waits" : "") +
+    (v.last_seconds ? ` (the last took ${v.last_seconds} s)` : "") + ".";
+}
+// What's being worked on now, in the Overview's Now card (0.60.3, the owner: "one progress bar in the overview panel
+// that shows if something is working, what is working and what stage it is at"): the kind of analysis and how far it
+// is, the song and its step. The first that's running, in the order they take turns.
+function nowWork(s, total, queued) {
+  const c = s.counts || {}, st = s.styles || {}, l = s.loudness || {}, so = s.sound || {}, tr = s.traits || {}, v = s.vocals || {};
+  const who = (x) => x ? `${x.artist || ""} – ${x.title || ""}` : "";
+  const beats = {done: c.done || 0, total: (c.songs || 0) - (c.skipped || 0)};
+  if (s.current) return {kind: "Beats", what: who(s.current), step: `${s.current.step} for ${fmt(s.current.for_seconds)} s` + (s.next ? ` · next: ${who(s.next)} (${s.next.step})` : ""), ...beats};
+  if (s.reading && !queued) return {kind: "Reading the libraries", what: `Reading ${s.reading.server_name}'s libraries`,
+    step: `${s.reading.library || "Starting"}: ${s.reading.songs == null ? "asking for its songs…" : `matching its ${num(s.reading.songs)} songs with those already here…`}`};
+  if (s.regridding) return {kind: "Working out beats again", what: "Working out songs again from their saved beats", step: "an update changed how; no model needed", done: s.regridding.done, total: s.regridding.total};
+  if (s.next) return {kind: "Beats", what: who(s.next), step: `${s.next.step} for ${fmt(s.next.for_seconds)} s`, ...beats};
+  if (l.measuring) return {kind: "Loudness & key", what: who(l.measuring), step: "measuring", done: l.measured || 0, total: l.total || 0};
+  if (so.hearing) return {kind: "Sound", what: who(so.hearing), step: "hearing it", done: so.heard ?? so.sound ?? 0, total: so.wanted ?? so.songs ?? 0};
+  if (st.current) return {kind: "Genres", what: who(st.current), step: "hearing its styles", done: st.done || 0, total: st.total || 0};
+  if (tr.available && (tr.total || 0) > (tr.scored || 0)) return {kind: "Voice and mood", what: "Scoring songs", step: "from the sound already heard", done: tr.scored || 0, total: tr.total || 0};
+  const vDone = (v.separated || 0) + (v.none || 0), vAll = vDone + (v.waiting || 0) + (v.failed || 0);
+  // Not while it's switched off (0.61.4), nor while every song left is one it can't do yet (0.61.1, the owner:
+  // "looking for song even though it's done").
+  if (v.available && (v.working || v.alone || (v.on && (v.waiting || 0) > (v.stuck || 0) && v.state !== "all done"))) {
+    const what = v.working ? who(v.working) : v.alone ? "Only vocals" : "Vocals";
+    const step = v.working ? `${v.working.step || "finding its vocals"} for ${fmt(v.working.for_seconds, 0)} s` :
+      v.state === "waits for the rest of the analysis" ? "waits for the rest of the analysis" :
+      v.state === "resting" ? `${num(v.stepped_past || 0)} songs can't be done yet; looking again in a minute` :
+      v.state === "starting" ? "starting" : "looking for the next song…";
+    return {kind: "Vocals", what, step: step + (v.alone ? " · only vocals: the rest carries on after" : ""), done: vDone, total: vAll};
+  }
+  return null;
+}
+function drawNow(s, total, queued) {
+  const w = nowWork(s, total, queued);
+  if (w) {
+    $("now-what").textContent = w.what;
+    $("now-step").textContent = w.step;
+  } else if (s.paused) {
+    $("now-what").textContent = "Paused"; $("now-step").textContent = `${queued} waiting`;
+  } else {
+    $("now-what").textContent = total ? (queued ? "Starting the next song…" : "All done") : "No songs yet";
+    $("now-step").innerHTML = total ? "" : (libraries.some((l) => l.on) ? "Reading the libraries…" : 'Choose the libraries to analyse under <a href="#libraries">Libraries</a>.');
+  }
+  const bar = !!(w && w.total);
+  $("now-bar").hidden = !bar;
+  if (bar) {
+    $("now-meter").style.width = `${Math.max(0, Math.min(100, 100 * w.done / w.total))}%`;
+    $("now-count").textContent = `${w.kind}: ${num(w.done)} of ${num(w.total)}`;
+  }
+}
+// Only vocals (0.60.2, the owner: "no way to start only it"): shown while songs wait for their vocals; pressed again,
+// it stops and the rest carries on.
+function drawVocalsAlone(v) {
+  document.querySelectorAll("[data-vocals-alone]").forEach((b) => {
+    b.hidden = !v || !v.available || !v.on || (!v.alone && !(v.waiting > 0));
+    b.textContent = v && v.alone ? "Stop only vocals" : "Only vocals";
+    b.setAttribute("aria-pressed", String(!!(v && v.alone)));
+  });
+}
+document.querySelectorAll("[data-vocals-alone]").forEach((b) => b.addEventListener("click", async () => {
+  const on = b.getAttribute("aria-pressed") !== "true";
+  b.disabled = true;
+  try { drawVocalsAlone(await api("api/vocals", {method: "POST", body: JSON.stringify({alone: on})})); } catch (e) { banner(e.message); }
+  b.disabled = false;
+  refreshStatus();
+  refreshVocals();
+}));
+$("vocals-on").addEventListener("change", async () => {
+  const on = $("vocals-on").checked;
+  $("vocals-on").disabled = true;
+  try { await api("api/vocals", {method: "POST", body: JSON.stringify({on})}); }
+  catch (e) { banner(e.message); }
+  await refreshVocals();
+  refreshStatus();
+  if (status) drawStart(status);
+});
+$("vocals-only").addEventListener("change", async () => {
+  try { await api("api/vocals", {method: "POST", body: JSON.stringify({only_sung: $("vocals-only").checked})}); refreshVocals(); }
+  catch (e) { banner(e.message); }
+});
 async function drawStyleModels() {
   try { styleModels = await api("api/style/models"); } catch (e) { return; }
   $("style-choices").innerHTML = styleModels.models.map((m) => {

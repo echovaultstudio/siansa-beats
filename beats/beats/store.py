@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS sound (
 );
 -- What a library is left out of (0.40, the owner, 13 Nov): a library of two-hour mixes needs its loudness, not its
 -- beats. A song is left out of a task only when every library it's in leaves it out.
+-- Where each song's vocals are at its ends (0.60, beats.vocals): how ("separated", "none": instrumental by the voice
+-- model, "failed"), and the bar-snapped summary the app blends by (JSON).
+CREATE TABLE IF NOT EXISTS vocals (song_id TEXT PRIMARY KEY, how TEXT, summary TEXT, version INTEGER, seconds REAL,
+    error TEXT, at REAL);
 CREATE TABLE IF NOT EXISTS library_skips (server TEXT, folder TEXT, task TEXT, PRIMARY KEY (server, folder, task));
 CREATE INDEX IF NOT EXISTS links_by_song ON links (song_id, server);
 CREATE INDEX IF NOT EXISTS links_by_server ON links (server, song_id);
@@ -100,7 +104,7 @@ RESULT_FIELDS = ("bpm", "bpm_fit", "main_share", "grid_bpm", "on_grid", "grid_dr
                  "outro_steady", "beats_per_bar", "bar_share", "first_downbeat_ms", "beat_count", "downbeat_count",
                  "download_seconds", "decode_seconds", "model_seconds")
 BUSY = ("downloading", "decoding", "ready", "analysing")  # ready: downloaded and decoded, waiting for the model
-TASKS = ("beats", "loudness", "sound", "styles")  # what a library can be left out of (library_skips)
+TASKS = ("beats", "loudness", "sound", "styles", "vocals")  # what a library can be left out of (library_skips)
 HAS_BEATS = "('done', 'skipped')"  # a song's beats are settled: found, or left out by its library's choice
 
 
@@ -269,6 +273,66 @@ class Store:
     def sound_waiting(self):
         """How many songs' sound is marked to be heard again."""
         return self._rows("SELECT COUNT(*) AS n FROM sound WHERE again = 1")[0]["n"]
+
+    # ---- vocals (0.60, beats.vocals) ----
+
+    def save_vocals(self, song_id, how, summary, version, seconds=None, error=None):
+        with self._write():
+            self.db.execute("INSERT OR REPLACE INTO vocals (song_id, how, summary, version, seconds, error, at) "
+                            "VALUES (?,?,?,?,?,?,?)",
+                            (song_id, how, json.dumps(summary) if summary is not None else None, version, seconds,
+                             (error or None) and str(error)[:300], time.time()))
+
+    def vocals_again(self):
+        """Every song's vocals are found again (0.60.2): what's kept stays in use until then, and songs that couldn't be
+        read are tried once more. How many songs."""
+        with self._write():
+            return self.db.execute("UPDATE vocals SET version = 0, error = NULL").rowcount
+
+    def without_vocals(self, version, limit=20, again_none=False, need_voice=False, offset=0):
+        """Songs with their beats found whose vocals aren't known at ``version`` (not failed), newest first; with
+        ``again_none``, also those kept as instrumental by the voice model without being separated; with
+        ``need_voice``, only songs the voice model has scored (the table ``traits``, :mod:`beats.traits`)."""
+        voice = " AND EXISTS (SELECT 1 FROM traits t WHERE t.song_id = j.song_id AND t.voice IS NOT NULL)" if need_voice else ""
+        return [r["song_id"] for r in self._rows(
+            "SELECT j.song_id FROM jobs j LEFT JOIN vocals v ON v.song_id = j.song_id WHERE j.state = 'done' AND "
+            f"(v.song_id IS NULL OR v.version IS NOT ? OR (? AND v.how = 'none')){voice} AND NOT {skipped('vocals', 'j.song_id')} "
+            "ORDER BY v.song_id IS NOT NULL, j.finished_at DESC, j.song_id LIMIT ? OFFSET ?", (version, 1 if again_none else 0, limit, offset))]
+
+    def vocals(self, song_ids):
+        """``{song id: row}`` of ``vocals`` for the songs among ``song_ids`` that have one."""
+        out, ids = {}, list(dict.fromkeys(song_ids))
+        for start in range(0, len(ids), 500):
+            chunk = ids[start:start + 500]
+            for r in self._rows(f"SELECT * FROM vocals WHERE song_id IN ({', '.join('?' for _ in chunk)})", chunk):
+                out[r["song_id"]] = dict(r)
+        return out
+
+    def median_seconds(self, latest=100):
+        """``{"vocal_seconds", "analysis_seconds"}``: the median seconds a song took, over the ``latest`` songs, to
+        find its vocals and to be analysed (from starting it to done); None for either with no song yet (0.61)."""
+        def median(values):
+            values = sorted(v for v in values if v is not None and v >= 0)
+            if not values:
+                return None
+            mid = len(values) // 2
+            return round(values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2, 1)
+        with self.lock:
+            vocal = [r[0] for r in self.db.execute(
+                "SELECT seconds FROM vocals WHERE how = 'separated' AND seconds IS NOT NULL ORDER BY at DESC LIMIT ?", (latest,))]
+            analysis = [r[0] for r in self.db.execute(
+                "SELECT finished_at - started_at FROM jobs WHERE state = 'done' AND started_at IS NOT NULL "
+                "AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT ?", (latest,))]
+        return {"vocal_seconds": median(vocal), "analysis_seconds": median(analysis)}
+
+    def vocal_counts(self, version):
+        """``{"separated", "none", "failed", "waiting"}``: songs with their beats found, by how their vocals are known."""
+        out = {"separated": 0, "none": 0, "failed": 0, "waiting": 0}
+        for r in self._rows("SELECT CASE WHEN v.song_id IS NULL OR v.version IS NOT ? THEN 'waiting' ELSE v.how END AS how, "
+                            "COUNT(*) AS n FROM jobs j LEFT JOIN vocals v ON v.song_id = j.song_id WHERE j.state = 'done' "
+                            f"AND NOT {skipped('vocals', 'j.song_id')} GROUP BY 1", (version,)):
+            out[r["how"]] = out.get(r["how"], 0) + r["n"]
+        return out
 
     def without_sound(self, limit=20):
         """Songs analysed for their beats whose sound isn't known (and that didn't fail to be heard), newest first."""
@@ -805,6 +869,23 @@ class Store:
         return {"skipped": out, "queued": back} if out or back else None
 
     # ---- settings ----
+
+    def listening_facts(self):
+        """``({song id: year}, {song id: style})`` for Listening's genres and decades (0.59): a song's year from its
+        file, its style the strongest the sound gave (``Electronic---House``), else its file's first genre tag."""
+        with self.lock:
+            years = {r[0]: r[1] for r in self.db.execute("SELECT song_id, year FROM sound WHERE year BETWEEN 1900 AND 2100")}
+            styles, tags = {}, {}
+            for song, source, label, weight in self.db.execute(
+                    "SELECT song_id, source, label, weight FROM genres WHERE source IN ('sound', 'sound-doubted', 'tag')"):
+                if source == "tag":
+                    tags.setdefault(song, label)
+                elif weight > styles.get(song, (None, -1))[1]:
+                    styles[song] = (label, weight)
+        styles = {song: label for song, (label, _) in styles.items()}
+        for song, label in tags.items():
+            styles.setdefault(song, label)
+        return years, styles
 
     def setting(self, key, default=None):
         rows = self._rows("SELECT value FROM settings WHERE key=?", (key,))

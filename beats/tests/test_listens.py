@@ -405,6 +405,15 @@ class ListeningService(Service):
             self.call("/api/v1/listens", "POST", {"user": "max", "listens": "all of them"})
         self.assertEqual(e.exception.code, 400)
         self.call("/api/v1/listens/now", "POST", {"user": "max", "artist": "House Test", "title": "Deep", "duration": 50})
+        # Songs left before they counted (0.64): kept for the mixes, and no listen.
+        self.assertTrue(caps["skips"])
+        skipped = self.call("/api/v1/skips", "POST", {"user": "max", "skips": [
+            {"id": "t140", "at": now - 50, "heard": 9}, {"id": "not-here", "at": now - 40}]})
+        self.assertEqual(skipped, {"kept": 1, "known": 0, "skipped": 1})
+        self.assertEqual(self.app.listens.skips("max"), [(self.app.store.resolve(["t140"])["t140"], now - 50)])
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            self.call("/api/v1/skips", "POST", {"user": "max", "skips": "some"})
+        self.assertEqual(e.exception.code, 400)
 
         top = self.call("/api/v1/listens/top?user=max&kind=songs")
         self.assertEqual([(t["title"], t["listens"], t["id"]) for t in top["top"]], [("Control", 2, "t140"), ("Elsewhere", 1, None)])
@@ -454,6 +463,12 @@ class ListeningService(Service):
         self.assertEqual(os.listdir(os.path.join(self.tmp, "data", "tmp")), [])  # the files aren't kept
         may = self.call("/api/listens?user=max&year=2024&month=5&tz=UTC")
         self.assertEqual((may["period"]["label"], may["totals"]["listens"]), ("May 2024", 2))
+        self.assertEqual((may["previous"]["label"], may["decades"]), ("April 2024", []))
+        # My profile (0.59): all of a listener's history, its artists with their pictures' songs.
+        profile = self.call("/api/listens/profile?user=max&tz=UTC")
+        self.assertEqual(profile["totals"]["listens"], 2)
+        self.assertIn("face", profile["artists"][0])
+        self.assertIn("face", profile["bubbles"][0])
         # A listen from a file is linked to the song here by artist and title, so the app gets an id to play.
         top = self.call("/api/v1/listens/top?user=max")["top"]
         self.assertEqual({t["title"]: t["id"] for t in top}, {"Control": "t140", "Unknown song": None})
@@ -633,6 +648,81 @@ class NamesInAnyCapitals(unittest.TestCase):
 class Fresh(unittest.TestCase):
     """History's start, without its checks."""
     setUp, row = History.setUp, History.row
+
+
+class Graphs(Fresh):
+    """0.59 (the owner, 19 Nov: "more graph representations of different listening data, similar to how lastfm does
+    it"): a month beside the one before, what was played by genre and decade, and the listening profile."""
+
+    def setUp(self):
+        super().setUp()
+        song = {"album": "Play", "duration": 200.0, "suffix": "flac", "tag_bpm": None}
+        self.store.add_songs([{**song, "id": "porcelain", "title": "Porcelain", "artist": "Moby"},
+                              {**song, "id": "eple", "title": "Eple", "artist": "Röyksopp", "album": "Melody AM"},
+                              {**song, "id": "teardrop", "title": "Teardrop", "artist": "Massive Attack", "album": "Mezzanine"}])
+        db = self.store.db
+        db.execute("INSERT INTO sound (song_id, year) VALUES ('porcelain', 1999), ('eple', 2001), ('teardrop', 1998)")
+        db.executemany("INSERT INTO genres VALUES (?,?,?,?)", [
+            ("porcelain", "sound", "Electronic---Downtempo", 0.6), ("porcelain", "sound", "Electronic---Ambient", 0.3),
+            ("eple", "sound-doubted", "Electronic---Synth-pop", 0.5), ("teardrop", "tag", "Trip Hop", 1.0)])
+        db.commit()
+        self.listens.add("max", [
+            self.row("2026-09-20T10:00:00", "Moby", "Porcelain", id="porcelain"),
+            self.row("2026-10-03T10:00:00", "Moby", "Porcelain", id="porcelain"),
+            self.row("2026-10-03T11:00:00", "Moby", "Porcelain", id="porcelain"),
+            self.row("2026-11-01T10:00:00", "Moby", "Porcelain", id="porcelain"),
+            self.row("2026-11-02T10:00:00", "Röyksopp", "Eple", id="eple"),
+            self.row("2026-11-02T11:00:00", "Massive Attack", "Teardrop", id="teardrop"),
+            self.row("2026-11-03T11:00:00", "Nobody Here", "Unknown")])
+
+    def test_a_month_has_the_one_before_its_genres_and_decades(self):
+        november = self.listens.summary("max", 2026, 11, "UTC")
+        before = november["previous"]
+        self.assertEqual((before["label"], before["totals"]["listens"], before["totals"]["days"], len(before["points"])),
+                         ("October 2026", 2, 1, 31))
+        self.assertEqual(before["points"][2], 2)  # both on 3 October
+        self.assertEqual(before["totals"]["new_artists"], 0)  # Moby was first heard in September
+        g = november["genres"]
+        self.assertEqual(g["known"], 3)  # the song that isn't in the library has none
+        self.assertEqual([(x["name"], x["family"]) for x in g["styles"]],
+                         [("Downtempo", "Electronic"), ("Synth-pop", "Electronic"), ("Trip Hop", "Trip Hop")])  # a tie: as heard
+        self.assertEqual(g["families"][0], {"name": "Electronic", "listens": 2})
+        self.assertEqual(november["decades"], [{"decade": 1990, "listens": 2}, {"decade": 2000, "listens": 1}])
+        self.assertEqual(november["discovery"], 0.75)  # three of four listens of artists new in November
+        year = self.listens.summary("max", 2026, None, "UTC")
+        self.assertEqual((year["previous"]["label"], year["previous"]["totals"]["listens"], len(year["previous"]["points"])), ("2025", 0, 12))
+        self.assertIsNone(self.listens.summary("max", None, None, "UTC")["previous"])
+        january = self.listens.summary("max", 2027, 1, "UTC")
+        self.assertEqual(january["previous"]["label"], "December 2026")
+
+    def test_the_profile_over_all_time(self):
+        p = self.listens.profile("max", "UTC")
+        self.assertEqual([(m["label"], m["listens"], m["new_artists"]) for m in p["months"]],
+                         [("Sep 2026", 1, 1), ("Oct 2026", 2, 0), ("Nov 2026", 4, 3)])
+        self.assertEqual(p["artists"][0]["artist"], "Moby")
+        self.assertEqual(p["artists"][0]["months"], [1, 2, 1])
+        self.assertEqual(sum(sum(h) for h in p["clock"]), 7)
+        self.assertEqual(p["clock"][6][10], 2)  # Sundays 20 September and 1 November, 10:00
+        self.assertEqual(p["genres"]["names"][0], "Downtempo")  # four listens of Porcelain
+        self.assertEqual([m["counts"][0] for m in p["genres"]["months"]], [1, 2, 1])
+        self.assertEqual(p["decades"][0], {"decade": 1990, "listens": 5})
+        f = p["fingerprint"]
+        self.assertEqual(f["axes"], ["Consistency", "Discovery", "Variety", "Concentration", "Replay"])
+        self.assertEqual(len(f["recent"]), 5)
+        self.assertTrue(all(0 <= v <= 100 for v in f["recent"]))
+        self.assertEqual(f["recent"][1], 100.0)  # every artist was first heard in the last twelve months
+        self.assertEqual(f["recent"][3], 100.0)  # fewer than ten artists: all in the ten most played
+        self.assertEqual(f["recent"][4], round(3 / 7 * 100, 1))  # Porcelain heard again three times
+        self.assertIsNone(f["before"])
+        self.assertEqual(p["totals"]["artists"], 4)
+        # Kept until a listen comes in.
+        self.assertIs(self.listens.profile("max", "UTC"), p)
+        self.listens.add("max", [self.row("2026-11-04T11:00:00", "Moby", "Porcelain", id="porcelain")])
+        self.assertEqual(self.listens.profile("max", "UTC")["months"][-1]["listens"], 5)
+
+    def test_a_listener_with_nothing_has_an_empty_profile(self):
+        p = self.listens.profile("nobody", "UTC")
+        self.assertEqual((p["months"], p["fingerprint"], p["totals"]["listens"]), ([], None, 0))
 
 
 class EveryArtistOfASong(Fresh):
