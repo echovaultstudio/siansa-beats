@@ -206,13 +206,19 @@
   document.addEventListener("DOMContentLoaded", () => {
     // Back to where the demo was opened from on the website, else to the Siansa Beats page.
     let back = "/beats";
-    try { const from = new URL(document.referrer); if (from.origin === location.origin && !/beats-demo/.test(from.pathname)) back = from.pathname + from.search; } catch (e) { /* no page before */ }
+    // Only a page of this website, by its path alone (letters, digits, - and /): nothing else is taken from the address.
+    try {
+      const from = new URL(document.referrer);
+      if (from.origin === location.origin && /^\/[A-Za-z0-9\/-]*$/.test(from.pathname) && !/beats-demo/.test(from.pathname)) back = from.pathname;
+    } catch (e) { /* no page before */ }
     const note = document.createElement("div");
     note.id = "demo-note";
     note.setAttribute("role", "note");
-    note.innerHTML = '<a class="exit" href="' + back + '" aria-label="Exit the demo">← Exit demo</a>' +
+    // Fixed words as HTML; the way back (from the address the demo was opened from) only ever as a link's address.
+    note.innerHTML = '<a class="exit" aria-label="Exit the demo">← Exit demo</a>' +
       '<span class="what"><b>Demo</b> Made-up music and listening. Nothing here is real, and nothing you change is kept.</span>' +
       '<a class="get" href="/beats">Get Siansa Beats</a><button type="button" aria-label="Make this note small">×</button>';
+    note.querySelector(".exit").setAttribute("href", back);
     const style = document.createElement("style");
     style.textContent = "#demo-note{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:1000;display:flex;gap:10px;align-items:center;" +
       "max-width:calc(100vw - 24px);padding:6px 8px 6px 6px;border-radius:999px;background:#12161c;color:#f4f6f8;font:500 13px/1.3 system-ui,sans-serif;" +
