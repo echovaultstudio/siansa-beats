@@ -328,7 +328,14 @@ def record(base, app, songs):
             keep(f"/api/listens?tz={TZ}&year={year}&month={month}")
     keep(f"/api/listens/profile?tz={TZ}")
     for artist in sorted({s["artist"] for s in songs}):
-        keep(f"/api/listens/artist?tz={TZ}&name={quote(artist)}")
+        # An artist the made-up listener hasn't played (which ones depends on the day it's built) has no page: the
+        # demo then says so, as the service does.
+        try:
+            answers[key_of(f"/api/listens/artist?tz={TZ}&name={quote(artist)}")] = call(base, f"/api/listens/artist?tz={TZ}&name={quote(artist)}")
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+            answers[key_of(f"/api/listens/artist?tz={TZ}&name={quote(artist)}")] = {"missing": e.read().decode()}
     # The mixes: now's, each part of the week's, and two more picks for "Make the mixes again".
     now = keep(f"/api/mixes?tz={TZ}")
     for part in now["parts"]:
