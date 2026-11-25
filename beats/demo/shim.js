@@ -135,7 +135,7 @@
     if (path === "api/log") return ok(+q.get("after") ? {...answers["api/log?after=0&limit=1000"], lines: []} : answers["api/log?after=0&limit=1000"]);
     const song = path.match(/^api\/songs\/([^/]+)$/);
     if (song) { const all = await songPages(), found = all[decodeURIComponent(song[1])]; return found ? ok(found) : no("That song isn't in the demo.", 404); }
-    if (key in answers) return ok(answers[key]);
+    if (key in answers) return answers[key] && answers[key].missing ? { status: 404, body: JSON.parse(answers[key].missing) } : ok(answers[key]);
     if (path in answers) return ok(answers[path]);
     return miss(key);
   }
@@ -201,22 +201,32 @@
     if (/^media-src/.test(e.violatedDirective || "") && window.banner) window.banner("Songs can't be played in the demo on this website yet.");
   });
 
-  // ---- the line that says what this is ----
+  // ---- the line that says what this is, and the way out (the owner, 25 Nov: "no easy way on mobile or web to exit") ----
+  // Always there: hiding the note folds it to a small "Exit demo" in the corner, never takes the way out away.
   document.addEventListener("DOMContentLoaded", () => {
+    // Back to where the demo was opened from on the website, else to the Siansa Beats page.
+    let back = "/beats";
+    try { const from = new URL(document.referrer); if (from.origin === location.origin && !/beats-demo/.test(from.pathname)) back = from.pathname + from.search; } catch (e) { /* no page before */ }
     const note = document.createElement("div");
     note.id = "demo-note";
     note.setAttribute("role", "note");
-    note.innerHTML = '<b>Demo</b><span>Made-up music and listening. Nothing here is real, and nothing you change is kept.</span>' +
-      '<a href="/beats">Get Siansa Beats</a><button type="button" aria-label="Hide this note">×</button>';
+    note.innerHTML = '<a class="exit" href="' + back + '" aria-label="Exit the demo">← Exit demo</a>' +
+      '<span class="what"><b>Demo</b> Made-up music and listening. Nothing here is real, and nothing you change is kept.</span>' +
+      '<a class="get" href="/beats">Get Siansa Beats</a><button type="button" aria-label="Make this note small">×</button>';
     const style = document.createElement("style");
     style.textContent = "#demo-note{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:1000;display:flex;gap:10px;align-items:center;" +
-      "max-width:calc(100vw - 24px);padding:8px 10px 8px 14px;border-radius:999px;background:#12161c;color:#f4f6f8;font:500 13px/1.3 system-ui,sans-serif;" +
-      "box-shadow:0 6px 24px rgba(0,0,0,.28)}#demo-note b{color:#ffb547;letter-spacing:.06em;text-transform:uppercase;font-size:11px}" +
-      "#demo-note a{color:#12161c;background:#ffb547;border-radius:999px;padding:5px 12px;text-decoration:none;white-space:nowrap;font-weight:600}" +
-      "#demo-note button{background:none;border:0;color:#9aa4b0;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px}" +
-      "@media (max-width:640px){#demo-note{left:12px;right:12px;transform:none;border-radius:16px;flex-wrap:wrap}#demo-note span{flex:1 1 100%;order:3}}";
+      "max-width:calc(100vw - 24px);padding:6px 8px 6px 6px;border-radius:999px;background:#12161c;color:#f4f6f8;font:500 13px/1.3 system-ui,sans-serif;" +
+      "box-shadow:0 6px 24px rgba(0,0,0,.28)}#demo-note .what b{color:#ffb547;letter-spacing:.06em;text-transform:uppercase;font-size:11px;margin-right:6px}" +
+      "#demo-note a{border-radius:999px;padding:7px 12px;text-decoration:none;white-space:nowrap;font-weight:600;min-height:20px}" +
+      "#demo-note .exit{color:#f4f6f8;background:#2a313b}#demo-note .exit:hover{background:#38414d}" +
+      "#demo-note .get{color:#12161c;background:#ffb547}" +
+      "#demo-note button{background:none;border:0;color:#9aa4b0;font-size:20px;line-height:1;cursor:pointer;padding:6px 8px;min-width:32px;min-height:32px}" +
+      "#demo-note.small{left:auto;right:14px;transform:none;padding:6px}#demo-note.small .what,#demo-note.small .get,#demo-note.small button{display:none}" +
+      "@media (max-width:640px){#demo-note{left:12px;right:12px;transform:none;border-radius:16px;flex-wrap:wrap;padding:8px}" +
+      "#demo-note .what{flex:1 1 100%;order:-1;padding:2px 4px}#demo-note .exit,#demo-note .get{flex:1;text-align:center}" +
+      "#demo-note.small{left:auto;right:12px;border-radius:999px}#demo-note.small .exit{flex:none}}";
     document.head.appendChild(style);
     document.body.appendChild(note);
-    note.querySelector("button").addEventListener("click", () => note.remove());
+    note.querySelector("button").addEventListener("click", () => note.classList.add("small"));
   });
 })();
