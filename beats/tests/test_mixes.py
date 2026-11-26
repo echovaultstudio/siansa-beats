@@ -611,6 +611,13 @@ class YourSound(unittest.TestCase):
         self.assertEqual({s["artist"] for s in mix["songs"]}, {"Artist 2", "Artist 4", "Artist 5"})
         # Their most played, and one they never played.
         self.assertTrue(any(s["own"] for s in mix["songs"]) and any(not s["own"] for s in mix["songs"]))
+        # The artists themselves, for the app to show (the owner, 26 Nov), each with a song of theirs in the mix.
+        people = mix["people"]
+        self.assertEqual({p["name"] for p in people}, {"Artist 2", "Artist 4", "Artist 5"})
+        self.assertTrue(all(p["plays"] >= M.ARTIST_PLAYS and p["last"] > 0 for p in people))
+        songs = {s["id"]: s["artist"] for s in mix["songs"]}
+        self.assertTrue(all(songs[p["song"]] == p["name"] for p in people))
+        self.assertEqual([p["plays"] for p in people], sorted((p["plays"] for p in people), reverse=True))
 
     def test_your_energy_is_your_own_songs_at_each_end(self):
         for album in range(6):

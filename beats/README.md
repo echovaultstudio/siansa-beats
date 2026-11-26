@@ -136,6 +136,10 @@ for you's mixes now leave them out altogether, so a mix has fewer songs the list
 a mix that would come out short (a small library, played all through) takes some, the longest unplayed first. On
 repeat is what's played lately and keeps them; set to 0 days, nothing is left out.
 
+**Forgotten artists as artists (0.66.0, the owner, 26 Nov).** The *Forgotten artists* mix also names its artists,
+the most played first (`people`: each one's name, plays, when last played, and one of their songs in the mix), so the
+app can show the artists themselves instead of the songs, each opening on its own page, with Play for the mix.
+
 **Four more mixes of your sound (0.65.0, the owner, 26 Nov).** *Your sound* has four more, each with its switch under
 *Mix settings*, all in More of you in the app:
 - **Deep cuts**: the songs you never played from albums you love (an album with at least three of its songs played,
