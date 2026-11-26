@@ -136,9 +136,26 @@ for you's mixes now leave them out altogether, so a mix has fewer songs the list
 a mix that would come out short (a small library, played all through) takes some, the longest unplayed first. On
 repeat is what's played lately and keeps them; set to 0 days, nothing is left out.
 
+**Four more mixes of your sound (0.65.0, the owner, 26 Nov).** *Your sound* has four more, each with its switch under
+*Mix settings*, all in More of you in the app:
+- **Deep cuts**: the songs you never played from albums you love (an album with at least three of its songs played,
+  six times in all), at most three from one album.
+- **Forgotten artists**: artists you played at least ten times and not for *Rediscover*'s days: a few of their most
+  played and one you never played, up to eight artists.
+- **Your energy**: **Your high energy** and **Your wind down**, your own songs in the top and the bottom 30 % of the
+  library's energy, the party, danceable and aggressive ones (or the relaxed and acoustic ones) first.
+- **Smooth run**: one for each of the first kinds of music in Made for you (two, or up to four), ordered so each song
+  flows into the next: its key the same, a step round the Camelot wheel or its relative major or minor, its tempo
+  within 6 % (or half or double), then the nearest by sound. It stops sooner rather than jolt; songs without a tempo
+  or a key aren't in it. Named "Smooth run · Drum and bass" when one genre holds most of it. It says `"ordered": true`:
+  the app plays it in that order.
+
+Every mix also has a `shape` now: five shares from 0 to 1 (energy, danceable, happy, relaxed, voice) the app can draw
+as its picture, or null where the songs' traits aren't known.
+
 **Mix settings on a page of their own (0.63.0).** The settings left the foot of the Mixes page: **Mix settings**, at
 its top, opens their own page. Every setting is still there, in three parts of one line each: *Mixes* (For now, Made
-for you), *Your sound* (On repeat, Rediscover, New for you) and *For all mixes* (What's in a mix, Leave out, Made
+for you), *Your sound* (On repeat, Rediscover, New for you, Deep cuts, Forgotten artists, Your energy, Smooth run) and *For all mixes* (What's in a mix, Leave out, Made
 around, In Siansa). A mix's line has its switch and says AUTO while it's as it comes, TUNED once something of it is
 changed; a tap opens its choices under it, with **Back to automatic** for that line alone. Nothing about the settings
 themselves or `/api/v1/mixes/settings` changed.
