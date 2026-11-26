@@ -271,7 +271,8 @@ class TheMixes(Library):
         self.assertEqual(shelves["daily"]["title"], "Made for you")
         self.assertEqual({frozenset(self.kinds(m)) for m in shelves["daily"]["mixes"]}, {frozenset({"rock"}), frozenset({"piano"})})
         more = {m["id"]: m for m in shelves["more"]["mixes"]}
-        self.assertEqual([m["name"] for m in shelves["more"]["mixes"]], ["On repeat", "Rediscover", "New for you"])
+        # Your sound's others (0.65) may follow, where there are songs enough: Your wind down, of the piano played.
+        self.assertEqual([m["name"] for m in shelves["more"]["mixes"]][:3], ["On repeat", "Rediscover", "New for you"])
         self.assertEqual({s["id"] for s in more["repeat"]["songs"]}, {f"rock{n}" for n in range(12)})
         self.assertEqual(self.kinds(more["rediscover"]), {"piano"})
         self.assertTrue(all(s["own"] for s in more["rediscover"]["songs"]))
@@ -535,3 +536,134 @@ class TheNames(unittest.TestCase):
         self.assertNotIn("Rainy", M.moment_words("evening", 2, 11, "light", None))
         self.assertNotIn("Rainy", M.moment_words("evening", 2, 11, "light", "nonsense"))
 
+
+
+class YourSound(unittest.TestCase):
+    """Your sound's other mixes (0.65, the owner, 26 Nov): Deep cuts, Forgotten artists, Your energy and Smooth run.
+    Six albums of ten rock songs by six artists, each song with a tempo, a key, an energy and traits."""
+
+    def setUp(self):
+        from beats.traits import TRAITS, Traits
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.store = Store(os.path.join(self.folder.name, "beats.db"))
+        self.sound = Sound(self.store)
+        Arousal(self.folder.name, self.store)
+        self.traits = Traits(self.folder.name, self.store)
+        self.clock = [NOW]
+        self.listens = Listens(self.store, now=lambda: self.clock[0])
+        self.mixes = M.Mixes(self.store, self.sound, self.listens, self.traits, now=lambda: self.clock[0])
+        rng = np.random.default_rng(3)
+        keys = [("A", "minor"), ("E", "minor"), ("D", "minor"), ("C", "major"), ("F#", "major"), ("A#", "minor")]
+        for album in range(6):
+            for n in range(10):
+                song = f"a{album}s{n}"
+                self.store.add_song({"id": song, "title": f"Song {album}.{n}", "artist": f"Artist {album}", "album": f"Album {album}",
+                                     "duration": 200, "suffix": "mp3", "tag_bpm": None, "genres": ["Rock"]})
+                vector = rng.normal(0, 0.04, 200).astype(np.float32)
+                vector[0] += 1
+                self.store.save_sound([{"song_id": song, "musicnn": vector.tobytes(), "key": keys[n % 6][0], "scale": keys[n % 6][1]}])
+                energy = n / 10  # songs 0–2 calm, 7–9 lively
+                self.store.db.execute("INSERT OR REPLACE INTO arousal (song_id, value, valence) VALUES (?, ?, ?)", (song, energy, 0.5))
+                self.store.db.execute(f"INSERT OR REPLACE INTO traits (song_id, {', '.join(TRAITS)}) VALUES (?, {', '.join('?' for _ in TRAITS)})",
+                                      (song, *[0.5 for _ in TRAITS]))
+                self.store.db.execute("INSERT INTO results (song_id, model, bpm, analysed_at) VALUES (?, 'final0', ?, 1)", (song, 120 + n))
+        self.store.db.commit()
+        self.store.writes += 1
+
+    def play(self, album, songs, when, times=1):
+        rows = [{"id": f"a{album}s{n}", "at": at(when) + n * 240 + t * 3600, "artist": f"Artist {album}", "title": f"Song {album}.{n}",
+                 "duration": 200} for n in songs for t in range(times)]
+        return self.listens.add("max", rows)
+
+    def more(self):
+        self.mixes._kept.clear()
+        got = self.mixes.make("max", TZ)
+        return {m["id"]: m for s in got["shelves"] if s["key"] == "more" for m in s["mixes"]}
+
+    def test_deep_cuts_are_the_unplayed_songs_of_albums_loved(self):
+        for album in (0, 2, 3):
+            self.play(album, range(4), "2026-11-10 20:00", times=2)  # loved: four songs, eight listens
+        self.play(1, range(1), "2026-11-10 21:00", times=8)  # one song often: not an album loved
+        deep = self.more()["deep"]
+        self.assertEqual(deep["name"], "Deep cuts")
+        songs = [s["id"] for s in deep["songs"]]
+        self.assertGreaterEqual(len(songs), M.A_FEW)
+        self.assertEqual({s[:2] for s in songs}, {"a0", "a2", "a3"})  # only the albums loved
+        self.assertFalse({f"a{a}s{n}" for a in (0, 2, 3) for n in range(4)} & set(songs))  # none of their played songs
+        for album in ("a0", "a2", "a3"):
+            self.assertLessEqual(sum(s.startswith(album) for s in songs), M.DEEP_PER_ALBUM)
+        self.assertFalse(any(s["own"] for s in deep["songs"]))
+
+    def test_deep_cuts_need_albums_loved_enough(self):
+        self.play(0, range(2), "2026-11-10 20:00", times=5)  # two songs only
+        self.assertNotIn("deep", self.more())
+
+    def test_forgotten_artists_played_a_lot_once_and_not_lately(self):
+        for album in (2, 4, 5):
+            self.play(album, range(8), "2025-09-01 20:00", times=2)  # sixteen listens over a year ago
+        self.play(3, range(8), "2026-11-15 20:00", times=2)  # as many, this week
+        self.play(1, range(2), "2025-09-01 20:00")  # too few
+        # New for you takes the songs never played first, and Forgotten artists leaves out what it took: off here.
+        self.mixes.set_settings("max", {"new": False})
+        mix = self.more()["forgotten"]
+        self.assertEqual(mix["name"], "Forgotten artists")
+        self.assertEqual({s["artist"] for s in mix["songs"]}, {"Artist 2", "Artist 4", "Artist 5"})
+        # Their most played, and one they never played.
+        self.assertTrue(any(s["own"] for s in mix["songs"]) and any(not s["own"] for s in mix["songs"]))
+
+    def test_your_energy_is_your_own_songs_at_each_end(self):
+        for album in range(6):
+            self.play(album, range(10), "2026-10-01 20:00")
+        more = self.more()
+        high, low = more["energy-high"], more["energy-low"]
+        self.assertEqual((high["name"], low["name"]), ("Your high energy", "Your wind down"))
+        self.assertTrue(all(int(s["id"].split("s")[1]) >= 7 for s in high["songs"]), high["songs"])
+        self.assertTrue(all(int(s["id"].split("s")[1]) <= 2 for s in low["songs"]), low["songs"])
+        self.assertTrue(all(s["own"] for s in high["songs"] + low["songs"]))
+        # Its shape: five shares for the app to draw.
+        self.assertEqual(set(high["shape"]), set(M.SHAPE))
+        self.assertGreater(high["shape"]["energy"], low["shape"]["energy"])
+
+    def test_a_smooth_run_steps_by_key_and_tempo(self):
+        for album in range(6):
+            self.play(album, range(10), "2026-10-01 20:00", times=2)
+        runs = [m for m in self.more().values() if m["id"].startswith("smooth-")]
+        self.assertTrue(runs)
+        run = runs[0]
+        self.assertTrue(run["name"].startswith("Smooth run"))
+        self.assertTrue(run["ordered"])
+        tempo, key = self.mixes._tempos_and_keys([self.sound.index[s["id"]] for s in run["songs"]])
+        rows = [self.sound.index[s["id"]] for s in run["songs"]]
+        for a, b in zip(rows, rows[1:]):
+            self.assertIsNotNone(M.key_step(key[a], key[b]))
+            self.assertLessEqual(M.tempo_gap(tempo[a], tempo[b]), M.SMOOTH_TEMPO)
+
+    def test_each_can_be_switched_off(self):
+        for album in range(6):
+            self.play(album, range(10), "2026-10-01 20:00", times=2)
+        self.mixes.set_settings("max", {"deep": False, "forgotten": False, "energy": False, "smooth": False})
+        self.assertFalse({"deep", "forgotten", "energy-high", "energy-low", "smooth-1"} & set(self.more()))
+
+
+class TheCamelotWheel(unittest.TestCase):
+    def test_keys_on_the_wheel(self):
+        self.assertEqual(M.camelot("A", "minor"), (8, "A"))
+        self.assertEqual(M.camelot("C", "major"), (8, "B"))
+        self.assertEqual(M.camelot("E", "minor"), (9, "A"))
+        self.assertEqual(M.camelot("G", "major"), (9, "B"))
+        self.assertEqual(M.camelot("Ab", "minor"), (1, "A"))
+        self.assertEqual(M.camelot("E", "major"), (12, "B"))
+        self.assertIsNone(M.camelot("H", "minor"))
+        self.assertIsNone(M.camelot("C", None))
+
+    def test_moves_a_dj_makes_in_key(self):
+        am, em, c, dm, fs = M.camelot("A", "minor"), M.camelot("E", "minor"), M.camelot("C", "major"), M.camelot("D", "minor"), M.camelot("F#", "major")
+        self.assertEqual((M.key_step(am, am), M.key_step(am, em), M.key_step(am, c), M.key_step(am, dm)), (0, 1, 1, 1))
+        self.assertIsNone(M.key_step(am, fs))
+        self.assertEqual(M.key_step((12, "A"), (1, "A")), 1)  # round the wheel
+
+    def test_tempo_half_and_double_are_the_same_beat(self):
+        self.assertAlmostEqual(M.tempo_gap(174, 87), 0.0)
+        self.assertAlmostEqual(M.tempo_gap(120, 126), 0.05)
+        self.assertIsNone(M.tempo_gap(None, 120))
