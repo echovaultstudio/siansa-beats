@@ -982,8 +982,12 @@ class Mixes:
             mine = dict(picked)
             picked = self.sound._pick([(row, 0.0) for row, _ in picked], size, per_artist=PER_FORGOTTEN)
             if len(picked) >= A_FEW:
-                mixes.append(self._mix("forgotten", [(row, mine[row]) for row, _ in picked], "Artists you played a lot, and not for a long while.", taken,
-                                       name="Forgotten artists", used=used))
+                mix = self._mix("forgotten", [(row, mine[row]) for row, _ in picked], "Artists you played a lot, and not for a long while.", taken,
+                                name="Forgotten artists", used=used)
+                # The artists themselves (0.66, the owner, 26 Nov: "show actual artists instead of tracks"), most played
+                # first: the app shows them as artists, each opening on its own page, and Play plays the mix.
+                mix["people"] = self._people([row for row, _ in picked], plays, last)
+                mixes.append(mix)
 
         # Your energy: the listener's own songs at the lively end of the library, and at the calm end.
         if chosen["energy"]:
@@ -1029,6 +1033,20 @@ class Mixes:
                     mix["ordered"] = True  # played in this order: the app doesn't shuffle it when opened
                     mixes.append(mix)
         return mixes
+
+    def _people(self, rows, plays, last):
+        """The artists of ``rows``, the most played first: ``[{"name", "plays", "last" (when last played, seconds),
+        "song" (one of theirs in the mix, for the app to find the artist by)}]``. ``plays`` and ``last`` are by the
+        artist's name in lower case."""
+        out, seen = [], set()
+        for row in rows:
+            name = (self.sound.rows[row].get("artist") or "").strip()
+            low = name.casefold()
+            if not name or low in seen:
+                continue
+            seen.add(low)
+            out.append({"name": name, "plays": int(plays.get(low, 0)), "last": int(last.get(low, 0)), "song": self.sound.ids[row]})
+        return sorted(out, key=lambda p: (-p["plays"], p["name"].casefold()))
 
     def _grouped(self, weights, most, k, least=1):
         """The heaviest ``most`` songs of ``weights`` (``{row: weight}``) in groups: ``[(rows heaviest first, their
