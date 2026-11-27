@@ -2435,8 +2435,6 @@ var MX_PARTS = [
     {key: "new", name: "New for you", on: "new", more: [], note: () => "Fresh finds near your taste"},
     {key: "deep", name: "Deep cuts", on: "deep", more: [], note: () => "Unplayed songs from albums you love"},
     {key: "forgotten", name: "Forgotten artists", on: "forgotten", more: ["forgotten_days"], note: (v) => `Artists you played a lot · not for ${v.forgotten_days} days`},
-    {key: "energy", name: "Your energy", on: "energy", more: [], note: () => "Your high energy · your wind down"},
-    {key: "smooth", name: "Smooth run", on: "smooth", more: ["smooth_count"], note: (v) => `${plural(v.smooth_count, "run", "runs")} · flowing by key and tempo`},
   ]],
   ["For all mixes", "", [
     {key: "in", name: "What's in a mix", more: ["size", "familiar", "per_artist"], note: (v) => `${v.size} songs · ${v.familiar}% you know · ${v.per_artist} by one artist`},
@@ -2449,7 +2447,7 @@ var MX_PARTS = [
   ]],
 ];
 // A setting's few words under its line (its line says the rest); without one here, Siansa Beats' own words for it.
-var MX_WORDS = {now_count: "How many", daily_count: "How many", smooth_count: "How many", repeat_days: "Looks back … days", forgotten_days: "Not played for … days",
+var MX_WORDS = {now_count: "How many", daily_count: "How many", repeat_days: "Looks back … days", forgotten_days: "Not played for … days",
   size: "Songs in a mix", familiar: "Songs you know, in %", per_artist: "By one artist, at most", fresh_days: "Songs played in the last … days",
   leave_genres: "Genres", leave_artists: "Artists", time_of_day: "The part of the day you listen in", weekend_apart: "Weekends apart from weekdays",
   daylight: "Calmer when it's dark outside", season: "This time of year counts more", skips: "Songs you skip count for less", half_life: "Listening counts half after … days",

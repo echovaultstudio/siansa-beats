@@ -24,9 +24,6 @@ SETTINGS = {
     # 0.65 (the owner, 26 Nov).
     "deep": (True, "on", None, None, "More of you: Deep cuts, songs you haven't played from albums you love"),
     "forgotten": (True, "on", None, None, "More of you: Forgotten artists, artists you played a lot and not lately"),
-    "energy": (True, "on", None, None, "More of you: Your high energy and Your wind down, your own songs by their energy"),
-    "smooth": (True, "on", None, None, "More of you: Smooth run, a kind of music you play ordered by key and tempo"),
-    "smooth_count": (2, "number", 1, 4, "How many Smooth runs"),
     # Where they go on Home (0.62, the owner: "I don't like the idea of always separating More of you and Made for you";
     # "allow choosing how many cards it sends to Siansa").
     "together": (False, "on", None, None, "All in one row on Home, in For now's place: For now's first, then Made for you's, then More of you's"),

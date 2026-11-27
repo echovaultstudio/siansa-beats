@@ -119,20 +119,14 @@ KEEP_MOST = 90
 KEEP_SETTING = "mixes_keep_days"
 # The fixed mixes' lines.
 ABOUT = {"repeat": "Your most played, lately", "rediscover": "Old favourites, back again", "new": "Fresh finds near your taste",
-         "deep": "Unplayed songs from albums you love", "forgotten": "Artists you used to play a lot",
-         "energy-high": "Your liveliest songs", "energy-low": "Your calmest songs",
-         **{f"smooth-{n}": "Each song flowing into the next by key and tempo" for n in range(1, 5)}}
-# Your sound's other mixes (0.65, the owner, 26 Nov: Deep cuts, Forgotten artists, Your energy, Smooth run).
+         "deep": "Unplayed songs from albums you love", "forgotten": "Artists you used to play a lot"}
+# Your sound's other mixes (0.65, the owner, 26 Nov: Deep cuts, Forgotten artists).
 LOVED_TRACKS = 3  # an album is loved with this many of its songs played…
 LOVED_PLAYS = 6  # …this many times in all
 DEEP_PER_ALBUM = 3  # unplayed songs from one album, at most
 ARTIST_PLAYS = 10  # an artist forgotten had at least this many listens…
 FORGOTTEN_ARTISTS = 8  # …and this many of them come back in one mix
 PER_FORGOTTEN = 4  # songs of each: their most played, and one they never played
-ENERGY_EDGE = 0.3  # Your energy's songs are the listener's own in the top (or bottom) this share of the library's energy
-SHAPE = ("energy", "danceable", "happy", "relaxed", "voice")  # a mix's shape (its picture in the app): five shares, 0 to 1
-SMOOTH_TEMPO = 0.06  # Smooth run: the next song's tempo within this share of the one before (or half or double it)
-SMOOTH_POOL = 3  # Smooth run looks for its chain among this many times the mix's length of the group's songs
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kept_mixes (
     user TEXT, key TEXT, name TEXT, about TEXT, why TEXT, songs TEXT, made REAL, PRIMARY KEY (user, key)
@@ -782,11 +776,7 @@ class Mixes:
             name = self.sound.rows[row]["artist"] or ""
             if name:
                 artists[name] = artists.get(name, 0.0) + weight
-        # Its shape (0.65, issue #153): five shares the app draws as the mix's picture, from its traits and energy.
-        shape = None
-        if len(traits) >= 3 and energy is not None:
-            shape = {"energy": energy, **{t: round(sum(v[t] for v in traits.values()) / len(traits), 3) for t in SHAPE[1:]}}
-        return {"energy": energy, "mood": mood, "genres": genres, "sure": sure, "tags": tags, "shape": shape,
+        return {"energy": energy, "mood": mood, "genres": genres, "sure": sure, "tags": tags,
                 "artists": [name for name, _ in sorted(artists.items(), key=lambda kv: (-kv[1], kv[0]))][:3]}
 
     @staticmethod
@@ -888,7 +878,6 @@ class Mixes:
         return {"id": mix_id, "name": name or self._name(like, taken, used, moment, turn), "signature": signature, "why": why,
                 "about": ABOUT.get(mix_id) or _about(like), "tags": like["tags"],
                 "genres": like["genres"], "artists": like["artists"], "energy": like["energy"], "mood": like["mood"],
-                "shape": like.get("shape"),
                 "own": sum(1 for _, own in picked if own),
                 "songs": [{"id": self.sound.ids[row], "title": self.sound.rows[row]["title"] or "",
                            "artist": self.sound.rows[row]["artist"] or "", "album": self.sound.rows[row]["album"] or "",
@@ -908,31 +897,9 @@ class Mixes:
             self._by = (len(self.sound.ids), albums, artists)
         return self._by[1], self._by[2]
 
-    def _tempos_and_keys(self, rows):
-        """``({row: bpm}, {row: (Camelot number, letter)})`` of ``rows``: the tempo Beat This! heard, the key Siansa
-        Beats measured (else AudioMuse-AI's)."""
-        ids = {self.sound.ids[row]: row for row in rows}
-        tempo, key, keys = {}, {}, {}
-        chunked = list(ids)
-        for start in range(0, len(chunked), 500):
-            chunk = chunked[start:start + 500]
-            marks = ", ".join("?" for _ in chunk)
-            for r in self.store._rows(f"SELECT song_id, bpm FROM results WHERE bpm IS NOT NULL AND song_id IN ({marks}) ORDER BY analysed_at", chunk):  # noqa: S608
-                tempo[ids[r["song_id"]]] = float(r["bpm"])
-            for r in self.store._rows(f"SELECT song_id, key, scale FROM sound WHERE key IS NOT NULL AND song_id IN ({marks})", chunk):  # noqa: S608
-                keys[r["song_id"]] = (r["key"], r["scale"])
-            for r in self.store._rows(f"SELECT song_id, key, scale FROM measures WHERE key IS NOT NULL AND error IS NULL AND song_id IN ({marks})", chunk):  # noqa: S608
-                keys[r["song_id"]] = (r["key"], r["scale"])
-        for song, (k, sc) in keys.items():
-            c = camelot(k, sc)
-            if c:
-                key[ids[song]] = c
-        return tempo, key
-
-    def _your_sound(self, chosen, played, at, server, size, seed, taken, used, out, lately, passed, daily, fill, before):
-        """Your sound's other mixes (0.65, the owner, 26 Nov): Deep cuts, Forgotten artists, Your energy and the Smooth
-        runs, each when it's switched on and there are songs enough. ``before``: More of you's mixes made already, whose
-        songs these leave out."""
+    def _your_sound(self, chosen, played, at, server, size, seed, taken, used, out, passed, before):
+        """Your sound's other mixes (0.65, the owner, 26 Nov): Deep cuts and Forgotten artists, each when it's switched on
+        and there are songs enough. ``before``: More of you's mixes made already, whose songs these leave out."""
         mask = self.sound._mask(server)
         ok = lambda row: (mask is None or mask[row]) and not out(row)  # noqa: E731
         count, mixes = played["count"], []
@@ -989,49 +956,6 @@ class Mixes:
                 mix["people"] = self._people([row for row, _ in picked], plays, last)
                 mixes.append(mix)
 
-        # Your energy: the listener's own songs at the lively end of the library, and at the calm end.
-        if chosen["energy"]:
-            energies, _, of = self._scales()
-            if len(energies):
-                where = {}
-                for row in count:
-                    e = of.get(self.sound.ids[row], (None,))[0]
-                    if e is not None and ok(row) and row not in lately:
-                        where[row] = float(np.searchsorted(energies, e)) / len(energies)
-                traits = self.traits.of([self.sound.ids[row] for row in where]) if self.traits is not None else {}
-                lift = lambda row, names: sum(traits.get(self.sound.ids[row], {}).get(t, 0.0) for t in names) / len(names)  # noqa: E731
-                for mix_id, name, why, edge, score in (
-                        ("energy-high", "Your high energy", "Your own songs at their liveliest.", lambda p: p >= 1 - ENERGY_EDGE,
-                         lambda row: where[row] + 0.3 * lift(row, ("party", "danceable", "aggressive"))),
-                        ("energy-low", "Your wind down", "Your own songs at their calmest.", lambda p: p <= ENERGY_EDGE,
-                         lambda row: (1 - where[row]) + 0.3 * lift(row, ("relaxed", "acoustic")))):
-                    fits = sorted((row for row, p in where.items() if edge(p)), key=lambda row: (-score(row), row))[:size * 2]
-                    rng = seed(mix_id)
-                    some = sorted(rng.sample(fits, min(len(fits), size + size // 2)), key=fits.index)
-                    picked = self.sound._pick([(row, 0.0) for row in some], size, per_artist=per_artist + 1)
-                    if len(picked) >= A_FEW:
-                        mixes.append(self._mix(mix_id, [(row, True) for row, _ in picked], why, taken, name=name, used=used))
-
-        # Smooth run: a group's songs in an order that flows, key to key and tempo to tempo, as a DJ would play them.
-        if chosen["smooth"] and daily:
-            for n, (own, _, centre, reach) in enumerate(daily[:chosen["smooth_count"]]):
-                pool = [row for row, _ in fill(centre, list(map(int, own)), set(passed), server, size * SMOOTH_POOL, seed(f"smooth-{n}"), reach=reach)]
-                tempo, key = self._tempos_and_keys(pool)
-                known = [row for row in pool if row in tempo and row in key]
-                if len(known) < A_FEW:
-                    continue
-                mine = set(map(int, own))
-                middle = float(np.median([tempo[row] for row in known]))
-                start = min(known, key=lambda row: (row not in mine, abs(tempo[row] - middle), row))
-                chain = smooth_chain(known, tempo, key, self.sound.matrix, start, size)
-                if len(chain) >= A_FEW:
-                    like = self._like(chain)
-                    genre = like["genres"][0] if like["genres"] and like.get("sure", 1.0) >= NAMED_FOR else None
-                    name = _unused(f"Smooth run · {genre}" if genre else "Smooth run", {m["name"].casefold() for m in before + mixes})
-                    mix = self._mix(f"smooth-{n + 1}", [(row, row in mine) for row in chain], "Each song flowing into the next by key and tempo.",
-                                    taken, name=name, like=like, used=used)
-                    mix["ordered"] = True  # played in this order: the app doesn't shuffle it when opened
-                    mixes.append(mix)
         return mixes
 
     def _people(self, rows, plays, last):
@@ -1187,67 +1111,11 @@ class Mixes:
             picked = self.sound._pick([(row, 0.0) for row, _ in fresh], size, per_artist=per_artist)
             if len(picked) >= A_FEW:
                 mixes.append(self._mix("new", [(row, False) for row, _ in picked], "Never played by you, and close to what you play.", taken, name="New for you"))
-        mixes += self._your_sound(chosen, played, at, server, size, seed, taken, used, out, lately, passed, daily, fill, mixes)
+        mixes += self._your_sound(chosen, played, at, server, size, seed, taken, used, out, passed, mixes)
         if mixes:
             shelves.append({"key": "more", "title": "More of you", "note": "", "mixes": mixes})
         return {"day": ordinal, "part": part, "days": days, "said": said(part), "hours": hours(part), "basis": basis, "based": based,
                 "listens": played["listens"], "songs": int(len(have)), "daylight": sun, "shelves": shelves}
-
-
-_CAMELOT_MINOR, _CAMELOT_MAJOR = 9, 0  # A minor and C major are 8A and 8B on the Camelot wheel
-
-
-def camelot(key, scale):
-    """``(number 1–12, "A" minor or "B" major)`` of a key ("C#", "minor"), or None when it isn't known."""
-    names = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
-    flats = {"Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"}
-    key = flats.get((key or "").strip(), (key or "").strip())
-    if key not in names or (scale or "").lower() not in ("major", "minor"):
-        return None
-    minor = scale.lower() == "minor"
-    pc = names.index(key) - (_CAMELOT_MINOR if minor else _CAMELOT_MAJOR)
-    return (pc * 7 + 7) % 12 + 1, "A" if minor else "B"
-
-
-def key_step(a, b):
-    """How far two keys are apart for a mix (0 the same, 1 a step round the wheel or major to its relative minor),
-    or None when the move isn't one a DJ makes in key."""
-    if a is None or b is None:
-        return None
-    if a == b:
-        return 0
-    if a[1] == b[1] and min((a[0] - b[0]) % 12, (b[0] - a[0]) % 12) == 1:
-        return 1
-    return 1 if a[0] == b[0] else None
-
-
-def tempo_gap(a, b):
-    """How far tempo ``b`` is from ``a``, as a share, taking half or double time as the same beat; None when unknown."""
-    if not a or not b:
-        return None
-    return min(abs(b * f - a) / a for f in (0.5, 1.0, 2.0))
-
-
-def smooth_chain(rows, tempo, key, vectors, start, size, tempo_limit=SMOOTH_TEMPO):
-    """A run through ``rows`` from ``start``: each next song the one that fits best of those left (its key a step at
-    most from the last, its tempo within ``tempo_limit``), the nearest by sound among equals; it stops when nothing
-    fits rather than jolt. ``tempo``, ``key`` and ``vectors`` (unit) by row."""
-    chain, left = [start], set(rows) - {start}
-    while len(chain) < size and left:
-        last = chain[-1]
-        best = None
-        for row in left:
-            step, gap = key_step(key.get(last), key.get(row)), tempo_gap(tempo.get(last), tempo.get(row))
-            if step is None or gap is None or gap > tempo_limit:
-                continue
-            cost = step * 0.5 + gap / tempo_limit + (1.0 - float(vectors[last] @ vectors[row])) * 3
-            if best is None or cost < best[0] or (cost == best[0] and row < best[1]):
-                best = (cost, row)
-        if best is None:
-            break
-        chain.append(best[1])
-        left.discard(best[1])
-    return chain
 
 
 def _span(days):

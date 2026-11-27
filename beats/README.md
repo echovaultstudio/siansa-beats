@@ -140,26 +140,21 @@ repeat is what's played lately and keeps them; set to 0 days, nothing is left ou
 the most played first (`people`: each one's name, plays, when last played, and one of their songs in the mix), so the
 app can show the artists themselves instead of the songs, each opening on its own page, with Play for the mix.
 
-**Four more mixes of your sound (0.65.0, the owner, 26 Nov).** *Your sound* has four more, each with its switch under
-*Mix settings*, all in More of you in the app:
+**Two more mixes of your sound (0.65.0, the owner, 26 Nov).** *Your sound* has two more, each with its switch under
+*Mix settings*, both in More of you in the app:
 - **Deep cuts**: the songs you never played from albums you love (an album with at least three of its songs played,
   six times in all), at most three from one album.
 - **Forgotten artists**: artists you played at least ten times and not for *Rediscover*'s days: a few of their most
   played and one you never played, up to eight artists.
-- **Your energy**: **Your high energy** and **Your wind down**, your own songs in the top and the bottom 30 % of the
-  library's energy, the party, danceable and aggressive ones (or the relaxed and acoustic ones) first.
-- **Smooth run**: one for each of the first kinds of music in Made for you (two, or up to four), ordered so each song
-  flows into the next: its key the same, a step round the Camelot wheel or its relative major or minor, its tempo
-  within 6 % (or half or double), then the nearest by sound. It stops sooner rather than jolt; songs without a tempo
-  or a key aren't in it. Named "Smooth run · Drum and bass" when one genre holds most of it. It says `"ordered": true`:
-  the app plays it in that order.
 
-Every mix also has a `shape` now: five shares from 0 to 1 (energy, danceable, happy, relaxed, voice) the app can draw
-as its picture, or null where the songs' traits aren't known.
+**Your energy, Smooth run and the shape taken out (0.67.0, the owner, 27 Nov).** 0.65.0 also made *Your energy*
+(Your high energy, Your wind down) and *Smooth runs* (ordered by key and tempo), and gave every mix a `shape` for the
+app to draw; none of them is made any more. Their settings (`energy`, `smooth`, `smooth_count`) are gone, and one
+saved before is let be.
 
 **Mix settings on a page of their own (0.63.0).** The settings left the foot of the Mixes page: **Mix settings**, at
 its top, opens their own page. Every setting is still there, in three parts of one line each: *Mixes* (For now, Made
-for you), *Your sound* (On repeat, Rediscover, New for you, Deep cuts, Forgotten artists, Your energy, Smooth run) and *For all mixes* (What's in a mix, Leave out, Made
+for you), *Your sound* (On repeat, Rediscover, New for you, Deep cuts, Forgotten artists) and *For all mixes* (What's in a mix, Leave out, Made
 around, In Siansa). A mix's line has its switch and says AUTO while it's as it comes, TUNED once something of it is
 changed; a tap opens its choices under it, with **Back to automatic** for that line alone. Nothing about the settings
 themselves or `/api/v1/mixes/settings` changed.

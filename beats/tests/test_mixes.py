@@ -619,58 +619,21 @@ class YourSound(unittest.TestCase):
         self.assertTrue(all(songs[p["song"]] == p["name"] for p in people))
         self.assertEqual([p["plays"] for p in people], sorted((p["plays"] for p in people), reverse=True))
 
-    def test_your_energy_is_your_own_songs_at_each_end(self):
-        for album in range(6):
-            self.play(album, range(10), "2026-10-01 20:00")
-        more = self.more()
-        high, low = more["energy-high"], more["energy-low"]
-        self.assertEqual((high["name"], low["name"]), ("Your high energy", "Your wind down"))
-        self.assertTrue(all(int(s["id"].split("s")[1]) >= 7 for s in high["songs"]), high["songs"])
-        self.assertTrue(all(int(s["id"].split("s")[1]) <= 2 for s in low["songs"]), low["songs"])
-        self.assertTrue(all(s["own"] for s in high["songs"] + low["songs"]))
-        # Its shape: five shares for the app to draw.
-        self.assertEqual(set(high["shape"]), set(M.SHAPE))
-        self.assertGreater(high["shape"]["energy"], low["shape"]["energy"])
-
-    def test_a_smooth_run_steps_by_key_and_tempo(self):
-        for album in range(6):
-            self.play(album, range(10), "2026-10-01 20:00", times=2)
-        runs = [m for m in self.more().values() if m["id"].startswith("smooth-")]
-        self.assertTrue(runs)
-        run = runs[0]
-        self.assertTrue(run["name"].startswith("Smooth run"))
-        self.assertTrue(run["ordered"])
-        tempo, key = self.mixes._tempos_and_keys([self.sound.index[s["id"]] for s in run["songs"]])
-        rows = [self.sound.index[s["id"]] for s in run["songs"]]
-        for a, b in zip(rows, rows[1:]):
-            self.assertIsNotNone(M.key_step(key[a], key[b]))
-            self.assertLessEqual(M.tempo_gap(tempo[a], tempo[b]), M.SMOOTH_TEMPO)
-
     def test_each_can_be_switched_off(self):
         for album in range(6):
             self.play(album, range(10), "2026-10-01 20:00", times=2)
-        self.mixes.set_settings("max", {"deep": False, "forgotten": False, "energy": False, "smooth": False})
-        self.assertFalse({"deep", "forgotten", "energy-high", "energy-low", "smooth-1"} & set(self.more()))
+        self.mixes.set_settings("max", {"deep": False, "forgotten": False})
+        self.assertFalse({"deep", "forgotten"} & set(self.more()))
+
+    def test_your_energy_and_smooth_runs_are_gone(self):
+        """Taken out (the owner, 27 Nov): no Your energy, no Smooth run, no shape; their old settings are let be."""
+        for album in range(6):
+            self.play(album, range(10), "2026-10-01 20:00", times=2)
+        self.mixes.set_settings("max", {"energy": True, "smooth": True, "smooth_count": 4})
+        more = self.more()
+        self.assertFalse({"energy-high", "energy-low"} & set(more))
+        self.assertFalse([m for m in more if m.startswith("smooth-")])
+        self.assertFalse([m for m in more.values() if "shape" in m or "ordered" in m])
+        self.assertNotIn("energy", self.mixes.settings("max"))
 
 
-class TheCamelotWheel(unittest.TestCase):
-    def test_keys_on_the_wheel(self):
-        self.assertEqual(M.camelot("A", "minor"), (8, "A"))
-        self.assertEqual(M.camelot("C", "major"), (8, "B"))
-        self.assertEqual(M.camelot("E", "minor"), (9, "A"))
-        self.assertEqual(M.camelot("G", "major"), (9, "B"))
-        self.assertEqual(M.camelot("Ab", "minor"), (1, "A"))
-        self.assertEqual(M.camelot("E", "major"), (12, "B"))
-        self.assertIsNone(M.camelot("H", "minor"))
-        self.assertIsNone(M.camelot("C", None))
-
-    def test_moves_a_dj_makes_in_key(self):
-        am, em, c, dm, fs = M.camelot("A", "minor"), M.camelot("E", "minor"), M.camelot("C", "major"), M.camelot("D", "minor"), M.camelot("F#", "major")
-        self.assertEqual((M.key_step(am, am), M.key_step(am, em), M.key_step(am, c), M.key_step(am, dm)), (0, 1, 1, 1))
-        self.assertIsNone(M.key_step(am, fs))
-        self.assertEqual(M.key_step((12, "A"), (1, "A")), 1)  # round the wheel
-
-    def test_tempo_half_and_double_are_the_same_beat(self):
-        self.assertAlmostEqual(M.tempo_gap(174, 87), 0.0)
-        self.assertAlmostEqual(M.tempo_gap(120, 126), 0.05)
-        self.assertIsNone(M.tempo_gap(None, 120))
