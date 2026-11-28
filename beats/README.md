@@ -152,6 +152,8 @@ app can show the artists themselves instead of the songs, each opening on its ow
 app to draw; none of them is made any more. Their settings (`energy`, `smooth`, `smooth_count`) are gone, and one
 saved before is let be.
 
+**A quicker Overview (0.67.1, the owner, 28 Nov).** The Overview's numbers kept ready (genres, loudness, sound, voice and mood, servers) that are worked out again after a change are now worked out together, waiting at most half a second for them all instead of half a second for each: the page opens in well under a second, not about 3.5. The queue is still counted every time.
+
 **Mix settings on a page of their own (0.63.0).** The settings left the foot of the Mixes page: **Mix settings**, at
 its top, opens their own page. Every setting is still there, in three parts of one line each: *Mixes* (For now, Made
 for you), *Your sound* (On repeat, Rediscover, New for you, Deep cuts, Forgotten artists) and *For all mixes* (What's in a mix, Leave out, Made

@@ -78,6 +78,7 @@ id or name: the default server's without it.
 """
 
 import base64
+import contextlib
 import csv
 import hashlib
 import hmac
@@ -163,6 +164,29 @@ class Kept:
 
     WAIT = 0.5
 
+    # While set for a thread (:meth:`hurried`), its asks don't wait at all: the Overview's status asks seven kept
+    # answers one after the other, and waiting up to WAIT on each kept the page ~3.5 s (the owner, 28 Nov).
+    _hurry = threading.local()
+
+    @classmethod
+    @contextlib.contextmanager
+    def hurried(cls):
+        """Within it, a stale kept answer is handed out at once and worked out again behind it; what it yields lists
+        the answers being worked out again, for :meth:`settle`."""
+        before = getattr(cls._hurry, "on", False), getattr(cls._hurry, "started", None)
+        cls._hurry.on, cls._hurry.started = True, []
+        try:
+            yield cls._hurry.started
+        finally:
+            cls._hurry.on, cls._hurry.started = before
+
+    @classmethod
+    def settle(cls, started, wait=None):
+        """Waits for the answers in ``started`` together, at most ``wait`` (:data:`WAIT`) in all, not each."""
+        end = time.monotonic() + (cls.WAIT if wait is None else wait)
+        for kept in started:
+            kept._done.wait(max(0.0, end - time.monotonic()))
+
     def __init__(self, work, seconds, changes=lambda: 0):
         self.work, self.seconds, self.changes = work, seconds, changes
         self.value, self.at, self.seen = None, 0.0, None
@@ -178,8 +202,17 @@ class Kept:
                     self.value, self.at, self.seen = self.work(), time.monotonic(), seen
             return self.value
         if self.changes() != self.seen or time.monotonic() - self.at > self.seconds:
-            self.refresh(wait=self.WAIT)
+            if getattr(Kept._hurry, "on", False):
+                self.refresh(wait=0.0)
+                Kept._hurry.started.append(self)
+            else:
+                self.refresh(wait=self.WAIT)
         return self.value
+
+    @property
+    def fresh(self):
+        """Whether the kept answer is of the data as it is now (nothing written since it was worked out)."""
+        return self.value is not None and self.changes() == self.seen
 
     def refresh(self, wait=0.0):
         """Works it out again in a thread (one at a time), waiting at most ``wait`` seconds for it."""
@@ -842,12 +875,24 @@ class App:
                 parts[name] = time.monotonic() - started
 
         counts = timed("queue", lambda: self.store.counts(only))
-        styles = timed("styles", lambda: self.styles_status(server))
-        measured = timed("loudness", lambda: self.kept("measure-counts", server, lambda o: self.store.measure_counts(loudness.VERSION, o), 30,
-                                                       lambda: self.store.writes).get())
-        sound = timed("sound", lambda: self.sound_status(server))
-        voice = timed("voice", lambda: self.voice(server))
-        servers = timed("servers", self.server_list)
+
+        def kept_parts():
+            return (timed("styles", lambda: self.styles_status(server)),
+                    timed("loudness", lambda: self.kept("measure-counts", server, lambda o: self.store.measure_counts(loudness.VERSION, o), 30,
+                                                        lambda: self.store.writes).get()),
+                    timed("sound", lambda: self.sound_status(server)),
+                    timed("voice", lambda: self.voice(server)),
+                    timed("servers", self.server_list))
+
+        # The kept numbers that changed are worked out again together, waiting at most Kept.WAIT for them all, not
+        # each in turn (the owner, 28 Nov: the Overview took ~3.5 s, half a second for each of seven).
+        with Kept.hurried() as started:
+            kept_parts()
+            if started:
+                settling = time.monotonic()
+                Kept.settle(started)
+                parts["settle"] = time.monotonic() - settling
+            styles, measured, sound, voice, servers = kept_parts()
         events = timed("events", self.store.events)
         self.status_parts = parts
         worker = self.worker
@@ -1028,15 +1073,17 @@ class App:
                "model": spec.id if spec else None, "model_name": spec.name if spec else None}
         if available:
             # Kept ready: the page asks every few seconds; its total follows songs added, too.
-            out.update(self.kept("styles", server or self.servers.default_id, self.store.style_counts, 30,
-                                 lambda: self.store.genre_changes).get())
+            counted = self.kept("styles", server or self.servers.default_id, self.store.style_counts, 30, lambda: self.store.genre_changes)
+            out.update(counted.get())
             out["agreement"] = worker.genre_report
             styling = dict(worker.styling) if worker.styling else None
             if styling:
                 styling["for_seconds"] = round(time.time() - styling.pop("since"), 1)
             out["current"] = styling
             switch = self.style_switch
-            if switch and switch["phase"] == "hearing" and out.get("done", 0) + out.get("failed", 0) >= switch.get("doubted", 0):
+            # Only on counts of the data as it is: older ones, handed out while new ones are worked out, can be from
+            # before the songs were marked.
+            if switch and switch["phase"] == "hearing" and counted.fresh and out.get("done", 0) + out.get("failed", 0) >= switch.get("doubted", 0):
                 self.style_switch = switch = None  # every song heard with the new model
             out["switch"] = {**switch, "for_seconds": round(time.time() - switch["since"])} if switch else None
         return out

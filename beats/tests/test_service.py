@@ -1419,6 +1419,64 @@ class KeptTest(unittest.TestCase):
         state["changes"] += 1
         self.assertEqual(kept.get(), 2)
 
+    def test_a_hurried_ask_doesnt_wait_at_all(self):
+        """The Overview's status asks many kept answers in a row: hurried, a stale one comes back at once (the owner,
+        28 Nov: the page took ~3.5 s), and the fresh one is there for the next ask."""
+        import threading
+
+        from beats.server import Kept
+
+        gate = threading.Event()
+        state = {"changes": 0, "calls": 0}
+
+        def work():
+            state["calls"] += 1
+            if state["calls"] > 1:
+                gate.wait(5)
+            return state["calls"]
+
+        kept = Kept(work, seconds=300, changes=lambda: state["changes"])
+        self.assertEqual(kept.get(), 1)
+        state["changes"] += 1
+        started = time.monotonic()
+        with Kept.hurried():
+            self.assertEqual(kept.get(), 1)
+        self.assertLess(time.monotonic() - started, 0.1)
+        gate.set()
+        end = time.monotonic() + 5
+        while kept.value != 2 and time.monotonic() < end:
+            time.sleep(0.01)
+        self.assertEqual(kept.get(), 2)
+        # Outside it, an ask waits as before.
+        self.assertFalse(getattr(Kept._hurry, "on", False))
+
+    def test_answers_worked_out_again_together_wait_once(self):
+        """Several stale answers hurried and settled: fresh when the database answers in time, and the wait is one
+        WAIT for them all, not one each."""
+        import threading
+
+        from beats.server import Kept
+
+        gate = threading.Event()
+        state = {"changes": 0}
+        quick = [Kept(lambda i=i: (i, state["changes"]), seconds=300, changes=lambda: state["changes"]) for i in range(3)]
+        slow = [Kept(lambda: (gate.wait(5), state["changes"])[1], seconds=300, changes=lambda: state["changes"]) for _ in range(4)]
+        gate.set()
+        for k in quick + slow:
+            k.get()
+        gate.clear()
+        state["changes"] += 1
+        started = time.monotonic()
+        with Kept.hurried() as refreshing:
+            for k in quick + slow:
+                k.get()
+            Kept.settle(refreshing)
+            values = [k.get() for k in quick + slow]
+        self.assertLess(time.monotonic() - started, Kept.WAIT + 0.4)
+        self.assertEqual([v[1] for v in values[:3]], [1, 1, 1])  # the quick ones fresh
+        self.assertEqual(values[3:], [0, 0, 0, 0])  # the busy ones the last answer
+        gate.set()
+
     def test_a_busy_database_doesnt_hold_the_answer_up(self):
         import threading
 
